@@ -142,7 +142,7 @@ public class HookRefactoring extends RefactoringAction {
 		fb.setFunctionName(hookName);
 		
 		//TODO static-Test
-		fb.setStatic();
+		//fb.setStatic();
 		
 		try {
 			if (localDeps != null && localDeps.size() > 0) {
