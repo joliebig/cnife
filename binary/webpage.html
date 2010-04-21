@@ -107,10 +107,14 @@ Technically, the composition of features and refinement of classes are implement
 <div class="con">
 <h2><a name="howto"></a>HowTo</h2>
 <p>
-The cnife library is deployed in the form of a Jar archive, which can be used for testing purposes. As command line arguments, it expects a project directory containing another directory named 'Base'. This directory should contain some source files prepared with the latest build of <a href="http://www.sdml.info/projects/srcml/trunk/" target="blank">src2srcml</a>. In order to get started, we recommend to download and unzip the binary, then unzip the list example in the same folder and type this in a terminal:
+The cnife library is deployed in the form of a Jar archive, which can be used for testing purposes. As command line arguments, it expects a project directory containing another directory named 'Base'. This directory should contain some source files prepared with the latest build of <a href="http://www.sdml.info/projects/srcml/trunk/" target="blank">src2srcml</a>. In order to get started, we recommend to download and unzip the binary, then unzip the list example in the same folder. Open up a terminal, cd to the folder and type this in a terminal:
 <div class="code"> 
 java -jar cnife.jar ./list
 </div><br>
+<br>
+Notes on this prototype release:<br>
+The binary transforms all so-called disciplined annotations with limitations regarding some special cases (annotated #define-directives, gotos, cases in switch blocks, ...). Therefore it will apply hooks, wherever it could, moves whole functions to FeatureC++ feature-modules and so on.<br>
+Newer releases will extend this functionality to code-replication, interactive transforming of hooks and a complete api-documentation with configuration-examples.
 </p>
 
 <h2><a name="support"></a>Support</h2>
