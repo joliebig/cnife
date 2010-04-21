@@ -1,0 +1,147 @@
+<?xml encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>cnife: A tool for the transformation of #ifdefs into feature-modules</title>
+<link href="ar.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<STYLE>H1 {FONT-SIZE: 27pt}</STYLE>
+<a href=""><img style="width: 160px; float: left;" alt="cnife logo" src="images/cnife.png"></a>
+<h1 align="center"><em>cnife</em>: A tool for the transformation of #ifdefs into feature-modules</h1>
+<br><br>
+<div id="nav">
+<div class="link"><a href="#intro">Overview</a></div>
+<div class="link"><a href="#example">Background</a></div>
+<div class="link"><a href="#howto">HowTo</a></div>
+<div class="link"><a href="#download">Downloads</a></div>
+<div class="link"><a href="#contact">Contact</a></div>
+<p align="center">
+
+<br><br><br><br>
+
+<A HREF="http://www.uni-passau.de/index.php?id=6&L=1"><IMG ALT="Uni Logo" WIDTH="216" HEIGHT="57" BORDER="0" SRC="http://www.uni-passau.de/icons/unilogo/u0256.gif"></A>
+
+<br><br>
+
+<A HREF="http://www.fim.uni-passau.de/en"><IMG ALT="FIM" WIDTH="187" HEIGHT="80" BORDER="0" SRC="./images/fimlogo_eng.gif"></A>
+
+<br><br>
+
+<A HREF="http://www.infosun.fim.uni-passau.de/cl/index-e.html"><IMG ALT="Programming Group" WIDTH="206" HEIGHT="80" BORDER="0" SRC="./images/cllogo_eng.gif"></A>
+</p></div>
+
+<div class="con">
+<h2><a name="intro" id="introduction"></a>Overview</h2>
+<p>The preprocessor <em>cpp</em> has a long history in software development for the implementation of variable source code. By means of preprocessor directives (e.g., #if, #ifdef, and #ifndef) a programmer annotates variable parts of the source code. The implementation of variable source code is also a major aim of <em>feature-oriented programming</em>. In <em>feature-oriented programming</em> variable source code is represented by feature-modules. A feature-module is a folder that contains all source code (e.g., new classes or class refinements) that a feature adds to the existing code base. Although, #ifdef-annotated source code and feature modules share the same goal of implementing variable source code, the transformation of one in another is complicated.
+This project deals with the transformation of #ifdef-annotated source code in feature-modules.
+</p>
+
+<p>
+<em>cnife</em> is an extensible Java library for the (semi)automatic transformation of #ifdef annotated source code in C++ programs into <em>FeatureC++ feature-modules</em> (see <a href="http://fosd.de/fcc" target="_blank">FeatureC++ project website</a> for more information). <em>cnife</em> recognizes a set of patterns automatically (#ifdef usage in software systems) and tries to transform the annotated code into feature-modules.
+</p>
+</div>
+
+<div class="con">
+<h2><a name="example"></a>Background</h2>
+
+<h4>#ifdef annotation vs. feature-module</h4>
+<p>
+<div class="code">
+/* Config.cpp */<br>
+#define NOSORT 0<br>
+#define INSERTIONSORT 1<br>
+#define BUBBLESORT 2<br>
+#define DLINKED 1<br>
+#define SORTALGO INSERTIONSORT<br>
+#if SORTALGO != NOSORT<br>
+#define UPWARD 0<br>
+#define DOWNWARD 1<br>
+#define SORTORDER DOWNWARD<br>
+#endif<br>
+<br>
+/* Node.cpp */<br>
+class Node {<br>
+public:<br>
+&nbsp;&nbsp;int data;<br>
+&nbsp;&nbsp;Node *next;<br>
+#if DLINKED<br>
+&nbsp;&nbsp;Node *prev;<br>
+#endif<br>
+};<br>
+<br>
+/* List.cpp */<br>
+LinkedList::LinkedList() {<br>
+&nbsp;&nbsp;first = NULL;<br>
+#if DLINKED<br>
+&nbsp;&nbsp;last = NULL;<br>
+#endif<br>
+&nbsp;&nbsp;return;<br>
+}<br>
+void LinkedList::insert( int newData ) {<br>
+&nbsp;&nbsp;Node *n = new Node();<br>
+&nbsp;&nbsp;n->data = newData;<br>
+#if SORTALGO == BUBBLESORT || SORTALGO == INSERTIONSORT<br>
+&nbsp;&nbsp;Node *a = NULL;<br>
+&nbsp;&nbsp;Node *b = NULL;<br>
+#endif<br>
+#if SORTALGO == BUBBLESORT<br>
+&nbsp;&nbsp;Node *c = NULL;<br>
+&nbsp;&nbsp;Node *e = NULL;<br>
+&nbsp;&nbsp;Node *tmp = NULL;<br>
+#endif<br>
+<br>
+&nbsp;&nbsp;if (NULL == first) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;first = n;<br>
+&nbsp;&nbsp;} else {<br>
+...<br>
+</div><br>
+
+<p>
+Technically, the composition of features and refinement of classes are implemented via superimposition. For more details, we refer the interested reader to the <a href="http://www.fosd.de/fh" target="_blank">FeatureHouse</a> website.
+</p>
+
+</div>
+
+<div class="con">
+<h2><a name="howto"></a>HowTo</h2>
+<p>
+The cnife library is deployed in the form of a Jar archive, which can be used for testing purposes. As command line arguments, it expects a project directory containing another directory named 'Base'. This directory should contain some source files prepared with the latest build of <a href="http://www.sdml.info/projects/srcml/trunk/" target="blank">src2srcml</a>. In order to get started, we recommend to download and unzip the binary, then unzip the list example in the same folder and type this in a terminal:
+<div class="code"> 
+java -jar cnife.jar ./list
+</div><br>
+</p>
+
+<h2><a name="support"></a>Support</h2>
+<p>
+</p>
+</div>
+
+<div class="con">
+<h2><a name="download"></a>Downloads</h2>
+<p>
+<ul>
+	<li><b>Version 2010-03-23</b>
+	<ul>
+		<li>jar archive -- <a href="./deploy/cnife.jar">Binary</a></li>
+		<li>sources -- <a href="./deploy/cnife_sources_2010_03_23.zip">Sources</a></li>
+		<li>complete annotated C++ list example -- <a href="./deploy/list.zip">list.zip</a></li>
+	</ul>
+<ul>
+</p>
+</div>
+
+<div class="con">
+<h2><a name="contact" id="contact"></a>Contact</h2>
+  <p><em>cnife</em> has been developed at the University of Passau, Germany. For more information please contact the developers:</p>
+  <ul>
+    <li>Christopher Resch (University of Passau, Germany)</li>
+    <li><a href="http://www.infosun.fim.uni-passau.de/cl/staff/liebig/" target="_blank">J&ouml;rg Liebig</a> (University of Passau, Germany)</li>
+    <li><a href="http://www.infosun.fim.uni-passau.de/cl/staff/apel/" target="_blank">Sven Apel</a> (University of Passau, Germany)</li>
+  </ul>
+</div>
+
+<div class="end"></div>
+</body>
+</html>
