@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="gotoPattern.h">
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>gotoPattern</name>(c)  \
+  if (c == 1) goto label1 \
+  else if (c == 2) goto label2 \
+  else ;</cpp:define>
+<comment type="line">//--hook-call</comment>
+<cpp:undef>#<cpp:directive>undef</cpp:directive> <name>gotoPattern</name></cpp:undef></unit>

@@ -5,8 +5,6 @@ import java.util.LinkedList;
 
 import org.w3c.dom.Node;
 
-import common.xmlTemplates.FunctionBuilder;
-
 import refactoring.RefactoringStrategy;
 
 import backend.storage.PreprocessorOccurrence;
@@ -20,25 +18,7 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	private LinkedList<String> parameterDependencies;
 	private LinkedList<String> ownLocalVariables;
 	private String hookFunctionName;
-	private CriticalOccurrence dupe;
-	private FunctionBuilder hookBuilder;
 	
-	public FunctionBuilder getHookBuilder() {
-		return hookBuilder;
-	}
-
-	public void setHookBuilder(FunctionBuilder hookBuilder) {
-		this.hookBuilder = hookBuilder;
-	}
-
-	public CriticalOccurrence getDupe() {
-		return dupe;
-	}
-
-	public void setDupe(CriticalOccurrence dupe) {
-		this.dupe = dupe;
-	}
-
 	public CriticalOccurrence(PreprocessorOccurrence current) {
 		this.setDocFileName(new File(current.getDocFileName()));
 		this.setPrepNodes(current.getPrepNodes());

@@ -54,9 +54,9 @@ public class FeatureSearcher {
 	
 	public void importExternalFile (File xmlDoc) throws ReplaceFileException {
 		
-		FileOutputStream out = null;
 		try {
 			Document doc = parseDocument(xmlDoc);
+			
 			if (outputDir != null) {
 				File baseFile = new File(
 						outputDir.getAbsolutePath() 
@@ -65,7 +65,7 @@ public class FeatureSearcher {
 				if (baseFile.exists()) throw new ReplaceFileException();
 				Transformer transformer = TransformerFactory.newInstance().newTransformer();
 				DOMSource src = new DOMSource(doc);
-				out = new FileOutputStream(baseFile);
+				FileOutputStream out = new FileOutputStream(baseFile);
 				StreamResult res = new StreamResult(out);
 				transformer.transform(src, res);
 				xmlDoc = baseFile;
@@ -89,20 +89,12 @@ public class FeatureSearcher {
 		} catch (ParserConfigurationException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} finally {
-			if (out != null)
-				try {
-					out.close();
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
 		}
 	}
 	
 	public void checkDoc (File xmlDoc) {
-		if (!backend.isKnown(xmlDoc.getAbsolutePath()))
-			checkDoc(xmlDoc, null);
+		if (!backend.isKnown(xmlDoc.getAbsolutePath()));
+		checkDoc(xmlDoc, null);
 	}
 	
 	private void checkDoc (File xmlDoc, Document doc) {
@@ -181,7 +173,7 @@ public class FeatureSearcher {
 	 * @throws IOException
 	 * @throws ParserConfigurationException
 	 */
-	public Document parseDocument(File xmlDoc) throws SAXException,
+	private Document parseDocument(File xmlDoc) throws SAXException,
 			IOException, ParserConfigurationException {
 
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -199,7 +191,7 @@ public class FeatureSearcher {
 	 * @throws ParserConfigurationException
 	 * @throws XPathExpressionException
 	 */
-	public void populateTree(Document doc, PreprocessorTree tree) 
+	private void populateTree(Document doc, PreprocessorTree tree) 
 	throws SAXException, IOException, ParserConfigurationException, XPathExpressionException {
 		
 		javax.xml.xpath.XPathExpression expr = 
@@ -249,7 +241,6 @@ public class FeatureSearcher {
 				tree.add(node);
 			}
 		}
-		src.close();
 		return tree;
 	}
 	

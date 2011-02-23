@@ -15,11 +15,9 @@ public enum RefactoringStrategy {
 		RefactoringStrategy wider = null;
 		switch (this) {
 		case NO_REFACTORING:
-			wider = null;
-			break;
 		case SIMPLE_REFACTORING:
 		case REPLICATE_FUNCTION:
-			wider = NO_REFACTORING;
+			wider = null;
 			break;
 		case SIMPLE_HOOK:
 		case STATEMENT_REPLICATION_WITH_HOOK:

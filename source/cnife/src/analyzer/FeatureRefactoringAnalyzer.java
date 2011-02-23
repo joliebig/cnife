@@ -22,7 +22,6 @@ import scanner.FeatureSearcher;
 import analyzer.visitors.FeatureVisitor;
 import backend.storage.IdentifiedFeature;
 import backend.storage.IdentifiedFeatureList;
-import backend.storage.PreprocessorOccurrence;
 
 public class FeatureRefactoringAnalyzer {
 
@@ -159,105 +158,8 @@ public class FeatureRefactoringAnalyzer {
 		this.visitors.add(visitor);
 	}
 	
-	public static void main (String[] args) 
-	throws SAXException, IOException, ParserConfigurationException, 
-	TransformerFactoryConfigurationError, TransformerException {
-		if (args.length == 0) {
-			System.out.println("Usage: java -jar cnife.jar project-dir");
-			System.exit(1);
-		}
-		String dir = "";
-		for (String arg : args) {
-			dir += arg + " ";
-		}
-		dir = dir.trim();
-		
-		File projectDirectory = new File(dir);
-		if (!projectDirectory.exists() || !projectDirectory.isDirectory()) {
-			System.out.print("Project directory not valid: " + projectDirectory);
-			System.exit(1);
-		}
-		
-		int simple = 0;
-		int hook = 0;
-		int impc = 0;
-		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(projectDirectory);
-		LinkedList<String> list = a.getFeatureNames();
-		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
-		System.out.println("Found " + list.size() + " different feature candidates");
-		for (String name : list) {
-			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat);
-			afeat.analyze();
-			afeats.add(afeat.getAnalyzedFeature());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
-			System.out.println("processing Feature " + name + " ...");
-			while (it.hasNext()) {
-				PreprocessorOccurrence occ = it.next();
-				System.out.println("\nFound type: " + occ.getType() 
-						+ " on linenumber: " + occ.getPrepNodes()[0].getLineNumber() 
-						+ "\nin File: " + occ.getDocFileName());
-				if (occ.getType().startsWith("impossible") || occ.getType().startsWith("unknown")) {
-					impc++;
-				} else if (occ.getType().startsWith("Hook")){
-					hook++; 
-				} else {
-					simple++;
-				}
-			}
-			System.out.println("-------------------------------------------------------------\n");
-			LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-			a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles().keySet(), modFiles);
-		}
-		System.out.println("Finished. Statistics:");
-		System.out.println("the good: " + simple + "\nthe bad " + hook);
-		System.out.println("impossibles: " + impc);
-	}
-	
-	public static void main2 (String[] args) throws SAXException, IOException, ParserConfigurationException, XPathExpressionException, TransformerFactoryConfigurationError, TransformerException {
+	public static void main (String[] args) throws SAXException, IOException, ParserConfigurationException, XPathExpressionException, TransformerFactoryConfigurationError, TransformerException {
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(new File("test"));
-		int impc = 0;
-		int implc = 0;
-		int simple = 0;
-		int hook = 0;
-		
-		LinkedList<String> list = a.getFeatureNames();
-		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
-		System.out.println("Feature-Anzahl: " + list.size());
-		for (String name : list) {
-			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			System.out.println("Feature: " + name);
-			System.out.println("gesamt LOCs: " + feat.getLOCs());
-			AnalyzeFeature afeat = new AnalyzeFeature(feat);
-			afeat.analyze();
-			afeats.add(afeat.getAnalyzedFeature());
-			System.out.println("LOCs" + feat.getLOCs());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
-			while (it.hasNext()) {
-				PreprocessorOccurrence occ = it.next();
-				System.out.println("Linenumber: " + occ.getPrepNodes()[0].getLineNumber());
-				System.out.println("in File: " + occ.getDocFileName());
-				System.out.println("LOCs in File: " + occ.getLinesOfCode());
-				System.out.println("Found type: " + occ.getType() + "\n");
-				if (occ.getType().startsWith("impossible") || occ.getType().startsWith("unknown")) {
-					impc++;
-					implc += occ.getLinesOfCode();
-				} else if (occ.getType().startsWith("Hook")){
-					hook++; 
-				} else {
-					simple++;
-				}
-			}
-			System.out.println("-------------------------------------------------------------\n");
-			LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-			a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles().keySet(), modFiles);
-//			afeat.refactor();
-		}
-		System.out.println("einfache: " + simple + " hooks " + hook);
-		System.out.println("unmögliche: " + impc + " LOCs " + implc);
-		
-		
-		
 //		File[] dirlist = (new File("source_mls")).listFiles();
 //		
 //		for (File file : dirlist) {
@@ -273,23 +175,23 @@ public class FeatureRefactoringAnalyzer {
 //			}
 //		}
 		
-//		Iterator<IdentifiedFeature> it = a.backend.iterate();
-//		LinkedList<String> featureNames = new LinkedList<String>();
-//		while (it.hasNext()) {
-//			featureNames.add(it.next().getName());
-//		}
-//		for (String name : featureNames) {
-////			String name = "HAVE_BTREE";
-//			IdentifiedFeature feature = a.backend.getIdentifiedFeatureByName(name);
-//			if (feature == null) continue;
-//			System.out.println(name);
-//			AnalyzeFeature feat = new AnalyzeFeature(feature);
-//			feat.analyze();
-//			
-//			LinkedList<RefactoringDocument> modFiles = feat.refactor();
-//			a.saveRefactorings(feat.getAnalyzedFeature().getAffectedFiles().keySet(), modFiles);
+		Iterator<IdentifiedFeature> it = a.backend.iterate();
+		LinkedList<String> featureNames = new LinkedList<String>();
+		while (it.hasNext()) {
+			featureNames.add(it.next().getName());
+		}
+		for (String name : featureNames) {
+//			String name = "HAVE_BTREE";
+			IdentifiedFeature feature = a.backend.getIdentifiedFeatureByName(name);
+			if (feature == null) continue;
+			System.out.println(name);
+			AnalyzeFeature feat = new AnalyzeFeature(feature);
+			feat.analyze();
 			
-//		}
+			LinkedList<RefactoringDocument> modFiles = feat.refactor();
+			a.saveRefactorings(feat.getAnalyzedFeature().getAffectedFiles().keySet(), modFiles);
+			
+		}
 //			IdentifiedFeature feature = it.next();
 //			System.out.println("Found Feature: " + feature.getName());
 //			System.out.println("LOCS:          " + feature.getLOCs());

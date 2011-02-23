@@ -2,7 +2,6 @@ package refactoring;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.IOException;
 
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
@@ -66,19 +65,12 @@ public class RefactoringDocument implements Document {
 	public void saveDocument(String pathName)
 			throws TransformerFactoryConfigurationError, FileNotFoundException,
 			TransformerException {
-		Transformer transformer = TransformerFactory.newInstance().newTransformer();
-		DOMSource src = new DOMSource(xmlDoc);
-		FileOutputStream out = new FileOutputStream(pathName);
-		StreamResult res = new StreamResult(out);
-		transformer.transform(src, res);
-		
-		try {
-			out.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
+				Transformer transformer = TransformerFactory.newInstance().newTransformer();
+				DOMSource src = new DOMSource(xmlDoc);
+				FileOutputStream out = new FileOutputStream(pathName);
+				StreamResult res = new StreamResult(out);
+				transformer.transform(src, res);
+			}
 
 	public void setFeatureName(String featureName) {
 		this.featureName = featureName;

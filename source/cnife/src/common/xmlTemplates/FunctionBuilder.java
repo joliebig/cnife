@@ -200,21 +200,16 @@ public class FunctionBuilder {
 		
 	}
 
-	private boolean callInited = false;
 	public Node buildCallNode() {
-		if (!callInited) {
-			try {
-				XPathExpression expr = 
-					QueryBuilder.instance().getExpression(CALL_PARAMETERS);
-				Node toKill = ((NodeList) expr.evaluate(
-						templateDoc, XPathConstants.NODESET)).item(0);
-				if (toKill != null)
-					toKill.getParentNode().removeChild(toKill);
-			} catch (XPathExpressionException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			callInited = true;
+		try {
+			XPathExpression expr = 
+				QueryBuilder.instance().getExpression(CALL_PARAMETERS);
+			Node toKill = ((NodeList) expr.evaluate(
+					templateDoc, XPathConstants.NODESET)).item(0);
+			toKill.getParentNode().removeChild(toKill);
+		} catch (XPathExpressionException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 		return functionCallNode;
 		
