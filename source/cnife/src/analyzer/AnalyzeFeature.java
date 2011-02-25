@@ -28,6 +28,8 @@ import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 
 public class AnalyzeFeature {
+	private static final String IMPOSSIBLE = "impossible";
+	private static final String UNKNOWN = "unknown";
 	private IdentifiedFeature feature;
 	private AnalyzedFeature analyzedFeature = null;
 	private LinkedList<CriticalOccurrence> crits; //TODO kann lokal werden
@@ -60,7 +62,7 @@ public class AnalyzeFeature {
 
 	
 	private static String FIND_FUNCTION_CONTAINER =
-		"./ancestor::src:function";
+		"./(ancestor::src:function union ancestor::src:constructor union ancestor::src:destructor)";
 	
 	private static String FIND_NEXT_GOTOS = 
 		"./following::* intersect //src:goto";
@@ -85,11 +87,12 @@ public class AnalyzeFeature {
 		
 		HashMap<String, HashMap<Node, LinkedList<CriticalOccurrence>>> affectedFiles =
 			new HashMap<String, HashMap<Node,LinkedList<CriticalOccurrence>>>();
+		HashMap<String, SimpleHookCloneFinder> cloneMap = new HashMap<String, SimpleHookCloneFinder>();
 		analyzedFeature.setAffectedFiles(affectedFiles);
 		
 		while(it.hasNext()) {
 			PreprocessorOccurrence current = it.next();
-			if (current.getType().equals("unknown") 
+			if (current.getType().equals(UNKNOWN) 
 					|| current.getType().equals("HookRefactoring")) {
 				CriticalOccurrence occ = new CriticalOccurrence(current);
 				boolean isImpossible = false;
@@ -110,8 +113,12 @@ public class AnalyzeFeature {
 					
 					
 					HashMap<Node, LinkedList<CriticalOccurrence>> affectedFunctions;
-					if (affectedFiles.containsKey(occ.getDocFileName())) {
+					if (affectedFiles.containsKey(occ.getDocFileName()) && affectedFiles.get(occ.getDocFileName()) != null) {
 						affectedFunctions = affectedFiles.get(occ.getDocFileName());
+					} else if (affectedFiles.containsKey(occ.getDocFileName()) && affectedFiles.get(occ.getDocFileName())== null) {
+						affectedFunctions = new HashMap<Node, LinkedList<CriticalOccurrence>>();
+						affectedFiles.remove(occ.getDocFileName());
+						affectedFiles.put(occ.getDocFileName(), affectedFunctions);
 					} else {
 						affectedFunctions = new HashMap<Node, LinkedList<CriticalOccurrence>>();
 						affectedFiles.put(occ.getDocFileName(), affectedFunctions);
@@ -119,25 +126,39 @@ public class AnalyzeFeature {
 					
 					
 					LinkedList<CriticalOccurrence> occsInFunction;
-					if (affectedFunctions.containsKey(occ.getContainingFunctionNode())) {
+					if (affectedFunctions != null && affectedFunctions.containsKey(occ.getContainingFunctionNode())) {
 						occsInFunction = affectedFunctions.get(occ.getContainingFunctionNode());
 					} else {
+						if (affectedFunctions == null) {
+							affectedFunctions = new HashMap<Node, LinkedList<CriticalOccurrence>>();
+						}
 						occsInFunction = new LinkedList<CriticalOccurrence>();
 						affectedFunctions.put(occ.getContainingFunctionNode(), occsInFunction);
 					}
 					occsInFunction.add(occ);
 				} else {
-					occ.setType("impossible");
+					occ.setType(IMPOSSIBLE);
 					//TODO: DEBUG
 //					System.out.println("_________");
 //					System.out.println(occ.getDocFileName());
 //					System.out.println("impossible Occ: " + occ.getPrepNodes()[0].getLineNumber());
 				}
-				if (!occ.getType().startsWith("impossible") && !occ.getType().startsWith("unknown")) {
+				if (!occ.getType().startsWith(IMPOSSIBLE) && !occ.getType().startsWith(UNKNOWN)) {
 					
 					try {
 						occ.setCritNodeType(RefactoringStrategy.SIMPLE_HOOK);
-						checkDependencies(occ);
+						if (cloneMap.containsKey(occ.getDocFileName())) {
+							cloneMap.get(occ.getDocFileName()).doDuplicateCheck(occ);
+							if (occ.getDupe() == null) {
+								checkDependencies(occ);
+							}
+							occ.setDupe(null);
+						} else {
+							SimpleHookCloneFinder scf = new SimpleHookCloneFinder();
+							cloneMap.put(occ.getDocFileName(), scf);
+							checkDependencies(occ);
+							scf.doDuplicateCheck(occ);
+						}
 //						//TODO DEBUG
 //						if (occ.getLocalVariableDependencies().size() == 0 && occ.getParameterDependencies().size() == 0) {
 //							System.out.println("no dependencies!");
@@ -155,6 +176,9 @@ public class AnalyzeFeature {
 				crits.add(occ);
 				analyzedFeature.addOccurrence(occ);
 			} else {
+				if (!affectedFiles.containsKey(current.getDocFileName())) {
+					affectedFiles.put(current.getDocFileName(), null);
+				}
 				analyzedFeature.addOccurrence(current);
 			}
 		}
@@ -195,6 +219,7 @@ public class AnalyzeFeature {
 			if (functionNode == null) {
 				//TODO DEBUG (Pattern noch unbekannt?!)
 				System.out.println("Null-Function? " + occ.getDocFileName() + " at line " + occ.getPrepNodes()[i].getLineNumber());
+				occ.setType("impossible");
 				continue;
 			} else {
 				Node functionChild = functionNode.getFirstChild();
@@ -384,9 +409,11 @@ public class AnalyzeFeature {
 						pos, neg, 
 						occ, analyzedFeature.getName());
 //				System.out.println(occ.getDocFileName());
-				String docName = (new File(occ.getDocFileName())).getName();
+				File docFile = new File(occ.getDocFileName());
+				String docName = (docFile).getName();
 				if (pos.getModified() || neg.getModified()) {
 					RefactoringDocument doc = new RefactoringDocument(occ.getDocument());
+					doc.setFeatureName(docFile.getParentFile().getName());
 					modifiedFiles.add(doc);
 					doc.setFileName(docName);
 				}
@@ -410,21 +437,37 @@ public class AnalyzeFeature {
 			analyzedFeature.getAffectedFiles();
 		
 		for (String key : files.keySet()) {
+			SimpleHookCloneFinder cloneFinder = new SimpleHookCloneFinder();
 			int counter = 0;
-			for (Node node : files.get(key).keySet()) {
-				for (CriticalOccurrence occ : files.get(key).get(node)) {
-					//TODO String-Konstante herausziehen
-					if (occ.getType().equals("HookRefactoring") 
-							&& (occ.getHookFunctionName() == null
-							|| occ.getHookFunctionName().length() == 0)
-							&& (occ.getCritNodeType() == RefactoringStrategy.SIMPLE_HOOK
-							|| occ.getCritNodeType() == RefactoringStrategy.BLOCK_REPLICATION_WITH_HOOK
-							|| occ.getCritNodeType() == RefactoringStrategy.STATEMENT_REPLICATION_WITH_HOOK)) {
-						counter++;
-						String name = key.substring(key.lastIndexOf('\\')+1);
-						name = name.substring(0, name.indexOf('.'));
-						
-						occ.setHookFunctionName(name + "HookFunction" + counter);
+			int clonecounter = 0;
+			HashMap<Node, LinkedList<CriticalOccurrence>> nodes = files.get(key);
+			if (nodes != null) {
+				for (Node node : nodes.keySet()) {
+					
+					
+					for (CriticalOccurrence occ : files.get(key).get(node)) {
+						//TODO String-Konstante herausziehen
+						if (occ.getType().equals("HookRefactoring") 
+								&& (occ.getHookFunctionName() == null
+								|| occ.getHookFunctionName().length() == 0)
+								&& (occ.getCritNodeType() == RefactoringStrategy.SIMPLE_HOOK
+								|| occ.getCritNodeType() == RefactoringStrategy.BLOCK_REPLICATION_WITH_HOOK
+								|| occ.getCritNodeType() == RefactoringStrategy.STATEMENT_REPLICATION_WITH_HOOK)) {
+							
+							cloneFinder.doDuplicateCheck(occ);
+							
+							if (occ.getDupe() == null) {
+								counter++;
+								String name = key.substring(key.lastIndexOf('\\')+1);
+								name = name.substring(0, name.indexOf('.'));
+								
+								occ.setHookFunctionName(name + "HookFunction" + counter);
+							} else {
+								clonecounter++;
+								System.out.println("CLONES " + clonecounter);
+								occ.setHookFunctionName(occ.getDupe().getHookFunctionName());
+							}
+						}
 					}
 				}
 			}

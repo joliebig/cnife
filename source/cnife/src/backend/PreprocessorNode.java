@@ -10,7 +10,14 @@ public class PreprocessorNode implements Serializable {
 	private Node node;
 	private long lineNumber;
 	private String type;
+	private int depth;
 	
+	public int getDepth() {
+		return depth;
+	}
+	public void setDepth(int depth) {
+		this.depth = depth;
+	}
 	public String getType() {
 		return type;
 	}

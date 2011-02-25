@@ -52,11 +52,16 @@ public class FeatureSearcher {
 	private File outputDir = null;
 	private IdentifiedFeatureList backend = null;
 	
+	/**
+	 * Fügt eine neue XML-Datei ins Backend ein und erstellt eine Kopie im Ordner "Base"
+	 * @param xmlDoc
+	 * @throws ReplaceFileException - wird geworfen, falls eine Datei eingefuegt wird, die schon existiert
+	 */
 	public void importExternalFile (File xmlDoc) throws ReplaceFileException {
 		
+		FileOutputStream out = null;
 		try {
 			Document doc = parseDocument(xmlDoc);
-			
 			if (outputDir != null) {
 				File baseFile = new File(
 						outputDir.getAbsolutePath() 
@@ -65,36 +70,37 @@ public class FeatureSearcher {
 				if (baseFile.exists()) throw new ReplaceFileException();
 				Transformer transformer = TransformerFactory.newInstance().newTransformer();
 				DOMSource src = new DOMSource(doc);
-				FileOutputStream out = new FileOutputStream(baseFile);
+				out = new FileOutputStream(baseFile);
 				StreamResult res = new StreamResult(out);
 				transformer.transform(src, res);
 				xmlDoc = baseFile;
 			}
 			checkDoc(xmlDoc, doc);
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (TransformerConfigurationException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (TransformerFactoryConfigurationError e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (TransformerException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (SAXException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (ParserConfigurationException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} finally {
+			if (out != null)
+				try {
+					out.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 		}
 	}
 	
 	public void checkDoc (File xmlDoc) {
-		if (!backend.isKnown(xmlDoc.getAbsolutePath()));
-		checkDoc(xmlDoc, null);
+		if (!backend.isKnown(xmlDoc.getAbsolutePath()))
+			checkDoc(xmlDoc, null);
 	}
 	
 	private void checkDoc (File xmlDoc, Document doc) {
@@ -107,6 +113,7 @@ public class FeatureSearcher {
 				doc = parseDocument(xmlDoc);
 			}
 			populateTree(doc, tree);
+			tree.calculateDepths();
 			
 			//TODO: alle Patterns durchgehen
 			FeaturePattern pattern1 = new CompletePrivatePublicBlock();
@@ -173,7 +180,7 @@ public class FeatureSearcher {
 	 * @throws IOException
 	 * @throws ParserConfigurationException
 	 */
-	private Document parseDocument(File xmlDoc) throws SAXException,
+	public Document parseDocument(File xmlDoc) throws SAXException,
 			IOException, ParserConfigurationException {
 
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -183,7 +190,7 @@ public class FeatureSearcher {
 	}
 
 	/**
-	 * füllt einen bereits aufgebauten PreprocessorTree mit echten DOMNodes
+	 * füllt einen bereits aufgebauten PreprocessorTree mit DOMNode Objekten
 	 * @param doc
 	 * @param tree
 	 * @throws SAXException
@@ -191,7 +198,7 @@ public class FeatureSearcher {
 	 * @throws ParserConfigurationException
 	 * @throws XPathExpressionException
 	 */
-	private void populateTree(Document doc, PreprocessorTree tree) 
+	public void populateTree(Document doc, PreprocessorTree tree) 
 	throws SAXException, IOException, ParserConfigurationException, XPathExpressionException {
 		
 		javax.xml.xpath.XPathExpression expr = 
@@ -205,7 +212,7 @@ public class FeatureSearcher {
 	 * @param xmlDoc
 	 * @return
 	 */
-	private PreprocessorTree buildPrepTreeWithLineNumbers(File xmlDoc) {
+	public PreprocessorTree buildPrepTreeWithLineNumbers(File xmlDoc) {
 		AugmentedSource src = AugmentedSource.makeAugmentedSource(new StreamSource(xmlDoc));
 		src.setLineNumbering(true);
 		Configuration conf = new Configuration();
@@ -241,6 +248,7 @@ public class FeatureSearcher {
 				tree.add(node);
 			}
 		}
+		src.close();
 		return tree;
 	}
 	

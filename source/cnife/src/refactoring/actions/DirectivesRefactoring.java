@@ -63,7 +63,7 @@ public class DirectivesRefactoring extends RefactoringAction {
 				for (int i = 0; i < childs.getLength(); i++) {
 					Node child = childs.item(i).cloneNode(true);
 					target.adoptNode(child);
-					entryPoint.getParentNode().insertBefore(child, entryPoint.getNextSibling());
+					entryPoint.getParentNode().insertBefore(child, entryPoint);
 				}
 			} catch (XPathExpressionException e) {
 				// TODO Auto-generated catch block

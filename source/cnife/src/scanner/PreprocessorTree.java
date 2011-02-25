@@ -17,6 +17,10 @@ public class PreprocessorTree {
 		nodeHolders = new LinkedList<NodeHolder>();
 	}
 	
+	public LinkedList<NodeHolder> getDirectChildren() {
+		return nodeHolders;
+	}
+	
 	/**
 	 * prüft den übergebenen Tree auf in diesem Baum enthaltene Patterns
 	 * gefundene Patterns werden in diesem Baum als 'gefunden' markiert,
@@ -39,6 +43,7 @@ public class PreprocessorTree {
 						cHolder.patternMark = true;
 						pHolder.patternMark = true;
 						pHolder.ifDirective.setLineNumber(cHolder.ifDirective.getLineNumber());
+						pHolder.depth = cHolder.depth;
 						if (pHolder.elseDirective != null) {
 							pHolder.elseDirective.setLineNumber(cHolder.elseDirective.getLineNumber());
 						}
@@ -117,10 +122,13 @@ public class PreprocessorTree {
 		LinkedList<PreprocessorNode> result = new LinkedList<PreprocessorNode>();
 		
 		for (NodeHolder holder : occs) {
+			holder.ifDirective.setDepth(holder.depth);
 			result.addLast(holder.ifDirective); 
 			if (holder.elseDirective != null) {
+				holder.elseDirective.setDepth(holder.depth);
 				result.addLast(holder.elseDirective); 
 			}
+			holder.endDirective.setDepth(holder.depth);
 			result.addLast(holder.endDirective); 
 			
 		}
@@ -143,28 +151,30 @@ public class PreprocessorTree {
 	
 	public boolean add (PreprocessorNode node) {
 		boolean wasInserted = false;
-		NodeHolder curr = null;
+		NodeHolder insertingRoot = null;
+		
+		//Wurzel entweder initialisieren oder sie holen
 		if (nodeHolders.isEmpty()) {
-			curr = new NodeHolder();
-			nodeHolders.addLast(curr);
+			insertingRoot = new NodeHolder();
+			nodeHolders.addLast(insertingRoot);
 		} else {
-			curr = nodeHolders.getLast();
+			insertingRoot = nodeHolders.getLast();
 		}
 		
 		String type = node.getType();
 		if (type.startsWith("if")) {       //("if(n)?def")) {
-			if (curr.endDirective != null) {
-				curr = new NodeHolder();
-				nodeHolders.addLast(curr);
+			if (insertingRoot.endDirective != null) {
+				insertingRoot = new NodeHolder();
+				nodeHolders.addLast(insertingRoot);
 			}
-			insertIf(curr, node);
+			insertIf(insertingRoot, node);
 		} else if (type.matches("else")) {
-			wasInserted = insertElse(curr, node);
+			wasInserted = insertElse(insertingRoot, node);
 		} else if (type.matches("elif")) {
-			wasInserted = insertElse(curr, node);
-			insertIf(curr, node);
+			wasInserted = insertElse(insertingRoot, node);
+			insertIf(insertingRoot, node);
 		} else if (type.matches("endif")) {
-			wasInserted = insertEnd(curr, node);
+			wasInserted = insertEnd(insertingRoot, node);
 		}
 		return wasInserted;
 	}
@@ -273,16 +283,19 @@ public class PreprocessorTree {
 		return list;
 	}
 
-	private class NodeHolder {
+	public class NodeHolder {
 		
 		boolean patternMark = false;
 		boolean missingEnd = false;
 		
-		PreprocessorNode ifDirective;
-		PreprocessorTree betweenIf;		
-		PreprocessorNode elseDirective;
-		PreprocessorTree betweenElse;
-		PreprocessorNode endDirective;
+		public PreprocessorNode ifDirective;
+		public PreprocessorTree betweenIf;		
+		public PreprocessorNode elseDirective;
+		public PreprocessorTree betweenElse;
+		public PreprocessorNode endDirective;
+		
+		//Tiefe beginnt bei 0, gibt den Verschachtelungsgrad an
+		int depth = 0;
 		
 		public boolean compareDirectives(NodeHolder other) {
 			boolean equalDirectives = false;
@@ -371,5 +384,19 @@ public class PreprocessorTree {
 			}
 		}
 		return found;
+	}
+	
+	public void calculateDepths() {
+		calculateDepths(0);
+	}
+	
+	private void calculateDepths(int depth) {
+		for(NodeHolder nh : nodeHolders) {
+			nh.depth = 0;
+			if (nh.betweenIf != null)
+				nh.betweenIf.calculateDepths(depth+1);
+			if (nh.betweenElse != null)
+				nh.betweenElse.calculateDepths(depth+1);
+		}
 	}
 }

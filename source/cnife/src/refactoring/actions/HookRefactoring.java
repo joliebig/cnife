@@ -25,7 +25,7 @@ import refactoring.RefactoringDocument;
 public class HookRefactoring extends RefactoringAction {
 
 	private static String FIND_FUNCTION_CONTAINER =
-		"./ancestor::src:function";
+		"./(ancestor::src:function union ancestor::src:constructor)";
 	
 	private static final String BODY_ENTRY_POINT = 
 		"./src:block/src:comment[text()=\"//--functionbody\"]";
@@ -63,43 +63,77 @@ public class HookRefactoring extends RefactoringAction {
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 				RefactoringDocument neg, CriticalOccurrence occ) {
 		PreprocessorNode[] nodes = occ.getPrepNodes();
-	
-		boolean positive = false;
-		if (!nodes[0].getNode().getNodeName().startsWith("cpp:ifn")) {
-			extractHook(nodes[0], nodes[1], from, pos, featureName, 
-					occ.getHookFunctionName(), 
-					occ.getLocalVariableDependencies(), 
-					occ.getParameterDependencies());
-			positive = true;
-			pos.setModified(true);
+		FunctionBuilder fb = null;
+		if (occ.getDupe() != null && occ.getDupe().getHookBuilder() != null) {
+				fb = occ.getDupe().getHookBuilder();
+				insertDupeHookCall(nodes, from, fb);
 		} else {
-			extractHook(nodes[0], nodes[1], from, neg, negFeatureName, 
-					occ.getHookFunctionName(), 
-					occ.getLocalVariableDependencies(), 
-					occ.getParameterDependencies());
-			neg.setModified(true);
+			
+			boolean positive = false;
+			if (!nodes[0].getNode().getNodeName().startsWith("cpp:ifn")) {
+				fb = extractHook(nodes[0], nodes[1], from, pos, featureName, 
+						occ.getHookFunctionName(), 
+						occ.getLocalVariableDependencies(), 
+						occ.getParameterDependencies());
+				positive = true;
+				pos.setModified(true);
+			} else {
+				fb = extractHook(nodes[0], nodes[1], from, neg, negFeatureName, 
+						occ.getHookFunctionName(), 
+						occ.getLocalVariableDependencies(), 
+						occ.getParameterDependencies());
+				neg.setModified(true);
+			}
+			if (nodes.length > 2 && positive) {
+				fb = extractHook(nodes[1], nodes[2], from, neg, negFeatureName, 
+						occ.getHookFunctionName(), 
+						occ.getLocalVariableDependencies(), 
+						occ.getParameterDependencies());
+				neg.setModified(true);
+			} else if (nodes.length > 2) {
+				fb = extractHook(nodes[1], nodes[2], from, pos, featureName, 
+						occ.getHookFunctionName(), 
+						occ.getLocalVariableDependencies(), 
+						occ.getParameterDependencies());
+				pos.setModified(true);
+			}
 		}
-		if (nodes.length > 2 && positive) {
-			extractHook(nodes[1], nodes[2], from, neg, negFeatureName, 
-					occ.getHookFunctionName(), 
-					occ.getLocalVariableDependencies(), 
-					occ.getParameterDependencies());
-			neg.setModified(true);
-		} else if (nodes.length > 2) {
-			extractHook(nodes[1], nodes[2], from, pos, featureName, 
-					occ.getHookFunctionName(), 
-					occ.getLocalVariableDependencies(), 
-					occ.getParameterDependencies());
-			pos.setModified(true);
-		}
-		
 		for (int i = 0; i < nodes.length; i++) {
 			nodes[i].getNode().getParentNode().removeChild(nodes[i].getNode());
 		}
-		
+		if (occ.getDupe() == null) {
+			occ.setHookBuilder(fb);
+		} else if (occ.getDupe().getHookBuilder() == null) {
+			occ.getDupe().setHookBuilder(fb);
+		}
 	}
 	
-	private void extractHook(PreprocessorNode start,
+	private void insertDupeHookCall(PreprocessorNode[] nodes,
+			Document from, FunctionBuilder fb) {
+		Node functionCallNode = fb.buildCallNode();
+		PreprocessorNode start = nodes[0];
+		Node importedCall = start.getNode().getOwnerDocument().importNode(functionCallNode, true);
+		start.getNode().getParentNode().insertBefore(importedCall, start.getNode());
+		
+		Node currNode = start.getNode().getNextSibling();
+		
+		while (currNode != nodes[1].getNode()) {
+			Node next = currNode.getNextSibling();
+			currNode.getParentNode().removeChild(currNode);
+			currNode = next;
+		}
+		if (nodes.length > 2) {
+			currNode = currNode.getNextSibling();
+			while (currNode != nodes[2].getNode()) {
+				Node next = currNode.getNextSibling();
+				currNode.getParentNode().removeChild(currNode);
+				currNode = next;
+			}
+		}
+		
+		
+	}
+	private FunctionBuilder extractHook(PreprocessorNode start,
 			PreprocessorNode end, Document from, Document target, 
 			String featureName, String hookName, LinkedList<String> localDeps, LinkedList<String> paramDeps) {
 //		System.out.println("original: " + featureName);
@@ -108,7 +142,7 @@ public class HookRefactoring extends RefactoringAction {
 		fb.setFunctionName(hookName);
 		
 		//TODO static-Test
-		fb.setStatic();
+		//fb.setStatic();
 		
 		try {
 			if (localDeps != null && localDeps.size() > 0) {
@@ -153,6 +187,8 @@ public class HookRefactoring extends RefactoringAction {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		return fb;
 //		System.out.println("to: ");
 //		System.out.println(target.getFirstChild().getTextContent());
 	}

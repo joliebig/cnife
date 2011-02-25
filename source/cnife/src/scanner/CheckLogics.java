@@ -28,6 +28,8 @@ public class CheckLogics {
 			newTextContent = newTextContent.replace("defined", "");
 			newTextContent = newTextContent.replace("!", "NOT_");
 			newTextContent = newTextContent.replace("==", "_EQUALS_");
+			newTextContent = newTextContent.replace("<", "_lt_");
+			newTextContent = newTextContent.replace(">", "_gt_");
 			newTextContent = newTextContent.replace(" ", "");
 			newTextContent = "(" + newTextContent + ")";
 		} else {
