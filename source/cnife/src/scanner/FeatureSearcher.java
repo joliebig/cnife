@@ -48,7 +48,7 @@ public class FeatureSearcher {
 
 
 	private static final String ALL_RELEVANT_DIRECTIVES_XPATH = 
-		"//(cpp:if union cpp:ifdef union cpp:ifndef union cpp:else union cpp:endif)";
+		"//(cpp:if union cpp:ifdef union cpp:ifndef union cpp:else union cpp:elif union cpp:endif)";
 	private File outputDir = null;
 	private IdentifiedFeatureList backend = null;
 	
