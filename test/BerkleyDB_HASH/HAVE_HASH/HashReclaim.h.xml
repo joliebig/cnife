@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashReclaim</name>
+<block>{
+<comment>//---refactored functions</comment><public>
+public:
+<comment type="line">//#ifndef HAVE_HASH</comment>
+	<comment type="block">/*
+	* __ham_reclaim --
+	*	Reclaim the pages from a subdatabase and return them to the
+	* parent free list.  For now, we link each freed page on the list
+	* separately.  If people really store hash databases in subdatabases
+	* and do a lot of creates and deletes, this is going to be a problem,
+	* because hash needs chunks of contiguous storage.  We may eventually
+	* need to go to a model where we maintain the free list with chunks of
+	* contiguous pages as well.
+	*
+	* PUBLIC: int __ham_reclaim __P((DB *, DB_TXN *txn));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_reclaim</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>DB_TXN</name> *</type><name>txn</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<comment type="block">/* Open up a cursor that we'll use for traversing. */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbIface</name>::<name>db_cursor</name></name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>txn</name></expr></argument>, <argument><expr>&amp;<name>dbc</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_get_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashStat</name>::<name>ham_traverse</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>,
+			<argument><expr><name>DB_LOCK_WRITE</name></expr></argument>, <argument><expr><name><name>CDbReclaim</name>::<name>db_reclaim_callback</name></name></expr></argument>, <argument><expr><name>dbc</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbCam</name>::<name>db_c_close</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+		<return>return <expr>(0)</expr>;</return>
+
+<label><name>err</name>:</label>	<if>if <condition>(<expr><name>hcp</name>-&gt;<name>hdr</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CDbCam</name>::<name>db_c_close</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_truncate --
+	*	Reclaim the pages from a subdatabase and return them to the
+	* parent free list.
+	*
+	* PUBLIC: int __ham_truncate __P((DBC *, u_int32_t *));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_truncate</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>countp</name></decl></param>)</parameter_list>
+
+	<block>{
+		<decl_stmt><decl><type><name>db_trunc_param</name></type> <name>trunc</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name>, <name>t_ret</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_get_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+
+		<expr_stmt><expr><name>trunc</name>.<name>count</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>trunc</name>.<name>dbc</name> = <name>dbc</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>ret</name> = <call><name><name>CHashStat</name>::<name>ham_traverse</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>,
+			<argument><expr><name>DB_LOCK_WRITE</name></expr></argument>, <argument><expr><name><name>CDbReclaim</name>::<name>db_truncate_callback</name></name></expr></argument>, <argument><expr>&amp;<name>trunc</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>t_ret</name> = <call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0 &amp;&amp; <name>ret</name> == 0</expr>)</condition><then>
+			<expr_stmt><expr><name>ret</name> = <name>t_ret</name></expr>;</expr_stmt></then></if>
+
+		<if>if <condition>(<expr><name>countp</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>*<name>countp</name> = <name>trunc</name>.<name>count</name></expr>;</expr_stmt></then></if>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+</public>
+}</block></class>;</unit>

@@ -1,0 +1,1110 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashRec</name>
+<block>{
+<comment>//---refactored functions</comment><public>
+public:
+
+
+<comment type="block">/*
+ * __ham_insdel_recover --
+ *
+ * PUBLIC: int __ham_insdel_recover
+ * PUBLIC:     __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_insdel_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_insdel_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name>, <name>opcode</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>ret</name>, <name>type</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_insdel_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_insdel_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>ret</name> == <name>DB_PAGE_NOTFOUND</name></expr>)</condition><then>
+				<goto>goto <name>done</name>;</goto></then>
+			<else>else <block>{
+				<expr_stmt><expr><name>ret</name> = <call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<goto>goto <name>out</name>;</goto>
+			}</block></else></if>
+		}</block></then></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+		<comment type="block">/* If the page is not here then it was later truncated. */</comment>
+		<if>if <condition>(<expr>!<call><name>IS_ZERO_LSN</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<goto>goto <name>done</name>;</goto></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<comment type="block">/*
+		 * This page was created by a group allocation and
+		 * the file may not have been extend yet.
+		 * Create the page if necessary.
+		 */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>,
+		     <argument><expr>&amp;<name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>DB_MPOOL_CREATE</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<goto>goto <name>out</name>;</goto>
+		}</block></then></if>
+	}</block></then></if>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<comment type="block">/*
+	 * Two possible things going on:
+	 * redo a delete/undo a put: delete the item from the page.
+	 * redo a put/undo a delete: add the item to the page.
+	 * If we are undoing a delete, then the information logged is the
+	 * entire entry off the page, not just the data of a dbt.  In
+	 * this case, we want to copy it back onto the page verbatim.
+	 * We do this by calling __putitem with the type H_OFFPAGE instead
+	 * of H_KEYDATA.
+	 */</comment>
+
+	<expr_stmt><expr><name>opcode</name> = <call><name>OPCODE_OF</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>opcode</name> == <name>DELPAIR</name> &amp;&amp; <name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call>) ||
+	    (<name>opcode</name> == <name>PUTPAIR</name> &amp;&amp; <name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call>)</expr>)</condition><then> <block>{
+		<comment type="block">/*
+		 * Need to redo a PUT or undo a delete.  If we are undoing a
+		 * delete, we've got to restore the item back to its original
+		 * position.  That's a royal pain in the butt (because we do
+		 * not store item lengths on the page), but there's no choice.
+		 */</comment>
+		<if>if <condition>(<expr><name>opcode</name> != <name>DELPAIR</name> ||
+		    <name>argp</name>-&gt;<name>ndx</name> == (<name>u_int32_t</name>)<call><name>NUM_ENT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name><name>CHashPage</name>::<name>ham_putitem</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>key</name></expr></argument>,
+			    <argument><expr><call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> || <call><name>PAIR_ISKEYBIG</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call> ?
+			    <name>H_OFFPAGE</name> : <name>H_KEYDATA</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+			<if>if <condition>(<expr><call><name>PAIR_ISDATADUP</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+				<expr_stmt><expr><name>type</name> = <name>H_DUPLICATE</name></expr>;</expr_stmt></then>
+			<else>else <if>if <condition>(<expr><call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> || <call><name>PAIR_ISDATABIG</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_BTREE</name></cpp:ifdef>
+				<expr_stmt><expr><name>type</name> = <name>H_OFFPAGE</name></expr>;</expr_stmt></then></if></else></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+				<goto>goto <name>out</name>;</goto>	
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			<else>else
+				<expr_stmt><expr><name>type</name> = <name>H_KEYDATA</name></expr>;</expr_stmt></else>
+			<expr_stmt><expr><call><name><name>CHashPage</name>::<name>ham_putitem</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>data</name></expr></argument>, <argument><expr><name>type</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then> <else>else
+			<expr_stmt><expr><call><name><name>CHashPage</name>::<name>ham_reputpair</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>,
+			    <argument><expr><name>argp</name>-&gt;<name>ndx</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>key</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>data</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> ? *<name>lsnp</name> : <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+
+	}</block></then> <else>else <if>if <condition>(<expr>(<name>opcode</name> == <name>DELPAIR</name> &amp;&amp; <name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call>) ||
+	    (<name>opcode</name> == <name>PUTPAIR</name> &amp;&amp; <name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call>)</expr>)</condition><then> <block>{
+		<comment type="block">/* Need to undo a put or redo a delete. */</comment>
+		<expr_stmt><expr><call><name><name>CHashPage</name>::<name>ham_dpair</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>ndx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> ? *<name>lsnp</name> : <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+	<comment type="block">/* Return the previous LSN. */</comment>
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_newpage_recover --
+ *	This log message is used when we add/remove overflow pages.  This
+ *	message takes care of the pointer chains, not the data on the pages.
+ *
+ * PUBLIC: int __ham_newpage_recover
+ * PUBLIC:     __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_newpage_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_newpage_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>ret</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_newpage_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_newpage_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>new_pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>ppage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * There are potentially three pages we need to check: the one
+	 * that we created/deleted, the one before it and the one after
+	 * it.
+	 */</comment>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>) ||
+	    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>)</expr>)</condition><then> <block>{
+		<comment type="block">/* Redo a create new page or undo a delete new page. */</comment>
+		<expr_stmt><expr><call><name>P_INIT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>pgsize</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>new_pgno</name></expr></argument>,
+		    <argument><expr><name>argp</name>-&gt;<name>prev_pgno</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>next_pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>P_HASH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>) ||
+	    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>)</expr>)</condition><then> <block>{
+		<comment type="block">/*
+		 * Redo a delete or undo a create new page.  All we
+		 * really need to do is change the LSN.
+		 */</comment>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+
+	<if>if <condition>(<expr><name>flags</name></expr>)</condition><then>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> ? *<name>lsnp</name> : <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt></then></if>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+	<comment type="block">/* Now do the prev page. */</comment>
+<label><name>ppage</name>:</label>	<if>if <condition>(<expr><name>argp</name>-&gt;<name>prev_pgno</name> != <name>PGNO_INVALID</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>prev_pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>npage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>prevlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>prevlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>) ||
+		    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>)</expr>)</condition><then> <block>{
+			<comment type="block">/* Redo a create new page or undo a delete new page. */</comment>
+			<expr_stmt><expr><name>pagep</name>-&gt;<name>next_pgno</name> = <name>argp</name>-&gt;<name>new_pgno</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+		}</block></then> <else>else <if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp;
+		    <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>) ||
+		    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>)</expr>)</condition><then> <block>{
+			<comment type="block">/* Redo a delete or undo a create new page. */</comment>
+			<expr_stmt><expr><name>pagep</name>-&gt;<name>next_pgno</name> = <name>argp</name>-&gt;<name>next_pgno</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+		}</block></then></if></else></if>
+
+		<if>if <condition>(<expr><name>flags</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> ? *<name>lsnp</name> : <name>argp</name>-&gt;<name>prevlsn</name></expr>;</expr_stmt></then></if>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+		<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	}</block></then></if>
+
+	<comment type="block">/* Now time to do the next page */</comment>
+<label><name>npage</name>:</label>	<if>if <condition>(<expr><name>argp</name>-&gt;<name>next_pgno</name> != <name>PGNO_INVALID</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>next_pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>done</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>) ||
+		    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>)</expr>)</condition><then> <block>{
+			<comment type="block">/* Redo a create new page or undo a delete new page. */</comment>
+			<expr_stmt><expr><name>pagep</name>-&gt;<name>prev_pgno</name> = <name>argp</name>-&gt;<name>new_pgno</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+		}</block></then> <else>else <if>if <condition>(<expr>(<name>cmp_p</name> == 0 &amp;&amp;
+		    <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>DELOVFL</name>) ||
+		    (<name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp; <name>argp</name>-&gt;<name>opcode</name> == <name>PUTOVFL</name>)</expr>)</condition><then> <block>{
+			<comment type="block">/* Redo a delete or undo a create new page. */</comment>
+			<expr_stmt><expr><name>pagep</name>-&gt;<name>prev_pgno</name> = <name>argp</name>-&gt;<name>prev_pgno</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+		}</block></then></if></else></if>
+
+		<if>if <condition>(<expr><name>flags</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> ? *<name>lsnp</name> : <name>argp</name>-&gt;<name>nextlsn</name></expr>;</expr_stmt></then></if>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+		<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	}</block></then></if>
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_replace_recover --
+ *	This log message refers to partial puts that are local to a single
+ *	page.  You can think of them as special cases of the more general
+ *	insdel log message.
+ *
+ * PUBLIC: int __ham_replace_recover
+ * PUBLIC:    __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_replace_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_replace_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBT</name></type> <name>dbt</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>change</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>is_plus</name>, <name>ret</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int8_t</name> *</type><name>hk</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_replace_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_replace_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>done</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>dbt</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>dbt</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * Before we know the direction of the transformation we will
+	 * determine the size differential; then once we know if we are
+	 * redoing or undoing, we'll adjust the sign (is_plus) appropriately.
+	 */</comment>
+	<if>if <condition>(<expr><name>argp</name>-&gt;<name>newitem</name>.<name>size</name> &gt; <name>argp</name>-&gt;<name>olditem</name>.<name>size</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>change</name> = <name>argp</name>-&gt;<name>newitem</name>.<name>size</name> - <name>argp</name>-&gt;<name>olditem</name>.<name>size</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>is_plus</name> = 1</expr>;</expr_stmt>
+	}</block></then> <else>else <block>{
+		<expr_stmt><expr><name>change</name> = <name>argp</name>-&gt;<name>olditem</name>.<name>size</name> - <name>argp</name>-&gt;<name>newitem</name>.<name>size</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>is_plus</name> = 0</expr>;</expr_stmt>
+	}</block></else></if>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Reapply the change as specified. */</comment>
+		<expr_stmt><expr><name>dbt</name>.<name>data</name> = <name>argp</name>-&gt;<name>newitem</name>.<name>data</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbt</name>.<name>size</name> = <name>argp</name>-&gt;<name>newitem</name>.<name>size</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+		<comment type="block">/*
+		 * The is_plus flag is set properly to reflect
+		 * newitem.size - olditem.size.
+		 */</comment>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Undo the already applied change. */</comment>
+		<expr_stmt><expr><name>dbt</name>.<name>data</name> = <name>argp</name>-&gt;<name>olditem</name>.<name>data</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbt</name>.<name>size</name> = <name>argp</name>-&gt;<name>olditem</name>.<name>size</name></expr>;</expr_stmt>
+		<comment type="block">/*
+		 * Invert is_plus to reflect sign of
+		 * olditem.size - newitem.size.
+		 */</comment>
+		<expr_stmt><expr><name>is_plus</name> = !<name>is_plus</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+
+	<if>if <condition>(<expr><name>flags</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name><name>CHashPage</name>::<name>ham_onpage_replace</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>,
+		    <argument><expr><name>argp</name>-&gt;<name>ndx</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>off</name></expr></argument>, <argument><expr><name>change</name></expr></argument>, <argument><expr><name>is_plus</name></expr></argument>, <argument><expr>&amp;<name>dbt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>argp</name>-&gt;<name>makedup</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>hk</name> = <call><name>P_ENTRY</name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>ndx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<if>if <condition>(<expr><call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+				<expr_stmt><expr><call><name>HPAGE_PTYPE</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call> = <name>H_DUPLICATE</name></expr>;</expr_stmt></then>
+			<else>else
+				<expr_stmt><expr><call><name>HPAGE_PTYPE</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call> = <name>H_KEYDATA</name></expr>;</expr_stmt></else></if>
+		}</block></then></if>
+	}</block></then></if>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_splitdata_recover --
+ *
+ * PUBLIC: int __ham_splitdata_recover
+ * PUBLIC:    __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_splitdata_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_splitdata_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>ret</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_splitdata_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_splitdata_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>ret</name> == <name>DB_PAGE_NOTFOUND</name></expr>)</condition><then>
+				<goto>goto <name>done</name>;</goto></then>
+			<else>else <block>{
+				<expr_stmt><expr><name>ret</name> = <call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<goto>goto <name>out</name>;</goto>
+			}</block></else></if>
+		}</block></then></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+		<comment type="block">/* If the page is not here then it was later truncated. */</comment>
+		<if>if <condition>(<expr>!<call><name>IS_ZERO_LSN</name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<goto>goto <name>done</name>;</goto></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<comment type="block">/*
+		 * This page was created by a group allocation and
+		 * the file may not have been extend yet.
+		 * Create the page if necessary.
+		 */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>,
+		     <argument><expr>&amp;<name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>DB_MPOOL_CREATE</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<goto>goto <name>out</name>;</goto>
+		}</block></then></if>
+	}</block></then></if>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * There are two types of log messages here, one for the old page
+	 * and one for the new pages created.  The original image in the
+	 * SPLITOLD record is used for undo.  The image in the SPLITNEW
+	 * is used for redo.  We should never have a case where there is
+	 * a redo operation and the SPLITOLD record is on disk, but not
+	 * the SPLITNEW record.  Therefore, we only have work to do when
+	 * redo NEW messages and undo OLD messages, but we have to update
+	 * LSNs in both cases.
+	 */</comment>
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>argp</name>-&gt;<name>opcode</name> == <name>SPLITNEW</name></expr>)</condition><then>
+			<comment type="block">/* Need to redo the split described. */</comment>
+			<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pageimage</name>.<name>data</name></expr></argument>,
+			    <argument><expr><name>argp</name>-&gt;<name>pageimage</name>.<name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>argp</name>-&gt;<name>opcode</name> == <name>SPLITOLD</name></expr>)</condition><then> <block>{
+			<comment type="block">/* Put back the old image. */</comment>
+			<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pageimage</name>.<name>data</name></expr></argument>,
+			    <argument><expr><name>argp</name>-&gt;<name>pageimage</name>.<name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then> <else>else
+			<expr_stmt><expr><call><name>P_INIT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>pgsize</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>,
+			    <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>P_HASH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_copypage_recover --
+ *	Recovery function for copypage.
+ *
+ * PUBLIC: int __ham_copypage_recover
+ * PUBLIC:   __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_copypage_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_copypage_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>ret</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_copypage_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_copypage_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+
+	<comment type="block">/* This is the bucket page. */</comment>
+	<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>donext</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Need to redo update described. */</comment>
+		<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>page</name>.<name>data</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>page</name>.<name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>pgno</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>PREV_PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>PGNO_INVALID</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Need to undo update described. */</comment>
+		<expr_stmt><expr><call><name>P_INIT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>pgsize</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>,
+		    <argument><expr><name>argp</name>-&gt;<name>next_pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>P_HASH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+<label><name>donext</name>:</label>	<comment type="block">/* Now fix up the "next" page. */</comment>
+	<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>next_pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>do_nn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/* For REDO just update the LSN. For UNDO copy page back. */</comment>
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Need to undo update described. */</comment>
+		<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>page</name>.<name>data</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>page</name>.<name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+	<comment type="block">/* Now fix up the next's next page. */</comment>
+<label><name>do_nn</name>:</label>	<if>if <condition>(<expr><name>argp</name>-&gt;<name>nnext_pgno</name> == <name>PGNO_INVALID</name></expr>)</condition><then>
+		<goto>goto <name>done</name>;</goto></then></if>
+
+	<expr_stmt><expr><call><name>REC_FGET</name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>nnext_pgno</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>, <argument><expr><name>done</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nnextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>nnextlsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Need to redo update described. */</comment>
+		<expr_stmt><expr><call><name>PREV_PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>pgno</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Need to undo update described. */</comment>
+		<expr_stmt><expr><call><name>PREV_PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>next_pgno</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>nnextlsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then></if></else></if>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_metagroup_recover --
+ *	Recovery function for metagroup.
+ *
+ * PUBLIC: int __ham_metagroup_recover
+ * PUBLIC:   __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction1</name><parameterlist>(<param><decl><type><name>u_int32_t</name>&amp;</type> <name>flags</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction2</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>cmp_n</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>groupgrow</name></decl></param>, <param><decl><type><name>HASH_CURSOR</name> *&amp;</type> <name>hcp</name></decl></param>, <param><decl><type><name>__ham_metagroup_args</name> *&amp;</type> <name>argp</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>did_recover</name></decl></param>, <param><decl><type><name>db_recops</name>&amp;</type> <name>op</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>int</name></type> <name>ham_metagroup_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_metagroup_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBMETA</name> *</type><name>mmeta</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>flags</name>, <name>mmeta_flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>did_alloc</name>, <name>did_recover</name>, <name>groupgrow</name>, <name>ret</name></decl>;</decl_stmt>
+
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><name>mmeta_flags</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>did_alloc</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>mmeta</name> = <name>NULL</name></expr>;</expr_stmt>
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_metagroup_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_metagroup_read</name></name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * This logs the virtual create of pages pgno to pgno + bucket
+	 * If HAVE_FTRUNCATE is not supported the mpool page-allocation is not
+	 * transaction protected, we can never undo it.  Even in an abort,
+	 * we have to allocate these pages to the hash table if they
+	 * were actually created.  In particular, during disaster
+	 * recovery the metapage may be before this point if we
+	 * are rolling backward.  If the file has not been extended
+	 * then the metapage could not have been updated.
+	 * The log record contains:
+	 * bucket: old maximum bucket
+	 * pgno: page number of the new bucket.
+	 * We round up on log calculations, so we can figure out if we are
+	 * about to double the hash table if argp-&gt;bucket+1 is a power of 2.
+	 * If it is, then we are allocating an entire doubling of pages,
+	 * otherwise, we are simply allocated one new page.
+	 */</comment>
+	<expr_stmt><expr><name>groupgrow</name> =
+	    (<name>u_int32_t</name>)(1 &lt;&lt; <call><name><name>CDbLog2</name>::<name>db_log2</name></name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>bucket</name> + 1</expr></argument>)</argument_list></call>) == <name>argp</name>-&gt;<name>bucket</name> + 1</expr>;</expr_stmt>
+	<expr_stmt><expr><name>pgno</name> = <name>argp</name>-&gt;<name>pgno</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>argp</name>-&gt;<name>newalloc</name></expr>)</condition><then>
+		<expr_stmt><expr><name>pgno</name> += <name>argp</name>-&gt;<name>bucket</name></expr>;</expr_stmt></then></if>
+
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction1</name><argument_list>(<argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+	<comment type="block">/* If we are undoing, then we don't want to create the page. */</comment>
+	<if>if <condition>(<expr><name>ret</name> != 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+		<expr_stmt><expr><name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr><name>DB_MPOOL_CREATE</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then>
+	<else>else <if>if <condition>(<expr><name>ret</name> == <name>DB_PAGE_NOTFOUND</name></expr>)</condition><then>
+		<goto>goto <name>do_meta</name>;</goto></then></if></else></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>ret</name> != <name>ENOSPC</name></expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+		<expr_stmt><expr><name>pgno</name> = 0</expr>;</expr_stmt>
+		<goto>goto <name>do_meta</name>;</goto>
+	}</block></then></if>
+
+	<comment type="block">/*
+	 * When we get here then either we did not grow the file
+	 * (groupgrow == 0) or we did grow the file and the allocation
+	 * of those new pages succeeded.
+	 */</comment>
+	<expr_stmt><expr><name>did_alloc</name> = <name>groupgrow</name></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>pagelsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>flags</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>pagep</name>-&gt;<name>lsn</name> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+		<comment type="block">/* If this record allocated the pages give them back. */</comment>
+		<if>if <condition>(<expr><name>argp</name>-&gt;<name>newalloc</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name> &amp;&amp; (<name>ret</name> =
+			     <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>DB_MPOOL_DISCARD</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>out</name>;</goto></then></if>
+			<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpMethod</name>::<name>memp_ftruncate</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>out</name>;</goto></then></if>
+		}</block></then> <else>else
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<block>{
+			<comment type="block">/*
+			 * Otherwise just roll the page back to its
+			 * previous state.
+			 */</comment>
+			<expr_stmt><expr><name>pagep</name>-&gt;<name>lsn</name> = <name>argp</name>-&gt;<name>pagelsn</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></then></if></else></if>
+	<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name> &amp;&amp; (<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+
+<label><name>do_meta</name>:</label>
+	<comment type="block">/* Now we have to update the meta-data page. */</comment>
+	<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_get_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>lsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>lsn</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>metalsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>lsn</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>metalsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>did_recover</name> = 0</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Redo the actual updating of bucket counts. */</comment>
+		<expr_stmt><expr>++<name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>max_bucket</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>groupgrow</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>low_mask</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>high_mask</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>high_mask</name> =
+			    (<name>argp</name>-&gt;<name>bucket</name> + 1) | <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>low_mask</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>lsn</name> = *<name>lsnp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>did_recover</name> = 1</expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/* Undo the actual updating of bucket counts. */</comment>
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>max_bucket</name> = <name>argp</name>-&gt;<name>bucket</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>groupgrow</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>high_mask</name> = <name>argp</name>-&gt;<name>bucket</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>low_mask</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>high_mask</name> &gt;&gt; 1</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>lsn</name> = <name>argp</name>-&gt;<name>metalsn</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>did_recover</name> = 1</expr>;</expr_stmt>
+	}</block></then></if></else></if>
+
+	<comment type="block">/*
+	 * Now we need to fix up the spares array.  Each entry in the
+	 * spares array indicates the beginning page number for the
+	 * indicated doubling.  We need to fill this in whenever the
+	 * spares array is invalid, if we never reclaim pages then
+	 * we have to allocate the pages to the spares array in both
+	 * the redo and undo cases.
+	 */</comment>
+	<if>if <condition>(<expr><name>did_alloc</name> &amp;&amp;
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+	    !<call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call> &amp;&amp;
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	    <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name><name>spares</name><index>[<expr><call><name><name>CDbLog2</name>::<name>db_log2</name></name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>bucket</name> + 1</expr></argument>)</argument_list></call> + 1</expr>]</index></name> == <name>PGNO_INVALID</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name><name>spares</name><index>[<expr><call><name><name>CDbLog2</name>::<name>db_log2</name></name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>bucket</name> + 1</expr></argument>)</argument_list></call> + 1</expr>]</index></name> =
+		    (<name>argp</name>-&gt;<name>pgno</name> - <name>argp</name>-&gt;<name>bucket</name>) - 1</expr>;</expr_stmt>
+		<expr_stmt><expr><name>did_recover</name> = 1</expr>;</expr_stmt>
+	}</block></then></if>
+<expr_stmt><expr><call><name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction2</name><argument_list>(<argument><expr><name>cmp_n</name></expr></argument>, <argument><expr><name>groupgrow</name></expr></argument>, <argument><expr><name>hcp</name></expr></argument>, <argument><expr><name>argp</name></expr></argument>, <argument><expr><name>did_recover</name></expr></argument>, <argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * Finally, we need to potentially fix up the last_pgno field
+	 * in the master meta-data page (which may or may not be the
+	 * same as the hash header page).
+	 */</comment>
+	<if>if <condition>(<expr><name>argp</name>-&gt;<name>mmpgno</name> != <name>argp</name>-&gt;<name>mpgno</name></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>mmpgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>mmeta</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+		<expr_stmt><expr><name>mmeta_flags</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<name>mmeta</name>-&gt;<name>lsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<name>mmeta</name>-&gt;<name>lsn</name></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>mmetalsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>cmp_p</name> == 0 &amp;&amp; <call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr><name>mmeta</name>-&gt;<name>lsn</name> = *<name>lsnp</name></expr>;</expr_stmt></then>
+		<else>else <if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr><name>mmeta</name>-&gt;<name>lsn</name> = <name>argp</name>-&gt;<name>mmetalsn</name></expr>;</expr_stmt></then></if></else></if>
+	}</block></then> <else>else
+		<expr_stmt><expr><name>mmeta</name> = (<name>DBMETA</name> *)<name>hcp</name>-&gt;<name>hdr</name></expr>;</expr_stmt></else></if>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+	<if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+		<expr_stmt><expr><name>mmeta</name>-&gt;<name>last_pgno</name> = <name>argp</name>-&gt;<name>last_pgno</name></expr>;</expr_stmt></then>
+	<else>else <if>if <condition>(<expr><call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	<if>if <condition>(<expr><name>mmeta</name>-&gt;<name>last_pgno</name> &lt; <name>pgno</name></expr>)</condition><then>
+		<expr_stmt><expr><name>mmeta</name>-&gt;<name>last_pgno</name> = <name>pgno</name></expr>;</expr_stmt></then></if></then></if></else></if>
+	<expr_stmt><expr><name>mmeta_flags</name> = <name>DB_MPOOL_DIRTY</name></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>argp</name>-&gt;<name>mmpgno</name> != <name>argp</name>-&gt;<name>mpgno</name> &amp;&amp;
+	    (<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>mmeta</name></expr></argument>, <argument><expr><name>mmeta_flags</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<goto>goto <name>out</name>;</goto></then></if>
+	<expr_stmt><expr><name>mmeta</name> = <name>NULL</name></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>did_recover</name></expr>)</condition><then>
+		<constructor_decl><name>F_SET</name><parameter_list>(<param><decl><type><name>hcp</name></type></decl></param>, <param><decl><type><name>H_DIRTY</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>mmeta</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>mmeta</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<if>if <condition>(<expr><name>dbc</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<if>if <condition>(<expr><name>ret</name> == <name>ENOENT</name> &amp;&amp; <name>op</name> == <name>DB_TXN_BACKWARD_ALLOC</name></expr>)</condition><then>
+		<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt></then></if>
+
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_groupalloc_recover --
+ *	Recover the batch creation of a set of pages for a new database.
+ *
+ * PUBLIC: int __ham_groupalloc_recover
+ * PUBLIC:   __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_groupalloc_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_groupalloc_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBMETA</name> *</type><name>mmeta</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>cmp_n</name>, <name>cmp_p</name>, <name>modified</name>, <name>ret</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>mmeta</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>modified</name> = 0</expr>;</expr_stmt>
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_groupalloc_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_groupalloc_read</name></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>pgno</name> = <name>PGNO_BASE_MD</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>mmeta</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<goto>goto <name>out</name>;</goto>
+		}</block></then> <else>else
+			<goto>goto <name>done</name>;</goto></else></if>
+	}</block></then></if>
+
+	<expr_stmt><expr><name>cmp_n</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr><name>lsnp</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>mmeta</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>cmp_p</name> = <call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>mmeta</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>meta_lsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>CHECK_LSN</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>cmp_p</name></expr></argument>, <argument><expr>&amp;<call><name>LSN</name><argument_list>(<argument><expr><name>mmeta</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>argp</name>-&gt;<name>meta_lsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/*
+	 * Basically, we used mpool to allocate a chunk of pages.
+	 * We need to either add those to a free list (in the undo
+	 * case) or initialize them (in the redo case).
+	 *
+	 * If we are redoing and this is a hash subdatabase, it's possible
+	 * that the pages were never allocated, so we'd better check for
+	 * that and handle it here.
+	 */</comment>
+	<expr_stmt><expr><name>pgno</name> = <name>argp</name>-&gt;<name>start_pgno</name> + <name>argp</name>-&gt;<name>num</name> - 1</expr>;</expr_stmt>
+	<if>if <condition>(<expr><call><name>DB_REDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name>ham_alloc_pages</name><argument_list>(<argument><expr><name>file_dbp</name></expr></argument>, <argument><expr><name>argp</name></expr></argument>, <argument><expr><name>lsnp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+		<if>if <condition>(<expr><name>cmp_p</name> == 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>mmeta</name></expr></argument>)</argument_list></call> = *<name>lsnp</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>modified</name> = 1</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></then> <else>else <if>if <condition>(<expr><call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<comment type="block">/*
+		 * Fetch the last page and determine if it is in
+		 * the post allocation state.
+		 */</comment>
+		<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) == 0</expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<name>pagep</name>-&gt;<name>lsn</name></expr></argument>, <argument><expr><name>lsnp</name></expr></argument>)</argument_list></call> != 0</expr>)</condition><then> <block>{
+				<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>,
+				     <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>DB_MPOOL_DISCARD</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<goto>goto <name>out</name>;</goto></then></if>
+				<expr_stmt><expr><name>pagep</name> = <name>NULL</name></expr>;</expr_stmt>
+			}</block></then></if>
+		}</block></then> <else>else <if>if <condition>(<expr><name>ret</name> != <name>DB_PAGE_NOTFOUND</name></expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if></else></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<comment type="block">/*
+		 * If the last page was allocated then truncate back
+		 * to the first page.
+		 */</comment>
+		<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>ret</name> =
+			    <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>DB_MPOOL_DISCARD</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>out</name>;</goto></then></if>
+			<if>if <condition>(<expr>(<name>ret</name> =
+			     <call><name><name>CMpMethod</name>::<name>memp_ftruncate</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>start_pgno</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>out</name>;</goto></then></if>
+		}</block></then></if>
+
+		<comment type="block">/*
+		 * If we are rolling back the metapage, then make
+		 * sure it reflects the the correct last_pgno.
+		 */</comment>
+		<if>if <condition>(<expr><name>cmp_n</name> == 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>mmeta</name>-&gt;<name>last_pgno</name> = <name>argp</name>-&gt;<name>last_pgno</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>modified</name> = 1</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>pgno</name> = 0</expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<comment type="block">/*
+		 * Reset the last page back to its preallocation state.
+		 */</comment>
+		<if>if <condition>(<expr><name>pagep</name> != <name>NULL</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name><name>CLogCompare</name>::<name>log_compare</name></name><argument_list>(<argument><expr>&amp;<name>pagep</name>-&gt;<name>lsn</name></expr></argument>, <argument><expr><name>lsnp</name></expr></argument>)</argument_list></call> == 0</expr>)</condition><then>
+				<expr_stmt><expr><call><name>ZERO_LSN</name><argument_list>(<argument><expr><name>pagep</name>-&gt;<name>lsn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+			<if>if <condition>(<expr>(<name>ret</name> =
+			    <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>DB_MPOOL_DIRTY</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>out</name>;</goto></then></if>
+		}</block></then></if>
+		<comment type="block">/*
+		 * Put the pages into the limbo list and free them later.
+		 */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_limbo</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+		    <argument><expr><name>info</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>fileid</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>start_pgno</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>num</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>out</name>;</goto></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<if>if <condition>(<expr><name>cmp_n</name> == 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>LSN</name><argument_list>(<argument><expr><name>mmeta</name></expr></argument>)</argument_list></call> = <name>argp</name>-&gt;<name>meta_lsn</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>modified</name> = 1</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></then></if></else></if>
+
+	<comment type="block">/*
+	 * In both REDO and UNDO, we have grown the file and need to make
+	 * sure that last_pgno is correct.  If we HAVE_FTRUNCATE pgno
+	 * will only be valid on REDO.
+	 */</comment>
+	<if>if <condition>(<expr><name>pgno</name> &gt; <name>mmeta</name>-&gt;<name>last_pgno</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>mmeta</name>-&gt;<name>last_pgno</name> = <name>pgno</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>modified</name> = 1</expr>;</expr_stmt>
+	}</block></then></if>
+
+<label><name>done</name>:</label>	<if>if <condition>(<expr><name>ret</name> == 0</expr>)</condition><then>
+		<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+<label><name>out</name>:</label>	<if>if <condition>(<expr><name>mmeta</name> != <name>NULL</name></expr>)</condition><then>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>mmeta</name></expr></argument>, <argument><expr><name>modified</name> ? <name>DB_MPOOL_DIRTY</name> : 0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+	<if>if <condition>(<expr><name>ret</name> == <name>ENOENT</name> &amp;&amp; <name>op</name> == <name>DB_TXN_BACKWARD_ALLOC</name></expr>)</condition><then>
+		<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_alloc_pages --
+ *
+ * Called during redo of a file create.  We create new pages in the file
+ * using the MPOOL_NEW_GROUP flag.  We then log the meta-data page with a
+ * __crdel_metasub message.  If we manage to crash without the newly written
+ * pages getting to disk (I'm not sure this can happen anywhere except our
+ * test suite?!), then we need to go through a recreate the final pages.
+ * Hash normally has holes in its files and handles them appropriately.
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_alloc_pages</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>__ham_groupalloc_args</name> *</type><name>argp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>PAGE</name> *</type><name>pagep</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>mpf</name> = <name>dbp</name>-&gt;<name>mpf</name></expr>;</expr_stmt>
+
+	<comment type="block">/* Read the last page of the allocation. */</comment>
+	<expr_stmt><expr><name>pgno</name> = <name>argp</name>-&gt;<name>start_pgno</name> + <name>argp</name>-&gt;<name>num</name> - 1</expr>;</expr_stmt>
+
+	<comment type="block">/* If the page exists, and it has been initialized, then we're done. */</comment>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) == 0</expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><call><name>NUM_ENT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> == 0 &amp;&amp; <call><name>IS_ZERO_LSN</name><argument_list>(<argument><expr><name>pagep</name>-&gt;<name>lsn</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<goto>goto <name>reinit_page</name>;</goto></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></then></if>
+
+	<comment type="block">/* Had to create the page. */</comment>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr><name>DB_MPOOL_CREATE</name></expr></argument>, <argument><expr>&amp;<name>pagep</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<return>return <expr>(<call><name><name>CDbErr</name>::<name>db_pgerr</name></name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call>)</expr>;</return></then></if>
+
+<label><name>reinit_page</name>:</label>
+	<comment type="block">/* Initialize the newly allocated page. */</comment>
+	<expr_stmt><expr><call><name>P_INIT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>dbp</name>-&gt;<name>pgsize</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>P_HASH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>pagep</name>-&gt;<name>lsn</name> = *<name>lsnp</name></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>DB_MPOOL_DIRTY</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+
+	<return>return <expr>(0)</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_curadj_recover --
+ *	Undo cursor adjustments if a subtransaction fails.
+ *
+ * PUBLIC: int __ham_curadj_recover
+ * PUBLIC:   __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_curadj_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_curadj_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_curadj_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_curadj_read</name></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>op</name> != <name>DB_TXN_ABORT</name></expr>)</condition><then>
+		<goto>goto <name>done</name>;</goto></then></if>
+
+	<comment type="block">/*
+	 * Undo the adjustment by reinitializing the the cursor to look like
+	 * the one that was used to do the adjustment, then we invert the
+	 * add so that undo the adjustment.
+	 */</comment>
+	<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hcp</name>-&gt;<name>pgno</name> = <name>argp</name>-&gt;<name>pgno</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hcp</name>-&gt;<name>indx</name> = <name>argp</name>-&gt;<name>indx</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hcp</name>-&gt;<name>dup_off</name> = <name>argp</name>-&gt;<name>dup_off</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hcp</name>-&gt;<name>order</name> = <name>argp</name>-&gt;<name>order</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<name>argp</name>-&gt;<name>add</name></expr>)</condition><then>
+		<constructor_decl><name>F_SET</name><parameter_list>(<param><decl><type><name>hcp</name></type></decl></param>, <param><decl><type><name>H_DELETED</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+	<expr_stmt><expr>(<name>void</name>)<call><name><name>CHash</name>::<name>ham_c_update</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>len</name></expr></argument>, <argument><expr>!<name>argp</name>-&gt;<name>add</name></expr></argument>, <argument><expr><name>argp</name>-&gt;<name>is_dup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+<label><name>out</name>:</label>	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+ * __ham_chgpg_recover --
+ *	Undo cursor adjustments if a subtransaction fails.
+ *
+ * PUBLIC: int __ham_chgpg_recover
+ * PUBLIC:   __P((DB_ENV *, DBT *, DB_LSN *, db_recops, void *));
+ */</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_chgpg_recover</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>info</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>__ham_chgpg_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>CBTreeCursor</name> *</type><name>opdcp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DB</name> *</type><name>file_dbp</name>, *<name>ldbp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>dbc</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>DBC</name> *</type><name>cp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>lcp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>u_int32_t</name></type> <name>order</name>, <name>indx</name></decl>;</decl_stmt>
+
+	<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>info</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<constructor_decl><name>REC_PRINT</name><parameter_list>(<param><decl><type><name><name>CHashAutop</name>::<name>ham_chgpg_print</name></name></type></decl></param>)</parameter_list>;</constructor_decl>
+	<expr_stmt><expr><call><name>REC_INTRO</name><argument_list>(<argument><expr><name><name>CHashAuto</name>::<name>ham_chgpg_read</name></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>op</name> != <name>DB_TXN_ABORT</name></expr>)</condition><then>
+		<goto>goto <name>done</name>;</goto></then></if>
+
+	<comment type="block">/* Overloaded fields for DB_HAM_DEL*PG */</comment>
+	<expr_stmt><expr><name>indx</name> = <name>argp</name>-&gt;<name>old_indx</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>order</name> = <name>argp</name>-&gt;<name>new_indx</name></expr>;</expr_stmt>
+
+	<expr_stmt><expr><call><name>MUTEX_LOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbenv</name>-&gt;<name>mtx_dblist</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<for>for (<init><expr><name>ldbp</name> = <call><name><name>DB</name>::<name>dblist_get</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>adj_fileid</name></expr></argument>)</argument_list></call></expr>;</init>
+	    <condition><expr><name>ldbp</name> != <name>NULL</name> &amp;&amp; <name>ldbp</name>-&gt;<name>adj_fileid</name> == <name>file_dbp</name>-&gt;<name>adj_fileid</name></expr>;</condition>
+	    <incr><expr><name>ldbp</name> = <call><name>LIST_NEXT</name><argument_list>(<argument><expr><name>ldbp</name></expr></argument>, <argument><expr><name>dblistlinks</name></expr></argument>)</argument_list></call></expr></incr>) <block>{
+		<expr_stmt><expr><call><name>MUTEX_LOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<for>for (<init><expr><name>cp</name> = <call><name>TAILQ_FIRST</name><argument_list>(<argument><expr>&amp;<name>ldbp</name>-&gt;<name>active_queue</name></expr></argument>)</argument_list></call></expr>;</init> <condition><expr><name>cp</name> != <name>NULL</name></expr>;</condition>
+		    <incr><expr><name>cp</name> = <call><name>TAILQ_NEXT</name><argument_list>(<argument><expr><name>cp</name></expr></argument>, <argument><expr><name>links</name></expr></argument>)</argument_list></call></expr></incr>) <block>{
+			<expr_stmt><expr><name>lcp</name> = (<name>HASH_CURSOR</name> *)<name>cp</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+			<switch>switch <condition>(<expr><name>argp</name>-&gt;<name>mode</name></expr>)</condition> <block>{
+			<case>case <expr><name>DB_HAM_DELFIRSTPG</name></expr>:
+				<if>if <condition>(<expr><name>lcp</name>-&gt;<name>pgno</name> != <name>argp</name>-&gt;<name>new_pgno</name></expr>)</condition><then>
+					<break>break;</break></then></if>
+				<if>if <condition>(<expr><name>lcp</name>-&gt;<name>indx</name> != <name>indx</name> ||
+				    !<call><name>F_ISSET</name><argument_list>(<argument><expr><name>lcp</name></expr></argument>, <argument><expr><name>H_DELETED</name></expr></argument>)</argument_list></call> ||
+				    <name>lcp</name>-&gt;<name>order</name> &gt;= <name>order</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>pgno</name> = <name>argp</name>-&gt;<name>old_pgno</name></expr>;</expr_stmt>
+					<if>if <condition>(<expr><name>lcp</name>-&gt;<name>indx</name> == <name>indx</name></expr>)</condition><then>
+						<expr_stmt><expr><name>lcp</name>-&gt;<name>order</name> -= <name>order</name></expr>;</expr_stmt></then></if>
+				}</block></then></if>
+				<break>break;</break>
+			</case><case>case <expr><name>DB_HAM_DELMIDPG</name></expr>:
+			</case><case>case <expr><name>DB_HAM_DELLASTPG</name></expr>:
+				<if>if <condition>(<expr><name>lcp</name>-&gt;<name>pgno</name> == <name>argp</name>-&gt;<name>new_pgno</name> &amp;&amp;
+				    <name>lcp</name>-&gt;<name>indx</name> == <name>indx</name> &amp;&amp;
+				    <call><name>F_ISSET</name><argument_list>(<argument><expr><name>lcp</name></expr></argument>, <argument><expr><name>H_DELETED</name></expr></argument>)</argument_list></call> &amp;&amp;
+				    <name>lcp</name>-&gt;<name>order</name> &gt;= <name>order</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>pgno</name> = <name>argp</name>-&gt;<name>old_pgno</name></expr>;</expr_stmt>
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>order</name> -= <name>order</name></expr>;</expr_stmt>
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>indx</name> = 0</expr>;</expr_stmt>
+				}</block></then></if>
+				<break>break;</break>
+			</case><case>case <expr><name>DB_HAM_CHGPG</name></expr>:
+				<comment type="block">/*
+				 * If we're doing a CHGPG, we're undoing
+				 * the move of a non-deleted item to a
+				 * new page.  Any cursors with the deleted
+				 * flag set do not belong to this item;
+				 * don't touch them.
+				 */</comment>
+				<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>lcp</name></expr></argument>, <argument><expr><name>H_DELETED</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+					<break>break;</break></then></if>
+				<comment type="block">/* FALLTHROUGH */</comment>
+			</case><case>case <expr><name>DB_HAM_SPLIT</name></expr>:
+				<if>if <condition>(<expr><name>lcp</name>-&gt;<name>pgno</name> == <name>argp</name>-&gt;<name>new_pgno</name> &amp;&amp;
+				    <name>lcp</name>-&gt;<name>indx</name> == <name>argp</name>-&gt;<name>new_indx</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>indx</name> = <name>argp</name>-&gt;<name>old_indx</name></expr>;</expr_stmt>
+					<expr_stmt><expr><name>lcp</name>-&gt;<name>pgno</name> = <name>argp</name>-&gt;<name>old_pgno</name></expr>;</expr_stmt>
+				}</block></then></if>
+				<break>break;</break>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_BTREE</name></cpp:ifdef>			
+			</case><case>case <expr><name>DB_HAM_DUP</name></expr>:
+				<if>if <condition>(<expr><name>lcp</name>-&gt;<name>opd</name> == <name>NULL</name></expr>)</condition><then>
+					<break>break;</break></then></if>
+				<expr_stmt><expr><name>opdcp</name> = (<name>CBTreeCursor</name> *)<name>lcp</name>-&gt;<name>opd</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+				<if>if <condition>(<expr><name>opdcp</name>-&gt;<name>pgno</name> != <name>argp</name>-&gt;<name>new_pgno</name> ||
+				    <name>opdcp</name>-&gt;<name>indx</name> != <name>argp</name>-&gt;<name>new_indx</name></expr>)</condition><then>
+					<break>break;</break></then></if>
+
+				<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>opdcp</name></expr></argument>, <argument><expr><name>C_DELETED</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+					<constructor_decl><name>F_SET</name><parameter_list>(<param><decl><type><name>lcp</name></type></decl></param>, <param><decl><type><name>H_DELETED</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+				<comment type="block">/*
+				 * We can't close a cursor while we have the
+				 * dbp mutex locked, since c_close reacquires
+				 * it.  It should be safe to drop the mutex
+				 * here, though, since newly opened cursors
+				 * are put only at the end of the tailq and
+				 * the cursor we're adjusting can't be closed
+				 * under us.
+				 */</comment>
+				<expr_stmt><expr><call><name>MUTEX_UNLOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbCam</name>::<name>db_c_close</name></name><argument_list>(<argument><expr><name>lcp</name>-&gt;<name>opd</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<goto>goto <name>out</name>;</goto></then></if>
+				<expr_stmt><expr><call><name>MUTEX_LOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>lcp</name>-&gt;<name>opd</name> = <name>NULL</name></expr>;</expr_stmt>
+				<break>break;</break>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>	
+			</case>}</block></switch>
+		}</block></for>
+		<expr_stmt><expr><call><name>MUTEX_UNLOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>file_dbp</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></for>
+	<expr_stmt><expr><call><name>MUTEX_UNLOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbenv</name>-&gt;<name>mtx_dblist</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+<label><name>done</name>:</label>	<expr_stmt><expr>*<name>lsnp</name> = <name>argp</name>-&gt;<name>prev_lsn</name></expr>;</expr_stmt>
+<label><name>out</name>:</label>	<expr_stmt><expr><name>REC_CLOSE</name></expr>;</expr_stmt>
+}</block></function>
+
+</public>
+}</block></class>;</unit>

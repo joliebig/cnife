@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>Class</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/case/Base/ClassHookFunction1</name><parameterlist>()</parameterlist>
+	<block>{
+	
+	<case>case <expr>2</expr>:
+		<expr_stmt><expr><call><name>print2</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+		<break>break;</break></case>
+<comment>//--functionbody</comment>
+	}</block></function>
+<public>
+public:
+
+	<decl_stmt><decl><type><name>int</name></type> <name>k</name></decl>;</decl_stmt>
+</public>
+}</block></class>;</unit>

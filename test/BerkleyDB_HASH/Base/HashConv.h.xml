@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashConv.h" language="C++"><comment type="block">/*-
+* See the file LICENSE for redistribution information.
+*
+* Copyright (c) 1996-2005
+*	Sleepycat Software.  All rights reserved.
+*
+* $Id: HashConv.cpp,v 1.4 2006/08/16 17:43:20 rosenmue Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_swap.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"hash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashConv.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbConv.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Hash.h"</cpp:file></cpp:include>
+
+
+
+<class>class <name>CHashConv</name>
+<block>{<private type="default">
+
+	</private><public><comment type="line">//#ifndef HAVE_HASH</comment>
+
+	</public>}</block>;</class>
+
+
+</unit>

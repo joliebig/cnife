@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashStat</name>
+<block>{
+<comment>//---refactored functions</comment><public>
+public:
+
+	<comment type="block">/*
+	* __ham_print_cursor --
+	*	Display the current cursor.
+	*
+	* PUBLIC: void __ham_print_cursor __P((DBC *));
+	*/</comment>
+	<function><type><name>static</name> <name>void</name></type> <name>ham_print_cursor</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>const</name> <name>FN</name></type> <name><name>fn</name><index>[]</index></name> =<init> <expr><block>{
+			<expr><block>{ <expr><name>H_CONTINUE</name></expr>,	<expr>"H_CONTINUE"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_DELETED</name></expr>,	<expr>"H_DELETED"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_DIRTY</name></expr>,	<expr>"H_DIRTY"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_DUPONLY</name></expr>,	<expr>"H_DUPONLY"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_EXPAND</name></expr>,	<expr>"H_EXPAND"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_ISDUP</name></expr>,	<expr>"H_ISDUP"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_NEXT_NODUP</name></expr>,	<expr>"H_NEXT_NODUP"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_NOMORE</name></expr>,	<expr>"H_NOMORE"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>H_OK</name></expr>,		<expr>"H_OK"</expr> }</block></expr>,
+			<expr><block>{ <expr>0</expr>,		<expr><name>NULL</name></expr> }</block></expr>
+		}</block></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>cp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>dbenv</name> = <name>dbc</name>-&gt;<name>dbp</name>-&gt;<name>dbenv</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>cp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Bucket traversing"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>bucket</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Bucket locked"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>lbucket</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Duplicate set offset"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>dup_off</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Current duplicate length"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>dup_len</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Total duplicate set length"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>dup_tlen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Bytes needed for add"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>seek_size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Page on which we can insert"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>seek_found_page</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>STAT_ULONG</name><argument_list>(<argument><expr>"Order"</expr></argument>, <argument><expr><name>cp</name>-&gt;<name>order</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CDbPr</name>::<name>db_prflags</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>cp</name>-&gt;<name>flags</name></expr></argument>, <argument><expr><name>fn</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>"\tInternal Flags"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_stat --
+	*	Gather/print the hash statistics
+	*
+	* PUBLIC: int __ham_stat __P((DBC *, void *, u_int32_t));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_stat</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>, <param><decl><type><name>void</name> *</type><name>spp</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>flags</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB</name> *</type><name>dbp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_HASH_STAT</name> *</type><name>sp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>PAGE</name> *</type><name>h</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>dbp</name> = <name>dbc</name>-&gt;<name>dbp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbenv</name> = <name>dbp</name>-&gt;<name>dbenv</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>mpf</name> = <name>dbp</name>-&gt;<name>mpf</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_get_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+
+		<comment type="block">/* Allocate and clear the structure. */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_umalloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>sp</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>sp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+		<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>sp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>sp</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="block">/* Copy the fields that we have. */</comment>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_nkeys</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>key_count</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ndata</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>record_count</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_pagesize</name> = <name>dbp</name>-&gt;<name>pgsize</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_buckets</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>max_bucket</name> + 1</expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_magic</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>magic</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_version</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>version</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_metaflags</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>flags</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ffactor</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>ffactor</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr><name>flags</name> == <name>DB_FAST_STAT</name> || <name>flags</name> == <name>DB_CACHED_COUNTS</name></expr>)</condition><then>
+			<goto>goto <name>done</name>;</goto></then></if>
+
+		<comment type="block">/* Walk the free list, counting pages. */</comment>
+		<for>for (<init><expr><name>sp</name>-&gt;<name>hash_free</name> = 0</expr>, <expr><name>pgno</name> = <name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>free</name></expr>;</init>
+			<condition><expr><name>pgno</name> != <name>PGNO_INVALID</name></expr>;</condition><incr/>) <block>{
+				<expr_stmt><expr>++<name>sp</name>-&gt;<name>hash_free</name></expr>;</expr_stmt>
+
+				<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>h</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<goto>goto <name>err</name>;</goto></then></if>
+
+				<expr_stmt><expr><name>pgno</name> = <name>h</name>-&gt;<name>next_pgno</name></expr>;</expr_stmt>
+				<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>h</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+
+		<comment type="block">/* Now traverse the rest of the table. */</comment>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_nkeys</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ndata</name> = 0</expr>;</expr_stmt>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name>ham_traverse</name><argument_list>(<argument><expr><name>dbc</name></expr></argument>,
+			<argument><expr><name>DB_LOCK_READ</name></expr></argument>, <argument><expr><name>ham_stat_callback</name></expr></argument>, <argument><expr><name>sp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+
+		<if>if <condition>(<expr>!<call><name>F_ISSET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>DB_AM_RDONLY</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_dirty_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>err</name>;</goto></then></if>
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>key_count</name> = <name>sp</name>-&gt;<name>hash_nkeys</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name>dbmeta</name>.<name>record_count</name> = <name>sp</name>-&gt;<name>hash_ndata</name></expr>;</expr_stmt>
+		}</block></then></if>
+
+<label><name>done</name>:</label>	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+
+		<expr_stmt><expr>*(<name>DB_HASH_STAT</name> **)<name>spp</name> = <name>sp</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+
+<label><name>err</name>:</label>	<if>if <condition>(<expr><name>sp</name> != <name>NULL</name></expr>)</condition><then>
+			<constructor_decl><name>COsAlloc::os_ufree</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>sp</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+		<if>if <condition>(<expr><name>hcp</name>-&gt;<name>hdr</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashMeta</name>::<name>ham_release_meta</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_stat_print --
+	*	Display hash statistics.
+	*
+	* PUBLIC: int __ham_stat_print __P((DBC *, u_int32_t));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_stat_print</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>flags</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>const</name> <name>FN</name></type> <name><name>fn</name><index>[]</index></name> =<init> <expr><block>{
+			<expr><block>{ <expr><name>DB_HASH_DUP</name></expr>,		<expr>"duplicates"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>DB_HASH_SUBDB</name></expr>,	<expr>"multiple-databases"</expr> }</block></expr>,
+			<expr><block>{ <expr><name>DB_HASH_DUPSORT</name></expr>,	<expr>"sorted duplicates"</expr> }</block></expr>,
+			<expr><block>{ <expr>0</expr>,			<expr><name>NULL</name></expr> }</block></expr>
+		}</block></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB</name> *</type><name>dbp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_HASH_STAT</name> *</type><name>sp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>lorder</name>, <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>s</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>dbp</name> = <name>dbc</name>-&gt;<name>dbp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbenv</name> = <name>dbp</name>-&gt;<name>dbenv</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashStat</name>::<name>ham_stat</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr>&amp;<name>sp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_STAT_ALL</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_msg</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>db_line</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_msg</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Default Hash database information:"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_msg</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%lx\tHash magic number"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_magic</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_msg</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"%lu\tHash version number"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_version</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name><name>CDbMethod</name>::<name>db_get_lorder</name></name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr>&amp;<name>lorder</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<switch>switch <condition>(<expr><name>lorder</name></expr>)</condition> <block>{
+<case>case <expr>1234</expr>:
+	<expr_stmt><expr><name>s</name> = "Little-endian"</expr>;</expr_stmt>
+	<break>break;</break>
+</case><case>case <expr>4321</expr>:
+	<expr_stmt><expr><name>s</name> = "Big-endian"</expr>;</expr_stmt>
+	<break>break;</break>
+</case><default>default:
+	<expr_stmt><expr><name>s</name> = "Unrecognized byte order"</expr>;</expr_stmt>
+	<break>break;</break>
+		</default>}</block></switch>
+		<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_msg</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%s\tByte order"</expr></argument>, <argument><expr><name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CDbPr</name>::<name>db_prflags</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_metaflags</name></expr></argument>, <argument><expr><name>fn</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>"\tFlags"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Underlying database page size"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_pagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Specified fill factor"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_ffactor</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of keys in the database"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_nkeys</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of data items in the database"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_ndata</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Number of hash buckets"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_buckets</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl_pct</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Number of bytes free on bucket pages"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_bfree</name></expr></argument>, <argument><expr><call><name>DB_PCT_PG</name><argument_list>(
+			<argument><expr><name>sp</name>-&gt;<name>hash_bfree</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_buckets</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_pagesize</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>"ff"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of overflow pages"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_bigpages</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl_pct</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Number of bytes free in overflow pages"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_big_bfree</name></expr></argument>, <argument><expr><call><name>DB_PCT_PG</name><argument_list>(
+			<argument><expr><name>sp</name>-&gt;<name>hash_big_bfree</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_bigpages</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_pagesize</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>"ff"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of bucket overflow pages"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_overflows</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl_pct</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of bytes free in bucket overflow pages"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_ovfl_free</name></expr></argument>, <argument><expr><call><name>DB_PCT_PG</name><argument_list>(
+			<argument><expr><name>sp</name>-&gt;<name>hash_ovfl_free</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_overflows</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_pagesize</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>"ff"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Number of duplicate pages"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_dup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl_pct</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"Number of bytes free in duplicate pages"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_dup_free</name></expr></argument>, <argument><expr><call><name>DB_PCT_PG</name><argument_list>(
+			<argument><expr><name>sp</name>-&gt;<name>hash_dup_free</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_dup</name></expr></argument>, <argument><expr><name>sp</name>-&gt;<name>hash_pagesize</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>"ff"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name><name>CEnvStat</name>::<name>db_dl</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"Number of pages on the free list"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>sp</name>-&gt;<name>hash_free</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<constructor_decl><name>COsAlloc::os_ufree</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>sp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_stat_callback</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>PAGE</name> *</type><name>pagep</name></decl></param>, <param><decl><type><name>void</name> *</type><name>cookie</name></decl></param>, <param><decl><type><name>int</name> *</type><name>putp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_HASH_STAT</name> *</type><name>sp</name></decl>;</decl_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_BTREE</name></cpp:ifdef>
+		<decl_stmt><decl><type><name>DB_BTREE_STAT</name></type> <name>bstat</name></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<decl_stmt><decl><type><name>db_indx_t</name></type> <name>indx</name>, <name>len</name>, <name>off</name>, <name>tlen</name>, <name>top</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int8_t</name> *</type><name>hk</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr>*<name>putp</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>DB_HASH_STAT</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>cookie</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<switch>switch <condition>(<expr><name>pagep</name>-&gt;<name>type</name></expr>)</condition> <block>{
+<case>case <expr><name>P_INVALID</name></expr>:
+	<comment type="block">/*
+	* Hash pages may be wholly zeroed;  this is not a bug.
+	* Obviously such pages have no data, so we can just proceed.
+	*/</comment>
+	<break>break;</break>
+</case><case>case <expr><name>P_HASH</name></expr>:
+	<comment type="block">/*
+	* We count the buckets and the overflow pages
+	* separately and tally their bytes separately
+	* as well.  We need to figure out if this page
+	* is a bucket.
+	*/</comment>
+	<if>if <condition>(<expr><call><name>PREV_PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call> == <name>PGNO_INVALID</name></expr>)</condition><then>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_bfree</name> += <call><name>P_FREESPACE</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then>
+	<else>else <block>{
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_overflows</name>++</expr>;</expr_stmt>
+		<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ovfl_free</name> += <call><name>P_FREESPACE</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></else></if>
+	<expr_stmt><expr><name>top</name> = <call><name>NUM_ENT</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<comment type="block">/* Correct for on-page duplicates and deleted items. */</comment>
+	<for>for (<init><expr><name>indx</name> = 0</expr>;</init> <condition><expr><name>indx</name> &lt; <name>top</name></expr>;</condition> <incr><expr><name>indx</name> += <name>P_INDX</name></expr></incr>) <block>{
+		<switch>switch <condition>(<expr>*<call><name>H_PAIRDATA</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>indx</name></expr></argument>)</argument_list></call></expr>)</condition> <block>{
+<case>case <expr><name>H_OFFDUP</name></expr>:
+	<break>break;</break>
+</case><case>case <expr><name>H_OFFPAGE</name></expr>:
+</case><case>case <expr><name>H_KEYDATA</name></expr>:
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ndata</name>++</expr>;</expr_stmt>
+	<break>break;</break>
+</case><case>case <expr><name>H_DUPLICATE</name></expr>:
+	<expr_stmt><expr><name>tlen</name> = <call><name>LEN_HDATA</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>indx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hk</name> = <call><name>H_PAIRDATA</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr><name>indx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<for>for (<init><expr><name>off</name> = 0</expr>;</init> <condition><expr><name>off</name> &lt; <name>tlen</name></expr>;</condition>
+		<incr><expr><name>off</name> += <name>len</name> + 2 * <call><name>sizeof</name><argument_list>(<argument><expr><name>db_indx_t</name></expr></argument>)</argument_list></call></expr></incr>) <block>{
+			<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ndata</name>++</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name>len</name></expr></argument>,
+				<argument><expr><call><name>HKEYDATA_DATA</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call>
+				+ <name>off</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>db_indx_t</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></for>
+	<break>break;</break>
+</case><default>default:
+	<return>return <expr>(<call><name><name>CDbErr</name>::<name>db_pgfmt</name></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>dbenv</name></expr></argument>, <argument><expr><call><name>PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call>)</expr>;</return>
+		</default>}</block></switch>
+	}</block></for>
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_nkeys</name> += <call><name>H_NUMPAIRS</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<break>break;</break>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_BTREE</name></cpp:ifdef>
+</case><case>case <expr><name>P_IBTREE</name></expr>:
+</case><case>case <expr><name>P_IRECNO</name></expr>:
+</case><case>case <expr><name>P_LBTREE</name></expr>:
+</case><case>case <expr><name>P_LRECNO</name></expr>:
+</case><case>case <expr><name>P_LDUP</name></expr>:
+	<comment type="block">/*
+	* These are all btree pages; get a correct
+	* cookie and call them.  Then add appropriate
+	* fields into our stat structure.
+	*/</comment>
+	<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>bstat</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>bstat</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CBTreeStatistic</name>::<name>bam_stat_callback</name></name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>, <argument><expr>&amp;<name>bstat</name></expr></argument>, <argument><expr><name>putp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+		<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_dup</name>++</expr>;</expr_stmt>
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_dup_free</name> += <name>bstat</name>.<name>bt_leaf_pgfree</name> +
+		<name>bstat</name>.<name>bt_dup_pgfree</name> + <name>bstat</name>.<name>bt_int_pgfree</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_ndata</name> += <name>bstat</name>.<name>bt_ndata</name></expr>;</expr_stmt>
+	<break>break;</break>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</case><case>case <expr><name>P_OVERFLOW</name></expr>:
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_bigpages</name>++</expr>;</expr_stmt>
+	<expr_stmt><expr><name>sp</name>-&gt;<name>hash_big_bfree</name> += <call><name>P_OVFLSPACE</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>dbp</name>-&gt;<name>pgsize</name></expr></argument>, <argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<break>break;</break>
+</case><default>default:
+	<return>return <expr>(<call><name><name>CDbErr</name>::<name>db_pgfmt</name></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>dbenv</name></expr></argument>, <argument><expr><call><name>PGNO</name><argument_list>(<argument><expr><name>pagep</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call>)</expr>;</return>
+		</default>}</block></switch>
+
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+
+</public>
+}</block></class>;</unit>

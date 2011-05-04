@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashReclaim</name>
+<block>{
+<comment>//---refactored functions</comment><public>
+public:
+
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_reclaim</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>DB_TXN</name> *</type><name>txn</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>txn</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_truncate --
+	*	Reclaim the pages from a subdatabase and return them to the
+	* parent free list.
+	*
+	* PUBLIC: int __ham_truncate __P((DBC *, u_int32_t *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_truncate</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>countp</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbc</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>countp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbc</name>-&gt;<name>dbp</name>-&gt;<name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+</public>
+}</block></class>;</unit>

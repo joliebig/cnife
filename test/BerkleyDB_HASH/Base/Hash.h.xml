@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="Hash.h" language="C++">
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbOverflow.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbIface.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"BTreeCompare.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"BTreeCursor.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashOpen.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Lock.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbErr.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbLog2.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Txn.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+* If the library wasn't compiled with the Hash access method, various
+* routines aren't available.  Stub them here, returning an appropriate
+* error.
+*/</comment>
+
+<class>class <name>CHash</name>
+<block>{<private type="default">
+</private><public>public:
+	
+	<comment type="block">/*
+	* __db_nohasham --
+	*	Error when a Berkeley DB build doesn't include the access method.
+	*
+	* PUBLIC: int __db_no_hash_am __P((DB_ENV *));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>db_no_hash_am</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>"library build did not include support for the Hash access method"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>(<name>DB_OPNOTSUP</name>)</expr>;</return>
+	}</block></function>
+
+
+<comment type="line">//#ifndef HAVE_HASH #else</comment>
+
+		</public>}</block>;</class>
+</unit>

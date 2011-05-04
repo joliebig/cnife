@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashRec</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction2</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>cmp_n</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>groupgrow</name></decl></param>, <param><decl><type><name>HASH_CURSOR</name> *&amp;</type> <name>hcp</name></decl></param>, <param><decl><type><name>__ham_metagroup_args</name> *&amp;</type> <name>argp</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>did_recover</name></decl></param>, <param><decl><type><name>db_recops</name>&amp;</type> <name>op</name></decl></param>)</parameterlist>
+	<block>{
+	
+	<if>if <condition>(<expr><name>cmp_n</name> == 0 &amp;&amp; <name>groupgrow</name> &amp;&amp; <call><name>DB_UNDO</name><argument_list>(<argument><expr><name>op</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name>-&gt;<name><name>spares</name><index>[
+			<expr><call><name><name>CDbLog2</name>::<name>db_log2</name></name><argument_list>(<argument><expr><name>argp</name>-&gt;<name>bucket</name> + 1</expr></argument>)</argument_list></call> + 1</expr>]</index></name> = <name>PGNO_INVALID</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>did_recover</name> = 1</expr>;</expr_stmt>
+	}</block></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+}</block></class>;</unit>

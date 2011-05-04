@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashRec</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashRecHookFunction1</name><parameterlist>(<param><decl><type><name>u_int32_t</name>&amp;</type> <name>flags</name></decl></param>)</parameterlist>
+	<block>{
+	
+	<expr_stmt><expr><name>flags</name> = <name>DB_MPOOL_CREATE</name></expr>;</expr_stmt>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+}</block></class>;</unit>

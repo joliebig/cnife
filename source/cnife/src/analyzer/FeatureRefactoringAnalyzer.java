@@ -218,6 +218,7 @@ public class FeatureRefactoringAnalyzer {
 		int simple = 0;
 		int hook = 0;
 		int impc = 0;
+		int omit = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
 				projectDirectory);
 		LinkedList<String> list = a.getFeatureNames();
@@ -226,7 +227,7 @@ public class FeatureRefactoringAnalyzer {
 				+ " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, findclonesval);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, findclonesval, providehooknamesval);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
@@ -236,13 +237,17 @@ public class FeatureRefactoringAnalyzer {
 				PreprocessorOccurrence occ = it.next();
 				System.out.println("\nFound type: " + occ.getType()
 						+ " on linenumber: "
-						+ occ.getPrepNodes()[0].getLineNumber() + "\nin File: "
+						+ occ.getPrepNodes()[0].getLineNumber() + " (" + occ.getLinesOfCode() + " loc)\nin File: "
 						+ occ.getDocFileName());
+				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
+					occ.setType("toomit");
 				if (occ.getType().startsWith("impossible")
 						|| occ.getType().startsWith("unknown")) {
 					impc++;
 				} else if (occ.getType().startsWith("Hook")) {
 					hook++;
+				} else if (occ.getType().startsWith("toomit")) {
+					omit++;
 				} else {
 					simple++;
 				}
@@ -257,7 +262,9 @@ public class FeatureRefactoringAnalyzer {
 			}
 		}
 		System.out.println("Finished. Statistics:");
-		System.out.println("the good: " + simple + "\nthe bad " + hook);
+		System.out.println("the good: " + simple);
+		System.out.println("the bad " + hook);
+		System.out.println("omitted: " + omit);
 		System.out.println("impossibles: " + impc);
 	}
 
@@ -276,7 +283,7 @@ public class FeatureRefactoringAnalyzer {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
 			System.out.println("Feature: " + name);
 			System.out.println("gesamt LOCs: " + feat.getLOCs());
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, false);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, false, false);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
 			System.out.println("LOCs" + feat.getLOCs());
@@ -310,7 +317,7 @@ public class FeatureRefactoringAnalyzer {
 			System.out.println(type + ": " + types.get(type));
 		}
 		System.out.println("einfache: " + simple + " hooks " + hook);
-		System.out.println("unm�gliche: " + impc + " LOCs " + implc);
+		System.out.println("unmoegliche: " + impc + " LOCs " + implc);
 		
 		
 		

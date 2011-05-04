@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashUpgrade</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashUpgradeHookFunction1</name><parameterlist>(<param><decl><type><name>HKEYDATA</name> *&amp;</type> <name>hk</name></decl></param>, <param><decl><type><name>db_pgno_t</name>&amp;</type> <name>pgno</name></decl></param>, <param><decl><type><name>db_pgno_t</name>&amp;</type> <name>tpgno</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB</name> *&amp;</type> <name>dbp</name></decl></param>, <param><decl><type><name>char</name> *&amp;</type> <name>real_name</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>int</name> *&amp;</type> <name>dirtyp</name></decl></param>)</parameterlist>
+	<block>{
+		<comment type="">//ohne btree keine offpagedups</comment>
+			<if>if <condition>(<expr><call><name>HPAGE_PTYPE</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call> == <name>H_OFFDUP</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name>pgno</name></expr></argument>, <argument><expr><call><name>HOFFDUP_PGNO</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>db_pgno_t</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>tpgno</name> = <name>pgno</name></expr>;</expr_stmt>
+				<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbUpgOpd</name>::<name>db_31_offdup</name></name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>real_name</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>,
+					<argument><expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_DUPSORT</name></expr></argument>)</argument_list></call> ? 1 : 0</expr></argument>, <argument><expr>&amp;<name>tpgno</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<break>break;</break></then></if>
+				<if>if <condition>(<expr><name>pgno</name> != <name>tpgno</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr>*<name>dirtyp</name> = 1</expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><call><name>HOFFDUP_PGNO</name><argument_list>(<argument><expr><name>hk</name></expr></argument>)</argument_list></call></expr></argument>,
+						<argument><expr>&amp;<name>tpgno</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>db_pgno_t</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then></if>
+			}</block></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+}</block></class>;</unit>

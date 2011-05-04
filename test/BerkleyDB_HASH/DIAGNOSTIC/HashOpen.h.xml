@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashOpen</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashOpenHookFunction1</name><parameterlist>(<param><decl><type><name>void</name> *&amp;</type> <name>buf</name></decl></param>, <param><decl><type><name>DB</name> *&amp;</type> <name>dbp</name></decl></param>)</parameterlist>
+	<block>{
+	
+			<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>buf</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>dbp</name>-&gt;<name>pgsize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<comment>//--functionbody</comment>
+	}</block></function>
+
+}</block></class>;</unit>

@@ -1,0 +1,53 @@
+1. Null-Function? Ausgabe; Was heisst das? Und warum koennen die Vorkommen im
+   Class Beispiel (s.u.) nicht transformiert werden?
+#include <iostream>
+using namespace std;
+
+class Class {
+public:
+	Class();
+	~Class();
+
+#if A
+	int k;
+#endif
+
+#if A
+	void print();
+#endif
+};
+
+#if A
+Class::print() {
+	cout << "in here" << endl;
+}
+#endif
+
+
+
+2. Warum wird der folgende Code nicht transformiert? (siehe test/clone)
+#if A
+void Class::print() {
+	cout << "in here" << endl;
+}
+#endif
+
+
+
+3. Falsche Transformation! (siehe test/case) case 2 wird ohne Duplizierung direkt herausgezogen.
+void Class::print1() {
+	int k = 10;
+	switch(k) {
+	case 1:
+		print1();
+		break;
+#if A
+	case 2:
+		print2();
+		break;
+#endif
+	default:
+		print3();
+		break;
+	}
+}

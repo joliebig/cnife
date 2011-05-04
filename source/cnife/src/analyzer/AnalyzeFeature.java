@@ -31,7 +31,8 @@ public class AnalyzeFeature {
 	private static final String IMPOSSIBLE = "impossible";
 	private static final String UNKNOWN = "unknown";
 	private IdentifiedFeature feature;
-	private Boolean findclones; //TODO SimpleHookRefactoring Verbindung herstellen.
+	private Boolean findclones;
+	private Boolean providehoonames;
 	private AnalyzedFeature analyzedFeature = null;
 	private LinkedList<CriticalOccurrence> crits; //TODO kann lokal werden
 	
@@ -71,9 +72,10 @@ public class AnalyzeFeature {
 	private static String FIND_NEXT_DEFINE = 
 		"./following::* intersect //cpp:define";
 	
-	public AnalyzeFeature (IdentifiedFeature feature, Boolean findclones) {
+	public AnalyzeFeature (IdentifiedFeature feature, Boolean findclones, Boolean providehooknames) {
 		this.feature = feature;
 		this.findclones = findclones;
+		this.providehoonames = providehooknames;
 	}
 	
 	public LinkedList<CriticalOccurrence> getCriticalNodes() {
@@ -456,7 +458,8 @@ public class AnalyzeFeature {
 								|| occ.getCritNodeType() == RefactoringStrategy.BLOCK_REPLICATION_WITH_HOOK
 								|| occ.getCritNodeType() == RefactoringStrategy.STATEMENT_REPLICATION_WITH_HOOK)) {
 							
-							cloneFinder.doDuplicateCheck(occ);
+							if (findclones)
+								cloneFinder.doDuplicateCheck(occ);
 							
 							if (occ.getDupe() == null) {
 								counter++;

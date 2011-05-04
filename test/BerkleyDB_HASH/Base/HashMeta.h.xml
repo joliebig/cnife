@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashMeta.h" language="C++"><comment type="block">/*-
+* See the file LICENSE for redistribution information.
+*
+* Copyright (c) 1999-2005
+*	Sleepycat Software.  All rights reserved.
+*
+* $Id: HashMeta.cpp,v 1.5 2006/08/17 12:39:09 rosenmue Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_shash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"hash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"lock.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"mp.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashMeta.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbMeta.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"MpFget.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"MpFput.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Lock.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+* Acquire the meta-data page.
+*
+* PUBLIC: int __ham_get_meta __P((DBC *));
+*/</comment>
+
+
+
+<class>class <name>CHashMeta</name>
+<block>{<private type="default">
+	</private><public><comment type="line">//#ifdef HAVE_HASH #else</comment>
+
+	</public>}</block>;</class>
+</unit>

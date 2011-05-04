@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashConv</name>
+<block>{
+<comment>//---refactored functions</comment><public>
+public:
+public:
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgin</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dummydbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>pg</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>pp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>cookie</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgout</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dummydbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>pg</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>pp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>cookie</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_mswap</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pg</name></decl></param>)</parameter_list>;</function_decl>
+
+</public><private type="default">
+private:
+
+
+</private>
+}</block></class>;</unit>

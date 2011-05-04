@@ -12,7 +12,6 @@ import org.xml.sax.SAXException;
 
 import scanner.FeatureSearcher;
 import scanner.PreprocessorTree;
-
 import backend.PreprocessorNode;
 
 
@@ -49,16 +48,12 @@ public class PreprocessorOccurrence {
 				Document doc = searcher.parseDocument(docFileName);
 				searcher.populateTree(doc, tree);
 			} catch (SAXException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (ParserConfigurationException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (XPathExpressionException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			

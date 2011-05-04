@@ -63,7 +63,5 @@ public class CompleteFunctionRefactoring {
 		} catch (XPathExpressionException e) {
 			e.printStackTrace();
 		}
-
 	}
-
 }

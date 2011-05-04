@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="vorlage.h" language="C++">
+<comment>//---refactored defines</comment>
+<class>refines class <name>CHashAuto</name>
+<block>{
+<comment>//---refactored functions</comment>
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction2</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_chgpg_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction5</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_curadj_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction7</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_groupalloc_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction8</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_metagroup_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction9</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_copypage_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction1</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_replace_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction3</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_splitdata_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction4</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_newpage_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/BerkleyDB_HASH/HAVE_HASH/HashAutoHookFunction6</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name>&amp;</type> <name>logrec</name></decl></param>, <param><decl><type><name>DB_LSN</name> *&amp;</type> <name>ret_lsnp</name></decl></param>)</parameterlist>
+	<block>{
+	
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CHashAutop</name>::<name>ham_insdel_print</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+			<argument><expr>(<name>DBT</name> *)&amp;<name>logrec</name></expr></argument>, <argument><expr><name>ret_lsnp</name></expr></argument>, <argument><expr><name>DB_TXN_PRINT</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<comment>//--functionbody</comment>
+	}</block></function>
+
+}</block></class>;</unit>
