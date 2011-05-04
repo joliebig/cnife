@@ -53,16 +53,12 @@ public class FunctionBuilder {
 			functionCallNode = (Node) expr.evaluate(templateDoc, XPathConstants.NODE);
 			
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (SAXException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (ParserConfigurationException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -77,7 +73,6 @@ public class FunctionBuilder {
 			}
 			
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -95,7 +90,6 @@ public class FunctionBuilder {
 			typeName.getParentNode().insertBefore(tmp, separator);
 			
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -128,7 +122,6 @@ public class FunctionBuilder {
 			setName(name, dupe);
 //			System.out.println("");
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -171,7 +164,6 @@ public class FunctionBuilder {
 						lastNode.getNextSibling());
 			}
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -193,7 +185,6 @@ public class FunctionBuilder {
 			Node toKill = killList.item(0);
 			toKill.getParentNode().removeChild(toKill);
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return functionDeclNode;
@@ -211,7 +202,6 @@ public class FunctionBuilder {
 				if (toKill != null)
 					toKill.getParentNode().removeChild(toKill);
 			} catch (XPathExpressionException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			callInited = true;

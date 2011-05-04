@@ -8,9 +8,9 @@ public abstract class RefactoringAction {
 
 	protected String featureName;
 	protected String negFeatureName;
-	
-	public void doRefactoring(Document doc, RefactoringDocument pos, RefactoringDocument neg,
-			PreprocessorOccurrence occ, String name) {
+
+	public void doRefactoring(Document doc, RefactoringDocument pos,
+			RefactoringDocument neg, PreprocessorOccurrence occ, String name) {
 		this.featureName = name;
 		negFeatureName = negateFeatureName(featureName);
 		pos.setFeatureName(featureName);
@@ -18,13 +18,13 @@ public abstract class RefactoringAction {
 		doRefactoring(doc, pos, neg, occ);
 	}
 
-	protected abstract void doRefactoring(Document from, RefactoringDocument pos, RefactoringDocument neg, PreprocessorOccurrence occ);
+	protected abstract void doRefactoring(Document from,
+			RefactoringDocument pos, RefactoringDocument neg,
+			PreprocessorOccurrence occ);
 
 	private String negateFeatureName(String featureName) {
-		String negFeatureName = 
-			featureName.toLowerCase().startsWith("not_") ?
-					featureName.substring("NOT_".length()) :
-						"NOT_" + featureName;
+		String negFeatureName = featureName.toLowerCase().startsWith("not_") ? featureName
+				.substring("NOT_".length()) : "NOT_" + featureName;
 		return negFeatureName;
 	}
 

@@ -47,31 +47,32 @@ public class RefactoringDocument implements Document {
 
 	public RefactoringDocument(Document xmlDoc) {
 		super();
-//		Document  doc = null;
-//TODO Dokumentenkopien
+		// Document doc = null;
+		// TODO Dokumentenkopien
 		this.xmlDoc = xmlDoc;
-//		if (xmlDoc != null) {
-//			doc = xmlDoc.getImplementation().createDocument(
-//					xmlDoc.getNamespaceURI(), 
-//					null, 
-//					xmlDoc.getDoctype());
-//			Node imported = doc.importNode(xmlDoc.getFirstChild(), true);
-//			doc.appendChild(imported);
-////TODO DEBUG			
-////			System.out.println(doc.getFirstChild().getTextContent());
-//		}
-//		this.xmlDoc = doc;
+		// if (xmlDoc != null) {
+		// doc = xmlDoc.getImplementation().createDocument(
+		// xmlDoc.getNamespaceURI(),
+		// null,
+		// xmlDoc.getDoctype());
+		// Node imported = doc.importNode(xmlDoc.getFirstChild(), true);
+		// doc.appendChild(imported);
+		// //TODO DEBUG
+		// // System.out.println(doc.getFirstChild().getTextContent());
+		// }
+		// this.xmlDoc = doc;
 	}
 
 	public void saveDocument(String pathName)
 			throws TransformerFactoryConfigurationError, FileNotFoundException,
 			TransformerException {
-		Transformer transformer = TransformerFactory.newInstance().newTransformer();
+		Transformer transformer = TransformerFactory.newInstance()
+				.newTransformer();
 		DOMSource src = new DOMSource(xmlDoc);
 		FileOutputStream out = new FileOutputStream(pathName);
 		StreamResult res = new StreamResult(out);
 		transformer.transform(src, res);
-		
+
 		try {
 			out.close();
 		} catch (IOException e) {
@@ -83,21 +84,22 @@ public class RefactoringDocument implements Document {
 	public void setFeatureName(String featureName) {
 		this.featureName = featureName;
 	}
-	
+
 	public String getFeatureName() {
 		return featureName;
 	}
 
 	public void setModified(boolean modified) {
 		this.modified = modified;
-		
+
 	}
 
 	public boolean getModified() {
 		return modified;
 	}
-	//Delegators
-	
+
+	// Delegators
+
 	public Node adoptNode(Node source) throws DOMException {
 		return xmlDoc.adoptNode(source);
 	}
@@ -120,8 +122,8 @@ public class RefactoringDocument implements Document {
 
 	public Attr createAttributeNS(String namespaceURI, String qualifiedName)
 			throws DOMException {
-				return xmlDoc.createAttributeNS(namespaceURI, qualifiedName);
-			}
+		return xmlDoc.createAttributeNS(namespaceURI, qualifiedName);
+	}
 
 	public CDATASection createCDATASection(String data) throws DOMException {
 		return xmlDoc.createCDATASection(data);
@@ -141,17 +143,18 @@ public class RefactoringDocument implements Document {
 
 	public Element createElementNS(String namespaceURI, String qualifiedName)
 			throws DOMException {
-				return xmlDoc.createElementNS(namespaceURI, qualifiedName);
-			}
+		return xmlDoc.createElementNS(namespaceURI, qualifiedName);
+	}
 
-	public EntityReference createEntityReference(String name) throws DOMException {
+	public EntityReference createEntityReference(String name)
+			throws DOMException {
 		return xmlDoc.createEntityReference(name);
 	}
 
-	public ProcessingInstruction createProcessingInstruction(String target, String data)
-			throws DOMException {
-				return xmlDoc.createProcessingInstruction(target, data);
-			}
+	public ProcessingInstruction createProcessingInstruction(String target,
+			String data) throws DOMException {
+		return xmlDoc.createProcessingInstruction(target, data);
+	}
 
 	public Text createTextNode(String data) {
 		return xmlDoc.createTextNode(data);
@@ -335,8 +338,8 @@ public class RefactoringDocument implements Document {
 
 	public Node renameNode(Node n, String namespaceURI, String qualifiedName)
 			throws DOMException {
-				return xmlDoc.renameNode(n, namespaceURI, qualifiedName);
-			}
+		return xmlDoc.renameNode(n, namespaceURI, qualifiedName);
+	}
 
 	public Node replaceChild(Node newChild, Node oldChild) throws DOMException {
 		return xmlDoc.replaceChild(newChild, oldChild);
@@ -373,6 +376,5 @@ public class RefactoringDocument implements Document {
 	public void setXmlVersion(String xmlVersion) throws DOMException {
 		xmlDoc.setXmlVersion(xmlVersion);
 	}
-
 
 }

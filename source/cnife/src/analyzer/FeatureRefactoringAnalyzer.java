@@ -14,12 +14,12 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.xpath.XPathExpressionException;
 
+import jargs.gnu.CmdLineParser;
+
 import org.xml.sax.SAXException;
 
 import refactoring.RefactoringDocument;
 import scanner.FeatureSearcher;
-
-
 import analyzer.visitors.FeatureVisitor;
 import backend.storage.IdentifiedFeature;
 import backend.storage.IdentifiedFeatureList;
@@ -28,25 +28,26 @@ import backend.storage.PreprocessorOccurrence;
 public class FeatureRefactoringAnalyzer {
 
 	private File outputDir;
-	LinkedList <FeatureVisitor> visitors;
+	LinkedList<FeatureVisitor> visitors;
 	IdentifiedFeatureList backend;
-	
+
 	public FeatureRefactoringAnalyzer(File outputDir) {
 		assert outputDir.exists() && outputDir.isDirectory();
-		
+
 		this.outputDir = outputDir;
 		this.visitors = new LinkedList<FeatureVisitor>();
-		
+
 		initBackEnd();
 		initProjectDir();
 	}
-	
+
 	private void initBackEnd() {
-		backend = new IdentifiedFeatureList(); 
+		backend = new IdentifiedFeatureList();
 	}
 
 	private void initProjectDir() {
-		File baseDir = new File(outputDir.getAbsolutePath() + File.separatorChar + "Base");
+		File baseDir = new File(outputDir.getAbsolutePath()
+				+ File.separatorChar + "Base");
 		if (baseDir.exists()) {
 			File[] outputDirContent = outputDir.listFiles(new FileFilter() {
 
@@ -56,12 +57,12 @@ public class FeatureRefactoringAnalyzer {
 						return true;
 					return false;
 				}
-				
+
 			});
-			
+
 			for (File fileDir : outputDirContent) {
 				File[] fileDirContent = fileDir.listFiles(new FileFilter() {
-					
+
 					@Override
 					public boolean accept(File file) {
 						if (file.getName().toLowerCase().matches(".*\\.xml")
@@ -71,7 +72,7 @@ public class FeatureRefactoringAnalyzer {
 						return false;
 					}
 				});
-				
+
 				for (File featureFile : fileDirContent) {
 					FeatureSearcher searcher = new FeatureSearcher();
 					searcher.setOutputDir(outputDir);
@@ -82,25 +83,23 @@ public class FeatureRefactoringAnalyzer {
 		} else {
 			baseDir.mkdir();
 		}
-		
+
 	}
 
 	public boolean addFile(File xmlFile) {
 		if (!xmlFile.exists()) {
 			return false;
 		} else {
-			
+
 			FeatureSearcher scanner = new FeatureSearcher();
 			scanner.setOutputDir(outputDir);
 			scanner.setBackend(backend);
 			scanner.checkDoc(xmlFile);
-			
+
 			return true;
 		}
 	}
-	
-	
-	
+
 	public LinkedList<String> getFeatureNames() {
 		Iterator<IdentifiedFeature> it = this.backend.iterate();
 		LinkedList<String> featureNames = new LinkedList<String>();
@@ -109,112 +108,159 @@ public class FeatureRefactoringAnalyzer {
 		}
 		return featureNames;
 	}
-	
+
 	/**
-	 * Fürs Debugging und Testing ;)
-	 * @return eine Textrepräsentation der Refactoringvorschläge
+	 * debugging and testing
+	 * 
+	 * @return textrepresentation for refactorings
 	 */
 	public String getRefactoringSuggestion() {
-		//TODO Textausgabe des Refactorings generieren
 		return null;
 	}
-	
+
 	/**
 	 * Berechnet die besten Features
-	 * @param topK wieviele Features geliefert werden sollen
-	 * @return
-	 * 		sortiert nach Score (beste zuerst in der Liste) alle Features,
-	 * 		maximal topK-viele
+	 * 
+	 * @param topK
+	 *            wieviele Features geliefert werden sollen
+	 * @return sortiert nach Score (beste zuerst in der Liste) alle Features,
+	 *         maximal topK-viele
 	 */
 	public LinkedList<IdentifiedFeature> getBestFeatures(int topK) {
-		//TODO Geordnet nach Scores die besten Features liefern
 		return null;
 	}
-	
-	public void saveRefactorings(
-			Set<String> affectedFiles,
-			LinkedList<RefactoringDocument> modFiles) 
-	throws FileNotFoundException, TransformerFactoryConfigurationError, TransformerException {
+
+	public void saveRefactorings(Set<String> affectedFiles,
+			LinkedList<RefactoringDocument> modFiles)
+			throws FileNotFoundException, TransformerFactoryConfigurationError,
+			TransformerException {
 		for (String file : affectedFiles) {
 			backend.removeFileFromList(file);
 		}
+
 		
 		//TODO Derivatives - only necessary for directives refactoring atm
 		for (RefactoringDocument doc : modFiles) {
 			String featureName = doc.getFeatureName();
 			if (featureName == null) {
-				doc.saveDocument(this.outputDir.getAbsolutePath() + File.separatorChar 
-						+ "Base" + File.separatorChar + doc.getFileName());
+				doc.saveDocument(this.outputDir.getAbsolutePath()
+						+ File.separatorChar + "Base" + File.separatorChar
+						+ doc.getFileName());
 			} else {
-				File featureDir = new File(this.outputDir.getAbsolutePath() + File.separatorChar + featureName);
-				if (!featureDir.exists()) featureDir.mkdir();
-				doc.saveDocument(featureDir.getAbsolutePath() + File.separatorChar + doc.getFileName());
+				File featureDir = new File(this.outputDir.getAbsolutePath()
+						+ File.separatorChar + featureName);
+				if (!featureDir.exists())
+					featureDir.mkdir();
+				doc.saveDocument(featureDir.getAbsolutePath()
+						+ File.separatorChar + doc.getFileName());
 			}
-			
+
 		}
-		
+
 		initProjectDir();
 	}
-	
-	public void registerVisitors (FeatureVisitor visitor) {
+
+	public void registerVisitors(FeatureVisitor visitor) {
 		this.visitors.add(visitor);
 	}
-	
-	public static void main (String[] args) 
-	throws SAXException, IOException, ParserConfigurationException, 
-	TransformerFactoryConfigurationError, TransformerException {
-		if (args.length == 0) {
-			System.out.println("Usage: java -jar cnife.jar project-dir");
-			System.exit(1);
-		}
-		String dir = "";
-		for (String arg : args) {
-			dir += arg + " ";
-		}
-		dir = dir.trim();
+
+	public static void main(String[] args) throws SAXException, IOException,
+			ParserConfigurationException, TransformerFactoryConfigurationError,
+			TransformerException {
+
+		// setup command line arguments parser
+		CmdLineParser cmdparser = new CmdLineParser();
+
+		// inputfolder that cnife analyzes or refactors
+		CmdLineParser.Option inputfolder = cmdparser.addStringOption('i',
+				"inputfolder");
+
+		// use a simple clonefinder to reduce the number of refinements
+		// (function/statement level)
+		CmdLineParser.Option findclones = cmdparser.addBooleanOption('f',
+				"findclones");
+
+		// refactor or analyze only to get statistics
+		CmdLineParser.Option refactor = cmdparser.addBooleanOption('r',
+				"refactor");
 		
-		File projectDirectory = new File(dir);
+		// provide hook names
+		CmdLineParser.Option providehooknames = cmdparser.addBooleanOption('h', "providehooknames");
+		
+		// limit statement transformations
+		CmdLineParser.Option stmttrafo = cmdparser.addIntegerOption('s', "stmttrafo");
+		
+
+		try {
+			cmdparser.parse(args);
+		} catch (CmdLineParser.OptionException e) {
+			System.err.println(e.getMessage());
+			System.exit(2);
+		}
+
+		String inputfolderval = (String) cmdparser.getOptionValue(inputfolder);
+		Boolean findclonesval = (Boolean) cmdparser.getOptionValue(
+				findclones, Boolean.TRUE);
+		inputfolderval.trim();
+		Boolean refactorval = (Boolean) cmdparser.getOptionValue(
+				refactor, Boolean.FALSE);
+		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
+				providehooknames, Boolean.FALSE);
+		Integer stmttrafoval = (Integer) cmdparser.getOptionValue(stmttrafo, 0);
+
+		File projectDirectory = new File(inputfolderval);
 		if (!projectDirectory.exists() || !projectDirectory.isDirectory()) {
-			System.out.print("Project directory not valid: " + projectDirectory);
+			System.out
+					.print("Project directory not valid: " + projectDirectory);
 			System.exit(1);
 		}
-		
+
 		int simple = 0;
 		int hook = 0;
 		int impc = 0;
-		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(projectDirectory);
+		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
+				projectDirectory);
 		LinkedList<String> list = a.getFeatureNames();
 		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
-		System.out.println("Found " + list.size() + " different feature candidates");
+		System.out.println("Found " + list.size()
+				+ " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, findclonesval);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
+			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
+					.iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = it.next();
-				System.out.println("\nFound type: " + occ.getType() 
-						+ " on linenumber: " + occ.getPrepNodes()[0].getLineNumber() 
-						+ "\nin File: " + occ.getDocFileName());
-				if (occ.getType().startsWith("impossible") || occ.getType().startsWith("unknown")) {
+				System.out.println("\nFound type: " + occ.getType()
+						+ " on linenumber: "
+						+ occ.getPrepNodes()[0].getLineNumber() + "\nin File: "
+						+ occ.getDocFileName());
+				if (occ.getType().startsWith("impossible")
+						|| occ.getType().startsWith("unknown")) {
 					impc++;
-				} else if (occ.getType().startsWith("Hook")){
-					hook++; 
+				} else if (occ.getType().startsWith("Hook")) {
+					hook++;
 				} else {
 					simple++;
 				}
 			}
-			System.out.println("-------------------------------------------------------------\n");
-			LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-			a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles().keySet(), modFiles);
+			System.out
+					.println("-------------------------------------------------------------\n");
+
+			if (refactorval) {
+				LinkedList<RefactoringDocument> modFiles = afeat.refactor();
+				a.saveRefactorings(afeat.getAnalyzedFeature()
+						.getAffectedFiles().keySet(), modFiles);
+			}
 		}
 		System.out.println("Finished. Statistics:");
 		System.out.println("the good: " + simple + "\nthe bad " + hook);
 		System.out.println("impossibles: " + impc);
 	}
-	
+
 	public static void main3 (String[] args) throws SAXException, IOException, ParserConfigurationException, XPathExpressionException, TransformerFactoryConfigurationError, TransformerException {
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(new File("BerkleyDB_HASH"));
 		int impc = 0;
@@ -230,7 +276,7 @@ public class FeatureRefactoringAnalyzer {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
 			System.out.println("Feature: " + name);
 			System.out.println("gesamt LOCs: " + feat.getLOCs());
-			AnalyzeFeature afeat = new AnalyzeFeature(feat);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, false);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
 			System.out.println("LOCs" + feat.getLOCs());
@@ -264,7 +310,7 @@ public class FeatureRefactoringAnalyzer {
 			System.out.println(type + ": " + types.get(type));
 		}
 		System.out.println("einfache: " + simple + " hooks " + hook);
-		System.out.println("unmögliche: " + impc + " LOCs " + implc);
+		System.out.println("unmï¿½gliche: " + impc + " LOCs " + implc);
 		
 		
 		

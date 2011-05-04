@@ -31,6 +31,7 @@ public class AnalyzeFeature {
 	private static final String IMPOSSIBLE = "impossible";
 	private static final String UNKNOWN = "unknown";
 	private IdentifiedFeature feature;
+	private Boolean findclones; //TODO SimpleHookRefactoring Verbindung herstellen.
 	private AnalyzedFeature analyzedFeature = null;
 	private LinkedList<CriticalOccurrence> crits; //TODO kann lokal werden
 	
@@ -70,8 +71,9 @@ public class AnalyzeFeature {
 	private static String FIND_NEXT_DEFINE = 
 		"./following::* intersect //cpp:define";
 	
-	public AnalyzeFeature (IdentifiedFeature feature) {
+	public AnalyzeFeature (IdentifiedFeature feature, Boolean findclones) {
 		this.feature = feature;
+		this.findclones = findclones;
 	}
 	
 	public LinkedList<CriticalOccurrence> getCriticalNodes() {
@@ -259,7 +261,7 @@ public class AnalyzeFeature {
 	private void checkDependencies(CriticalOccurrence occ) 
 	throws XPathExpressionException {
 		
-		//Hack für Schnittmengenbildung zwischen allen Vars, 
+		//Hack fï¿½r Schnittmengenbildung zwischen allen Vars, 
 		//die nach ifdef und vor endif auftreten
 		XPathExpression varUsageBelowIfExpr = 
 			QueryBuilder.instance().getExpression(EXPR_NAMES_BELOW_IF_QUERY);
@@ -276,7 +278,7 @@ public class AnalyzeFeature {
 		NodeList exprList = NodeTools.intersectUpperLower(belowIfList, beforeEndList);
 		//-------------------------------------------------
 		
-		//gleiches nochmal für die lokalen Definitionen von Vars
+		//gleiches nochmal fï¿½r die lokalen Definitionen von Vars
 		XPathExpression varDeclBelowIfExpr = 
 			QueryBuilder.instance().getExpression(EXPR_DECLS_BELOW_IF_QUERY);
 		XPathExpression varDeclBeforeEndExpr = 
