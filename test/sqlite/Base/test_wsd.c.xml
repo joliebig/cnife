@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_wsd.c" filename=""><comment type="block">/*
+** 2008 September 1
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** The code in this file contains sample implementations of the 
+** sqlite3_wsd_init() and sqlite3_wsd_find() functions required if the
+** SQLITE_OMIT_WSD symbol is defined at build time.
+**
+** $Id: test_wsd.c,v 1.3 2008/10/07 15:25:49 drh Exp $
+*/</comment>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_WSD</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call></expr></cpp:if>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PLS_HASHSIZE</name> 43</cpp:define>
+
+<typedef>typedef <type><struct>struct <name>ProcessLocalStorage</name> ProcessLocalStorage;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>ProcessLocalVar</name> ProcessLocalVar;</struct></type></typedef>
+
+<struct>struct <name>ProcessLocalStorage</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>ProcessLocalVar</name> *</type><name><name>aData</name><index>[<expr><name>PLS_HASHSIZE</name></expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nFree</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name> *</type><name>pFree</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<struct>struct <name>ProcessLocalVar</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>void</name> *</type><name>pKey</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ProcessLocalVar</name> *</type><name>pNext</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<decl_stmt><decl><type><name>static</name> <name>ProcessLocalStorage</name> *</type><name>pGlobal</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+<function><type><name>int</name></type> <name>sqlite3_wsd_init</name><parameter_list>(<param><decl><type><name>int</name></type> <name>N</name></decl></param>, <param><decl><type><name>int</name></type> <name>J</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr>!<name>pGlobal</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>nMalloc</name> =<init> <expr><name>N</name> + <call><name>sizeof</name><argument_list>(<argument><expr><name>ProcessLocalStorage</name></expr></argument>)</argument_list></call> + <name>J</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name>ProcessLocalVar</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pGlobal</name> = (<name>ProcessLocalStorage</name> *)<call><name>malloc</name><argument_list>(<argument><expr><name>nMalloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pGlobal</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pGlobal</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>ProcessLocalStorage</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pGlobal</name>-&gt;<name>nFree</name> = <name>nMalloc</name> - <call><name>sizeof</name><argument_list>(<argument><expr><name>ProcessLocalStorage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pGlobal</name>-&gt;<name>pFree</name> = (<name>u8</name> *)&amp;<name><name>pGlobal</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <return>return <expr><name>pGlobal</name> ? <name>SQLITE_OK</name> : <name>SQLITE_NOMEM</name></expr>;</return>
+}</block></function>
+
+<function><type><name>void</name> *</type><name>sqlite3_wsd_find</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>K</name></decl></param>, <param><decl><type><name>int</name></type> <name>L</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iHash</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ProcessLocalVar</name> *</type><name>pVar</name></decl>;</decl_stmt>
+
+  <comment type="block">/* Calculate a hash of K */</comment>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>iHash</name> = (<name>iHash</name>&lt;&lt;3) + ((<name>unsigned</name> <name>char</name> *)&amp;<name>K</name>)[<name>i</name>]</expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><name>iHash</name> = <name>iHash</name>%<name>PLS_HASHSIZE</name></expr>;</expr_stmt>
+
+  <comment type="block">/* Search the hash table for K. */</comment>
+  <for>for(<init><expr><name>pVar</name>=<name>pGlobal</name>-&gt;<name><name>aData</name><index>[<expr><name>iHash</name></expr>]</index></name></expr>;</init> <condition><expr><name>pVar</name> &amp;&amp; <name>pVar</name>-&gt;<name>pKey</name>!=<name>K</name></expr>;</condition> <incr><expr><name>pVar</name>=<name>pVar</name>-&gt;<name>pNext</name></expr></incr>)<empty_stmt>;</empty_stmt></for>
+
+  <comment type="block">/* If no entry for K was found, create and populate a new one. */</comment>
+  <if>if<condition>( <expr>!<name>pVar</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>nByte</name> =<init> <expr>(<call><name>sizeof</name><argument_list>(<argument><expr><name>ProcessLocalVar</name></expr></argument>)</argument_list></call> + <name>L</name> + 7)&amp;~7</expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pGlobal</name>-&gt;<name>nFree</name>&gt;=<name>nByte</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVar</name> = (<name>ProcessLocalVar</name> *)<name>pGlobal</name>-&gt;<name>pFree</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVar</name>-&gt;<name>pKey</name> = <name>K</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVar</name>-&gt;<name>pNext</name> = <name>pGlobal</name>-&gt;<name><name>aData</name><index>[<expr><name>iHash</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pGlobal</name>-&gt;<name><name>aData</name><index>[<expr><name>iHash</name></expr>]</index></name> = <name>pVar</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pGlobal</name>-&gt;<name>nFree</name> -= <name>nByte</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pGlobal</name>-&gt;<name>pFree</name> += <name>nByte</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>pVar</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>K</name></expr></argument>, <argument><expr><name>L</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <return>return <expr>(<name>void</name> *)&amp;<name><name>pVar</name><index>[<expr>1</expr>]</index></name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

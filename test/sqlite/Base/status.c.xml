@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="status.c" filename=""><comment type="block">/*
+** 2008 June 18
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This module implements the sqlite3_status() interface and related
+** functionality.
+**
+** $Id: status.c,v 1.9 2008/09/02 00:52:52 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Variables in which to record status information.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>sqlite3StatType</name> sqlite3StatType;</struct></type></typedef>
+<decl_stmt><decl><type><name>static</name> <name>SQLITE_WSD</name> struct</type> <name>sqlite3StatType</name> <block>{
+  <decl_stmt><decl><type><name>int</name></type> <name><name>nowValue</name><index>[<expr>9</expr>]</index></name></decl>;</decl_stmt>         <comment type="block">/* Current value */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>mxValue</name><index>[<expr>9</expr>]</index></name></decl>;</decl_stmt>          <comment type="block">/* Maximum value */</comment>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>sqlite3Stat</name> = <block>{ <expr><block>{<expr>0</expr>,}</block></expr>, <expr><block>{<expr>0</expr>,}</block></expr> }</block></expr>;</expr_stmt>
+
+
+<comment type="block">/* The "wsdStat" macro will resolve to the status information
+** state vector.  If writable static data is unsupported on the target,
+** we have to locate the state vector at run-time.  In the more common
+** case where writable static data is supported, wsdStat can refer directly
+** to the "sqlite3Stat" state vector declared above.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_WSD</name></cpp:ifdef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>wsdStatInit</name>  <name>sqlite3StatType</name> *x = &amp;GLOBAL(sqlite3StatType,sqlite3Stat)</cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>wsdStat</name> <name>x</name>[0]</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>wsdStatInit</name></cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>wsdStat</name> <name>sqlite3Stat</name></cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Return the current value of a status parameter.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3StatusValue</name><parameter_list>(<param><decl><type><name>int</name></type> <name>op</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>wsdStatInit</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>op</name>&gt;=0 &amp;&amp; <name>op</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>wsdStat</name>.<name>nowValue</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Add N to the value of a status record.  It is assumed that the
+** caller holds appropriate locks.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3StatusAdd</name><parameter_list>(<param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>wsdStatInit</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>op</name>&gt;=0 &amp;&amp; <name>op</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>wsdStat</name>.<name>nowValue</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name> += <name>N</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name>&gt;<name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name> = <name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Set the value of a status to X.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3StatusSet</name><parameter_list>(<param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>int</name></type> <name>X</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>wsdStatInit</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>op</name>&gt;=0 &amp;&amp; <name>op</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>wsdStat</name>.<name>nowValue</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name> = <name>X</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name>&gt;<name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name> = <name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Query status information.
+**
+** This implementation assumes that reading or writing an aligned
+** 32-bit integer is an atomic operation.  If that assumption is not true,
+** then this routine is not threadsafe.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_status</name><parameter_list>(<param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pCurrent</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pHighwater</name></decl></param>, <param><decl><type><name>int</name></type> <name>resetFlag</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>wsdStatInit</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>op</name>&lt;0 || <name>op</name>&gt;=<call><name>ArraySize</name><argument_list>(<argument><expr><name>wsdStat</name>.<name>nowValue</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr>*<name>pCurrent</name> = <name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pHighwater</name> = <name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>resetFlag</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>wsdStat</name>.<name><name>mxValue</name><index>[<expr><name>op</name></expr>]</index></name> = <name>wsdStat</name>.<name><name>nowValue</name><index>[<expr><name>op</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Query status information for a single database connection
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_db_status</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,          <comment type="block">/* The database connection whose status is desired */</comment>
+  <param><decl><type><name>int</name></type> <name>op</name></decl></param>,               <comment type="block">/* Status verb */</comment>
+  <param><decl><type><name>int</name> *</type><name>pCurrent</name></decl></param>,        <comment type="block">/* Write current value here */</comment>
+  <param><decl><type><name>int</name> *</type><name>pHighwater</name></decl></param>,      <comment type="block">/* Write high-water mark here */</comment>
+  <param><decl><type><name>int</name></type> <name>resetFlag</name></decl></param>         <comment type="block">/* Reset high-water mark if true */</comment>
+)</parameter_list><block>{
+  <switch>switch<condition>( <expr><name>op</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_DBSTATUS_LOOKASIDE_USED</name></expr>: <block>{
+      <expr_stmt><expr>*<name>pCurrent</name> = <name>db</name>-&gt;<name>lookaside</name>.<name>nOut</name></expr>;</expr_stmt>
+      <expr_stmt><expr>*<name>pHighwater</name> = <name>db</name>-&gt;<name>lookaside</name>.<name>mxOut</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>resetFlag</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>db</name>-&gt;<name>lookaside</name>.<name>mxOut</name> = <name>db</name>-&gt;<name>lookaside</name>.<name>nOut</name></expr>;</expr_stmt>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+    </case><default>default: <block>{
+      <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+    }</block>
+  </default>}</block></switch>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+</unit>

@@ -1,0 +1,1726 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="os_win.c" filename=""><comment type="block">/*
+** 2004 May 22
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+******************************************************************************
+**
+** This file contains code that is specific to windows.
+**
+** $Id: os_win.c,v 1.145 2008/12/11 02:58:27 shane Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WIN</name></expr></cpp:if>               <comment type="block">/* This file is used for windows only */</comment>
+
+
+<comment type="block">/*
+** A Note About Memory Allocation:
+**
+** This driver uses malloc()/free() directly rather than going through
+** the SQLite-wrappers sqlite3_malloc()/sqlite3_free().  Those wrappers
+** are designed for use on embedded systems where memory is scarce and
+** malloc failures happen frequently.  Win32 does not typically run on
+** embedded systems, and when it does the developers normally have bigger
+** problems to worry about than running out of memory.  So there is not
+** a compelling need to use the wrappers.
+**
+** But there is a good reason to not use the wrappers.  If we use the
+** wrappers then we will get simulated malloc() failures within this
+** driver.  And that causes all kinds of problems for our tests.  We
+** could enhance SQLite to deal with simulated malloc failures within
+** the OS driver, but the code to deal with those failure would not
+** be exercised on Linux (which does not need to malloc() in the driver)
+** and so we would have difficulty writing coverage tests for that
+** code.  Better to leave the code out, we think.
+**
+** The point of this discussion is as follows:  When creating a new
+** OS layer for an embedded system, if you use this file as an example,
+** avoid the use of malloc()/free().  Those routines work ok on windows
+** desktops but not so well in embedded systems.
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;winbase.h&gt;</cpp:file></cpp:include>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>__CYGWIN__</name></cpp:ifdef>
+<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/cygwin.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Macros used to determine whether or not to use threads.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>THREADSAFE</name></expr></argument>)</argument_list></call> &amp;&amp; <name>THREADSAFE</name></expr></cpp:if>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>SQLITE_W32_THREADS</name> 1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Include code that is common to all os_*.c files
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"os_common.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Some microsoft compilers lack this definition.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>INVALID_FILE_ATTRIBUTES</name></cpp:ifndef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>INVALID_FILE_ATTRIBUTES</name> ((DWORD)-1)</cpp:define> 
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Determine if we are dealing with WindowsCE - which has a much
+** reduced API.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>AreFileApisANSI</name>() 1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** WinCE lacks native support for file locking so we have to fake it
+** with some code of our own.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<typedef>typedef <type><struct>struct <name>winceLock</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>int</name></type> <name>nReaders</name></decl>;</decl_stmt>       <comment type="block">/* Number of reader locks obtained */</comment>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bPending</name></decl>;</decl_stmt>      <comment type="block">/* Indicates a pending lock has been obtained */</comment>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bReserved</name></decl>;</decl_stmt>     <comment type="block">/* Indicates a reserved lock has been obtained */</comment>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bExclusive</name></decl>;</decl_stmt>    <comment type="block">/* Indicates an exclusive lock has been obtained */</comment>
+</public>}</block></struct></type> <name>winceLock</name>;</typedef>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The winFile structure is a subclass of sqlite3_file* specific to the win32
+** portability layer.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>winFile</name> winFile;</struct></type></typedef>
+<struct>struct <name>winFile</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>const</name> <name>sqlite3_io_methods</name> *</type><name>pMethod</name></decl>;</decl_stmt><comment type="block">/* Must be first */</comment>
+  <decl_stmt><decl><type><name>HANDLE</name></type> <name>h</name></decl>;</decl_stmt>               <comment type="block">/* Handle for accessing the file */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name>locktype</name></decl>;</decl_stmt> <comment type="block">/* Type of lock currently held on this file */</comment>
+  <decl_stmt><decl><type><name>short</name></type> <name>sharedLockByte</name></decl>;</decl_stmt>   <comment type="block">/* Randomly chosen byte used as a shared lock */</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zDeleteOnClose</name></decl>;</decl_stmt>  <comment type="block">/* Name of file to delete when closing */</comment>
+  <decl_stmt><decl><type><name>HANDLE</name></type> <name>hMutex</name></decl>;</decl_stmt>          <comment type="block">/* Mutex used to control access to shared lock */</comment>  
+  <decl_stmt><decl><type><name>HANDLE</name></type> <name>hShared</name></decl>;</decl_stmt>         <comment type="block">/* Shared memory segment used for locking */</comment>
+  <decl_stmt><decl><type><name>winceLock</name></type> <name>local</name></decl>;</decl_stmt>        <comment type="block">/* Locks obtained by this instance of winFile */</comment>
+  <decl_stmt><decl><type><name>winceLock</name> *</type><name>shared</name></decl>;</decl_stmt>      <comment type="block">/* Global shared lock memory for the file  */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</public>}</block>;</struct>
+
+
+<comment type="block">/*
+** The following variable is (normally) set once and never changes
+** thereafter.  It records whether the operating system is Win95
+** or WinNT.
+**
+** 0:   Operating system unknown.
+** 1:   Operating system is Win95.
+** 2:   Operating system is WinNT.
+**
+** In order to facilitate testing on a WinNT system, the test fixture
+** can manually set this value to 1 to emulate Win98 behavior.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<decl_stmt><decl><type><name>int</name></type> <name>sqlite3_os_type</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>sqlite3_os_type</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Return true (non-zero) if we are running under WinNT, Win2K, WinXP,
+** or WinCE.  Return false (zero) for Win95, Win98, or WinME.
+**
+** Here is an interesting observation:  Win95, Win98, and WinME lack
+** the LockFileEx() API.  But we can still statically link against that
+** API as long as we don't call it win running Win95/98/ME.  A call to
+** this routine is used to determine if the host is Win95/98/ME or
+** WinNT/2K/XP so that we will know whether or not we can safely call
+** the LockFileEx() API.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>isNT</name>()  (1)</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <function><type><name>static</name> <name>int</name></type> <name>isNT</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+    <if>if<condition>( <expr><name>sqlite3_os_type</name>==0</expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>OSVERSIONINFO</name></type> <name>sInfo</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>sInfo</name>.<name>dwOSVersionInfoSize</name> = <call><name>sizeof</name><argument_list>(<argument><expr><name>sInfo</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>GetVersionEx</name><argument_list>(<argument><expr>&amp;<name>sInfo</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>sqlite3_os_type</name> = <name>sInfo</name>.<name>dwPlatformId</name>==<name>VER_PLATFORM_WIN32_NT</name> ? 2 : 1</expr>;</expr_stmt>
+    }</block></then></if>
+    <return>return <expr><name>sqlite3_os_type</name>==2</expr>;</return>
+  }</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OS_WINCE */</comment>
+
+<comment type="block">/*
+** Convert a UTF-8 string to microsoft unicode (UTF-16?). 
+**
+** Space to hold the returned string is obtained from malloc.
+*/</comment>
+<function><type><name>static</name> <name>WCHAR</name> *</type><name>utf8ToUnicode</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nChar</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zWideFilename</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>nChar</name> = <call><name>MultiByteToWideChar</name><argument_list>(<argument><expr><name>CP_UTF8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zWideFilename</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nChar</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name><name>zWideFilename</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zWideFilename</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nChar</name> = <call><name>MultiByteToWideChar</name><argument_list>(<argument><expr><name>CP_UTF8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>zWideFilename</name></expr></argument>, <argument><expr><name>nChar</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nChar</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zWideFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zWideFilename</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>zWideFilename</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert microsoft unicode to UTF-8.  Space to hold the returned string is
+** obtained from malloc().
+*/</comment>
+<function><type><name>static</name> <name>char</name> *</type><name>unicodeToUtf8</name><parameter_list>(<param><decl><type><name>const</name> <name>WCHAR</name> *</type><name>zWideFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFilename</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>nByte</name> = <call><name>WideCharToMultiByte</name><argument_list>(<argument><expr><name>CP_UTF8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zWideFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zFilename</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nByte</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zFilename</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nByte</name> = <call><name>WideCharToMultiByte</name><argument_list>(<argument><expr><name>CP_UTF8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zWideFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>,
+                              <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nByte</name> == 0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zFilename</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>zFilename</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert an ansi string to microsoft unicode, based on the
+** current codepage settings for file apis.
+** 
+** Space to hold the returned string is obtained
+** from malloc.
+*/</comment>
+<function><type><name>static</name> <name>WCHAR</name> *</type><name>mbcsToUnicode</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zMbcsFilename</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>codepage</name> =<init> <expr><call><name>AreFileApisANSI</name><argument_list>()</argument_list></call> ? <name>CP_ACP</name> : <name>CP_OEMCP</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>nByte</name> = <call><name>MultiByteToWideChar</name><argument_list>(<argument><expr><name>codepage</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>NULL</name></expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call>*<call><name>sizeof</name><argument_list>(<argument><expr><name>WCHAR</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zMbcsFilename</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nByte</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name><name>zMbcsFilename</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zMbcsFilename</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nByte</name> = <call><name>MultiByteToWideChar</name><argument_list>(<argument><expr><name>codepage</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>zMbcsFilename</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nByte</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zMbcsFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zMbcsFilename</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>zMbcsFilename</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert microsoft unicode to multibyte character string, based on the
+** user's Ansi codepage.
+**
+** Space to hold the returned string is obtained from
+** malloc().
+*/</comment>
+<function><type><name>static</name> <name>char</name> *</type><name>unicodeToMbcs</name><parameter_list>(<param><decl><type><name>const</name> <name>WCHAR</name> *</type><name>zWideFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFilename</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>codepage</name> =<init> <expr><call><name>AreFileApisANSI</name><argument_list>()</argument_list></call> ? <name>CP_ACP</name> : <name>CP_OEMCP</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>nByte</name> = <call><name>WideCharToMultiByte</name><argument_list>(<argument><expr><name>codepage</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zWideFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zFilename</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nByte</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zFilename</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nByte</name> = <call><name>WideCharToMultiByte</name><argument_list>(<argument><expr><name>codepage</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zWideFilename</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>,
+                              <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nByte</name> == 0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zFilename</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>zFilename</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert multibyte character string to UTF-8.  Space to hold the
+** returned string is obtained from malloc().
+*/</comment>
+<function><type><name>char</name> *</type><name>sqlite3_win32_mbcs_to_utf8</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFilenameUtf8</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zTmpWide</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>zTmpWide</name> = <call><name>mbcsToUnicode</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zTmpWide</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zFilenameUtf8</name> = <call><name>unicodeToUtf8</name><argument_list>(<argument><expr><name>zTmpWide</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zTmpWide</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>zFilenameUtf8</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert UTF-8 to multibyte character string.  Space to hold the 
+** returned string is obtained from malloc().
+*/</comment>
+<function><type><name>static</name> <name>char</name> *</type><name>utf8ToMbcs</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFilenameMbcs</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zTmpWide</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>zTmpWide</name> = <call><name>utf8ToUnicode</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zTmpWide</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zFilenameMbcs</name> = <call><name>unicodeToMbcs</name><argument_list>(<argument><expr><name>zTmpWide</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zTmpWide</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>zFilenameMbcs</name></expr>;</return>
+}</block></function>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<comment type="block">/*************************************************************************
+** This section contains code for WinCE only.
+*/</comment>
+<comment type="block">/*
+** WindowsCE does not have a localtime() function.  So create a
+** substitute.
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;time.h&gt;</cpp:file></cpp:include>
+<function><type>struct <name>tm</name> *<name>__cdecl</name></type> <name>localtime</name><parameter_list>(<param><decl><type><name>const</name> <name>time_t</name> *</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+  <decl_stmt><decl><type><name>static</name> struct <name>tm</name></type> <name>y</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>FILETIME</name></type> <name>uTm</name>, <name>lTm</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>SYSTEMTIME</name></type> <name>pTm</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>t64</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>t64</name> = *<name>t</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>t64</name> = (<name>t64</name> + 11644473600)*10000000</expr>;</expr_stmt>
+  <expr_stmt><expr><name>uTm</name>.<name>dwLowDateTime</name> = <name>t64</name> &amp; 0xFFFFFFFF</expr>;</expr_stmt>
+  <expr_stmt><expr><name>uTm</name>.<name>dwHighDateTime</name>= <name>t64</name> &gt;&gt; 32</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>FileTimeToLocalFileTime</name><argument_list>(<argument><expr>&amp;<name>uTm</name></expr></argument>,<argument><expr>&amp;<name>lTm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>FileTimeToSystemTime</name><argument_list>(<argument><expr>&amp;<name>lTm</name></expr></argument>,<argument><expr>&amp;<name>pTm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_year</name> = <name>pTm</name>.<name>wYear</name> - 1900</expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_mon</name> = <name>pTm</name>.<name>wMonth</name> - 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_wday</name> = <name>pTm</name>.<name>wDayOfWeek</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_mday</name> = <name>pTm</name>.<name>wDay</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_hour</name> = <name>pTm</name>.<name>wHour</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_min</name> = <name>pTm</name>.<name>wMinute</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>tm_sec</name> = <name>pTm</name>.<name>wSecond</name></expr>;</expr_stmt>
+  <return>return <expr>&amp;<name>y</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* This will never be called, but defined to make the code compile */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>GetTempPathA</name>(a,b)</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>LockFile</name>(a,b,c,d,e)       winceLockFile(&amp;a, b, c, d, e)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>UnlockFile</name>(a,b,c,d,e)     winceUnlockFile(&amp;a, b, c, d, e)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>LockFileEx</name>(a,b,c,d,e,f)   winceLockFileEx(&amp;a, b, c, d, e, f)</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>HANDLE_TO_WINFILE</name>(a) (winFile*)&amp;((char*)a)[-offsetof(winFile,h)]</cpp:define>
+
+<comment type="block">/*
+** Acquire a lock on the handle h
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>winceMutexAcquire</name><parameter_list>(<param><decl><type><name>HANDLE</name></type> <name>h</name></decl></param>)</parameter_list><block>{
+   <decl_stmt><decl><type><name>DWORD</name></type> <name>dwErr</name></decl>;</decl_stmt>
+   <do>do <block>{
+     <expr_stmt><expr><name>dwErr</name> = <call><name>WaitForSingleObject</name><argument_list>(<argument><expr><name>h</name></expr></argument>, <argument><expr><name>INFINITE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+   }</block> while <condition>(<expr><name>dwErr</name> != <name>WAIT_OBJECT_0</name> &amp;&amp; <name>dwErr</name> != <name>WAIT_ABANDONED</name></expr>)</condition>;</do>
+}</block></function>
+<comment type="block">/*
+** Release a lock acquired by winceMutexAcquire()
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>winceMutexRelease</name>(h) ReleaseMutex(h)</cpp:define>
+
+<comment type="block">/*
+** Create the mutex and shared memory used for locking in the file
+** descriptor pFile
+*/</comment>
+<function><type><name>static</name> <name>BOOL</name></type> <name>winceCreateLock</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>, <param><decl><type><name>winFile</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zTok</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zName</name> =<init> <expr><call><name>utf8ToUnicode</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bInit</name> =<init> <expr><name>TRUE</name></expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* Initialize the local lockdata */</comment>
+  <expr_stmt><expr><call><name>ZeroMemory</name><argument_list>(<argument><expr>&amp;<name>pFile</name>-&gt;<name>local</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>local</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Replace the backslashes from the filename and lowercase it
+  ** to derive a mutex name. */</comment>
+  <expr_stmt><expr><name>zTok</name> = <call><name>CharLowerW</name><argument_list>(<argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for (<init>;</init><condition><expr>*<name>zTok</name></expr>;</condition><incr><expr><name>zTok</name>++</expr></incr>)<block>{
+    <if>if <condition>(<expr>*<name>zTok</name> == '\\'</expr>)</condition><then> <expr_stmt><expr>*<name>zTok</name> = '_'</expr>;</expr_stmt></then></if>
+  }</block></for>
+
+  <comment type="block">/* Create/open the named mutex */</comment>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>hMutex</name> = <call><name>CreateMutexW</name><argument_list>(<argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>FALSE</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if <condition>(<expr>!<name>pFile</name>-&gt;<name>hMutex</name></expr>)</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>FALSE</name></expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* Acquire the mutex before continuing */</comment>
+  <expr_stmt><expr><call><name>winceMutexAcquire</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  
+  <comment type="block">/* Since the names of named mutexes, semaphores, file mappings etc are 
+  ** case-sensitive, take advantage of that by uppercasing the mutex name
+  ** and using that as the shared filemapping name.
+  */</comment>
+  <expr_stmt><expr><call><name>CharUpperW</name><argument_list>(<argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>hShared</name> = <call><name>CreateFileMappingW</name><argument_list>(<argument><expr><name>INVALID_HANDLE_VALUE</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>,
+                                       <argument><expr><name>PAGE_READWRITE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>winceLock</name></expr></argument>)</argument_list></call></expr></argument>,
+                                       <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>  
+
+  <comment type="block">/* Set a flag that indicates we're the first to create the memory so it 
+  ** must be zero-initialized */</comment>
+  <if>if <condition>(<expr><call><name>GetLastError</name><argument_list>()</argument_list></call> == <name>ERROR_ALREADY_EXISTS</name></expr>)</condition><then><block>{
+    <expr_stmt><expr><name>bInit</name> = <name>FALSE</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* If we succeeded in making the shared memory handle, map it. */</comment>
+  <if>if <condition>(<expr><name>pFile</name>-&gt;<name>hShared</name></expr>)</condition><then><block>{
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name> = (<name>winceLock</name>*)<call><name>MapViewOfFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hShared</name></expr></argument>, 
+             <argument><expr><name>FILE_MAP_READ</name>|<name>FILE_MAP_WRITE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>winceLock</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <comment type="block">/* If mapping failed, close the shared memory handle and erase it */</comment>
+    <if>if <condition>(<expr>!<name>pFile</name>-&gt;<name>shared</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><call><name>CloseHandle</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hShared</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>hShared</name> = <name>NULL</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <comment type="block">/* If shared memory could not be created, then close the mutex and fail */</comment>
+  <if>if <condition>(<expr><name>pFile</name>-&gt;<name>hShared</name> == <name>NULL</name></expr>)</condition><then><block>{
+    <expr_stmt><expr><call><name>winceMutexRelease</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>CloseHandle</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>hMutex</name> = <name>NULL</name></expr>;</expr_stmt>
+    <return>return <expr><name>FALSE</name></expr>;</return>
+  }</block></then></if>
+  
+  <comment type="block">/* Initialize the shared memory if we're supposed to */</comment>
+  <if>if <condition>(<expr><name>bInit</name></expr>)</condition><then> <block>{
+    <expr_stmt><expr><call><name>ZeroMemory</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>shared</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>winceLock</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>winceMutexRelease</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TRUE</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Destroy the part of winFile that deals with wince locks
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>winceDestroyLock</name><parameter_list>(<param><decl><type><name>winFile</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <if>if <condition>(<expr><name>pFile</name>-&gt;<name>hMutex</name></expr>)</condition><then><block>{
+    <comment type="block">/* Acquire the mutex */</comment>
+    <expr_stmt><expr><call><name>winceMutexAcquire</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* The following blocks should probably assert in debug mode, but they
+       are to cleanup in case any locks remained open */</comment>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>nReaders</name> --</expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bReserved</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bReserved</name> = <name>FALSE</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bPending</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bPending</name> = <name>FALSE</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bExclusive</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bExclusive</name> = <name>FALSE</name></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <comment type="block">/* De-reference and close our copy of the shared memory handle */</comment>
+    <expr_stmt><expr><call><name>UnmapViewOfFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>shared</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>CloseHandle</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hShared</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* Done with the mutex */</comment>
+    <expr_stmt><expr><call><name>winceMutexRelease</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>    
+    <expr_stmt><expr><call><name>CloseHandle</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>hMutex</name> = <name>NULL</name></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/* 
+** An implementation of the LockFile() API of windows for wince
+*/</comment>
+<function><type><name>static</name> <name>BOOL</name></type> <name>winceLockFile</name><parameter_list>(
+  <param><decl><type><name>HANDLE</name> *</type><name>phFile</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwFileOffsetLow</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwFileOffsetHigh</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToLockLow</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToLockHigh</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr><call><name>HANDLE_TO_WINFILE</name><argument_list>(<argument><expr><name>phFile</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bReturn</name> =<init> <expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+
+  <if>if <condition>(<expr>!<name>pFile</name>-&gt;<name>hMutex</name></expr>)</condition><then> <return>return <expr><name>TRUE</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>winceMutexAcquire</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Wanting an exclusive lock? */</comment>
+  <if>if <condition>(<expr><name>dwFileOffsetLow</name> == <name>SHARED_FIRST</name>
+       &amp;&amp; <name>nNumberOfBytesToLockLow</name> == <name>SHARED_SIZE</name></expr>)</condition><then><block>{
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>nReaders</name> == 0 &amp;&amp; <name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bExclusive</name> == 0</expr>)</condition><then><block>{
+       <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bExclusive</name> = <name>TRUE</name></expr>;</expr_stmt>
+       <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bExclusive</name> = <name>TRUE</name></expr>;</expr_stmt>
+       <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then>
+
+  <comment type="block">/* Want a read-only lock? */</comment>
+  <else>else <if>if <condition>(<expr>(<name>dwFileOffsetLow</name> &gt;= <name>SHARED_FIRST</name> &amp;&amp;
+            <name>dwFileOffsetLow</name> &lt; <name>SHARED_FIRST</name> + <name>SHARED_SIZE</name>) &amp;&amp;
+            <name>nNumberOfBytesToLockLow</name> == 1</expr>)</condition><then><block>{
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bExclusive</name> == 0</expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name> ++</expr>;</expr_stmt>
+      <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name> == 1</expr>)</condition><then><block>{
+        <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>nReaders</name> ++</expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then>
+
+  <comment type="block">/* Want a pending lock? */</comment>
+  <else>else <if>if <condition>(<expr><name>dwFileOffsetLow</name> == <name>PENDING_BYTE</name> &amp;&amp; <name>nNumberOfBytesToLockLow</name> == 1</expr>)</condition><then><block>{
+    <comment type="block">/* If no pending lock has been acquired, then acquire it */</comment>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bPending</name> == 0</expr>)</condition><then> <block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bPending</name> = <name>TRUE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bPending</name> = <name>TRUE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then>
+  <comment type="block">/* Want a reserved lock? */</comment>
+  <else>else <if>if <condition>(<expr><name>dwFileOffsetLow</name> == <name>RESERVED_BYTE</name> &amp;&amp; <name>nNumberOfBytesToLockLow</name> == 1</expr>)</condition><then><block>{
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bReserved</name> == 0</expr>)</condition><then> <block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bReserved</name> = <name>TRUE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bReserved</name> = <name>TRUE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if></else></if></else></if></else></if>
+
+  <expr_stmt><expr><call><name>winceMutexRelease</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>bReturn</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** An implementation of the UnlockFile API of windows for wince
+*/</comment>
+<function><type><name>static</name> <name>BOOL</name></type> <name>winceUnlockFile</name><parameter_list>(
+  <param><decl><type><name>HANDLE</name> *</type><name>phFile</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwFileOffsetLow</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwFileOffsetHigh</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToUnlockLow</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToUnlockHigh</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr><call><name>HANDLE_TO_WINFILE</name><argument_list>(<argument><expr><name>phFile</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BOOL</name></type> <name>bReturn</name> =<init> <expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+
+  <if>if <condition>(<expr>!<name>pFile</name>-&gt;<name>hMutex</name></expr>)</condition><then> <return>return <expr><name>TRUE</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>winceMutexAcquire</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Releasing a reader lock or an exclusive lock */</comment>
+  <if>if <condition>(<expr><name>dwFileOffsetLow</name> &gt;= <name>SHARED_FIRST</name> &amp;&amp;
+       <name>dwFileOffsetLow</name> &lt; <name>SHARED_FIRST</name> + <name>SHARED_SIZE</name></expr>)</condition><then><block>{
+    <comment type="block">/* Did we have an exclusive lock? */</comment>
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bExclusive</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bExclusive</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bExclusive</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then>
+
+    <comment type="block">/* Did we just have a reader lock? */</comment>
+    <else>else <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name> --</expr>;</expr_stmt>
+      <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>nReaders</name> == 0</expr>)</condition><then>
+      <block>{
+        <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>nReaders</name> --</expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if></else></if>
+  }</block></then>
+
+  <comment type="block">/* Releasing a pending lock */</comment>
+  <else>else <if>if <condition>(<expr><name>dwFileOffsetLow</name> == <name>PENDING_BYTE</name> &amp;&amp; <name>nNumberOfBytesToUnlockLow</name> == 1</expr>)</condition><then><block>{
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bPending</name></expr>)</condition><then><block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bPending</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bPending</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then>
+  <comment type="block">/* Releasing a reserved lock */</comment>
+  <else>else <if>if <condition>(<expr><name>dwFileOffsetLow</name> == <name>RESERVED_BYTE</name> &amp;&amp; <name>nNumberOfBytesToUnlockLow</name> == 1</expr>)</condition><then><block>{
+    <if>if <condition>(<expr><name>pFile</name>-&gt;<name>local</name>.<name>bReserved</name></expr>)</condition><then> <block>{
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>local</name>.<name>bReserved</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pFile</name>-&gt;<name>shared</name>-&gt;<name>bReserved</name> = <name>FALSE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bReturn</name> = <name>TRUE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if></else></if></else></if>
+
+  <expr_stmt><expr><call><name>winceMutexRelease</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>hMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>bReturn</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** An implementation of the LockFileEx() API of windows for wince
+*/</comment>
+<function><type><name>static</name> <name>BOOL</name></type> <name>winceLockFileEx</name><parameter_list>(
+  <param><decl><type><name>HANDLE</name> *</type><name>phFile</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwFlags</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>dwReserved</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToLockLow</name></decl></param>,
+  <param><decl><type><name>DWORD</name></type> <name>nNumberOfBytesToLockHigh</name></decl></param>,
+  <param><decl><type><name>LPOVERLAPPED</name></type> <name>lpOverlapped</name></decl></param>
+)</parameter_list><block>{
+  <comment type="block">/* If the caller wants a shared read lock, forward this call
+  ** to winceLockFile */</comment>
+  <if>if <condition>(<expr><name>lpOverlapped</name>-&gt;<name>Offset</name> == <name>SHARED_FIRST</name> &amp;&amp;
+      <name>dwFlags</name> == 1 &amp;&amp;
+      <name>nNumberOfBytesToLockLow</name> == <name>SHARED_SIZE</name></expr>)</condition><then><block>{
+    <return>return <expr><call><name>winceLockFile</name><argument_list>(<argument><expr><name>phFile</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>FALSE</name></expr>;</return>
+}</block></function>
+<comment type="block">/*
+** End of the special code for wince
+*****************************************************************************/</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OS_WINCE */</comment>
+
+<comment type="block">/*****************************************************************************
+** The next group of routines implement the I/O methods specified
+** by the sqlite3_io_methods object.
+******************************************************************************/</comment>
+
+<comment type="block">/*
+** Close a file.
+**
+** It is reported that an attempt to close a handle might sometimes
+** fail.  This is a very unreasonable result, but windows is notorious
+** for being unreasonable so I do not doubt that it might happen.  If
+** the close fails, we pause for 100 milliseconds and try again.  As
+** many as MX_CLOSE_ATTEMPT attempts to close the handle are made before
+** giving up and returning an error.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MX_CLOSE_ATTEMPT</name> 3</cpp:define>
+<function><type><name>static</name> <name>int</name></type> <name>winClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name>, <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"CLOSE %d\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <do>do<block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>CloseHandle</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>while<condition>( <expr><name>rc</name>==0 &amp;&amp; ++<name>cnt</name> &lt; <name>MX_CLOSE_ATTEMPT</name> &amp;&amp; (<call><name>Sleep</name><argument_list>(<argument><expr>100</expr></argument>)</argument_list></call>, 1)</expr> )</condition>;</do>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>WINCE_DELETION_ATTEMPTS</name> 3</cpp:define>
+  <expr_stmt><expr><call><name>winceDestroyLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pFile</name>-&gt;<name>zDeleteOnClose</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <while>while<condition>(
+           <expr><call><name>DeleteFileW</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>zDeleteOnClose</name></expr></argument>)</argument_list></call>==0
+        &amp;&amp; <call><name>GetFileAttributesW</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>zDeleteOnClose</name></expr></argument>)</argument_list></call>!=0xffffffff 
+        &amp;&amp; <name>cnt</name>++ &lt; <name>WINCE_DELETION_ATTEMPTS</name></expr>
+    )</condition><block>{
+       <expr_stmt><expr><call><name>Sleep</name><argument_list>(<argument><expr>100</expr></argument>)</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* Wait a little before trying again */</comment>
+    }</block></while>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>zDeleteOnClose</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>OpenCounter</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name> ? <name>SQLITE_OK</name> : <name>SQLITE_IOERR</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Some microsoft compilers lack this definition.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>INVALID_SET_FILE_POINTER</name></cpp:ifndef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>INVALID_SET_FILE_POINTER</name> ((DWORD)-1)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Read data from a file into a buffer.  Return SQLITE_OK if all
+** bytes were read successfully and SQLITE_IOERR if anything goes
+** wrong.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winRead</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>,          <comment type="block">/* File to read from */</comment>
+  <param><decl><type><name>void</name> *</type><name>pBuf</name></decl></param>,                <comment type="block">/* Write content into this buffer */</comment>
+  <param><decl><type><name>int</name></type> <name>amt</name></decl></param>,                   <comment type="block">/* Number of bytes to read */</comment>
+  <param><decl><type><name>sqlite3_int64</name></type> <name>offset</name></decl></param>       <comment type="block">/* Begin reading at this offset */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>LONG</name></type> <name>upperBits</name> =<init> <expr>(<name>LONG</name>)((<name>offset</name>&gt;&gt;32) &amp; 0x7fffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>LONG</name></type> <name>lowerBits</name> =<init> <expr>(<name>LONG</name>)(<name>offset</name> &amp; 0xffffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>got</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>id</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <macro><name>SimulateIOError</name><argument_list>(<argument>return SQLITE_IOERR_READ</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"READ %d lock=%d\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>locktype</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>SetFilePointer</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>lowerBits</name></expr></argument>, <argument><expr>&amp;<name>upperBits</name></expr></argument>, <argument><expr><name>FILE_BEGIN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>INVALID_SET_FILE_POINTER</name> &amp;&amp; <call><name>GetLastError</name><argument_list>()</argument_list></call>!=<name>NO_ERROR</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_FULL</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr>!<call><name>ReadFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>, <argument><expr><name>amt</name></expr></argument>, <argument><expr>&amp;<name>got</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_IOERR_READ</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>got</name>==(<name>DWORD</name>)<name>amt</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <comment type="block">/* Unread parts of the buffer must be zero-filled */</comment>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;((<name>char</name>*)<name>pBuf</name>)[<name>got</name>]</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>amt</name>-<name>got</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_IOERR_SHORT_READ</name></expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Write data from a buffer into a file.  Return SQLITE_OK on success
+** or some other error code on failure.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winWrite</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>,         <comment type="block">/* File to write into */</comment>
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>pBuf</name></decl></param>,         <comment type="block">/* The bytes to be written */</comment>
+  <param><decl><type><name>int</name></type> <name>amt</name></decl></param>,                  <comment type="block">/* Number of bytes to write */</comment>
+  <param><decl><type><name>sqlite3_int64</name></type> <name>offset</name></decl></param>      <comment type="block">/* Offset into the file to begin writing at */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>LONG</name></type> <name>upperBits</name> =<init> <expr>(<name>LONG</name>)((<name>offset</name>&gt;&gt;32) &amp; 0x7fffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>LONG</name></type> <name>lowerBits</name> =<init> <expr>(<name>LONG</name>)(<name>offset</name> &amp; 0xffffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>wrote</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>id</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <macro><name>SimulateIOError</name><argument_list>(<argument>return SQLITE_IOERR_WRITE</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <macro><name>SimulateDiskfullError</name><argument_list>(<argument>return SQLITE_FULL</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"WRITE %d lock=%d\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>locktype</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>SetFilePointer</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>lowerBits</name></expr></argument>, <argument><expr>&amp;<name>upperBits</name></expr></argument>, <argument><expr><name>FILE_BEGIN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>INVALID_SET_FILE_POINTER</name> &amp;&amp; <call><name>GetLastError</name><argument_list>()</argument_list></call>!=<name>NO_ERROR</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_FULL</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>amt</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>(
+     <expr><name>amt</name>&gt;0
+     &amp;&amp; (<name>rc</name> = <call><name>WriteFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>, <argument><expr><name>amt</name></expr></argument>, <argument><expr>&amp;<name>wrote</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>)!=0
+     &amp;&amp; <name>wrote</name>&gt;0</expr>
+  )</condition><block>{
+    <expr_stmt><expr><name>amt</name> -= <name>wrote</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBuf</name> = &amp;((<name>char</name>*)<name>pBuf</name>)[<name>wrote</name>]</expr>;</expr_stmt>
+  }</block></while>
+  <if>if<condition>( <expr>!<name>rc</name> || <name>amt</name>&gt;(<name>int</name>)<name>wrote</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_FULL</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Truncate an open file to a specified size
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>sqlite3_int64</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>LONG</name></type> <name>upperBits</name> =<init> <expr>(<name>LONG</name>)((<name>nByte</name>&gt;&gt;32) &amp; 0x7fffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>LONG</name></type> <name>lowerBits</name> =<init> <expr>(<name>LONG</name>)(<name>nByte</name> &amp; 0xffffffff)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"TRUNCATE %d %lld\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <macro><name>SimulateIOError</name><argument_list>(<argument>return SQLITE_IOERR_TRUNCATE</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>SetFilePointer</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>lowerBits</name></expr></argument>, <argument><expr>&amp;<name>upperBits</name></expr></argument>, <argument><expr><name>FILE_BEGIN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>INVALID_SET_FILE_POINTER</name> != <name>rc</name></expr> )</condition><then><block>{
+    <comment type="block">/* SetEndOfFile will fail if nByte is negative */</comment>
+    <if>if<condition>( <expr><call><name>SetEndOfFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_IOERR_TRUNCATE</name></expr>;</return>
+}</block></function>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<comment type="block">/*
+** Count the number of fullsyncs and normal syncs.  This is used to test
+** that syncs and fullsyncs are occuring at the right times.
+*/</comment>
+<decl_stmt><decl><type><name>int</name></type> <name>sqlite3_sync_count</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<decl_stmt><decl><type><name>int</name></type> <name>sqlite3_fullsync_count</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Make sure all writes to a particular file are committed to disk.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>)</parameter_list><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_NO_SYNC</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"SYNC %d lock=%d\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>locktype</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifndef>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_SYNC_FULL</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sqlite3_fullsync_count</name>++</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>sqlite3_sync_count</name>++</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <comment type="block">/* If we compiled with the SQLITE_NO_SYNC flag, then syncing is a
+  ** no-op
+  */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_NO_SYNC</name></cpp:ifdef>
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <if>if<condition>( <expr><call><name>FlushFileBuffers</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr><name>SQLITE_IOERR</name></expr>;</return>
+  }</block></else></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block></function>
+
+<comment type="block">/*
+** Determine the current size of a file in bytes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>sqlite3_int64</name> *</type><name>pSize</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>upperBits</name>, <name>lowerBits</name></decl>;</decl_stmt>
+  <macro><name>SimulateIOError</name><argument_list>(<argument>return SQLITE_IOERR_FSTAT</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <expr_stmt><expr><name>lowerBits</name> = <call><name>GetFileSize</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr>&amp;<name>upperBits</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pSize</name> = (((<name>sqlite3_int64</name>)<name>upperBits</name>)&lt;&lt;32) + <name>lowerBits</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** LOCKFILE_FAIL_IMMEDIATELY is undefined on some Windows systems.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>LOCKFILE_FAIL_IMMEDIATELY</name></cpp:ifndef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>LOCKFILE_FAIL_IMMEDIATELY</name> 1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Acquire a reader lock.
+** Different API routines are called depending on whether or not this
+** is Win95 or WinNT.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>getReadLock</name><parameter_list>(<param><decl><type><name>winFile</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>OVERLAPPED</name></type> <name>ovlp</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>ovlp</name>.<name>Offset</name> = <name>SHARED_FIRST</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>ovlp</name>.<name>OffsetHigh</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>ovlp</name>.<name>hEvent</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>LockFileEx</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>LOCKFILE_FAIL_IMMEDIATELY</name></expr></argument>,
+                     <argument><expr>0</expr></argument>, <argument><expr><name>SHARED_SIZE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>ovlp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>lk</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_randomness</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>lk</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>lk</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>sharedLockByte</name> = (<name>short</name>)((<name>lk</name> &amp; 0x7fffffff)%(<name>SHARED_SIZE</name> - 1))</expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>LockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name>+<name>pFile</name>-&gt;<name>sharedLockByte</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <return>return <expr><name>res</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Undo a readlock
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>unlockReadLock</name><parameter_list>(<param><decl><type><name>winFile</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>res</name> = <call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>SHARED_SIZE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>res</name> = <call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name> + <name>pFile</name>-&gt;<name>sharedLockByte</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <return>return <expr><name>res</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Lock the file with the lock specified by parameter locktype - one
+** of the following:
+**
+**     (1) SHARED_LOCK
+**     (2) RESERVED_LOCK
+**     (3) PENDING_LOCK
+**     (4) EXCLUSIVE_LOCK
+**
+** Sometimes when requesting one lock state, additional lock states
+** are inserted in between.  The locking might fail on one of the later
+** transitions leaving the lock state different from what it started but
+** still short of its goal.  The following chart shows the allowed
+** transitions and the inserted intermediate states:
+**
+**    UNLOCKED -&gt; SHARED
+**    SHARED -&gt; RESERVED
+**    SHARED -&gt; (PENDING) -&gt; EXCLUSIVE
+**    RESERVED -&gt; (PENDING) -&gt; EXCLUSIVE
+**    PENDING -&gt; EXCLUSIVE
+**
+** This routine will only increase a lock.  The winUnlock() routine
+** erases all locks at once and returns us immediately to locking level 0.
+** It is not possible to lower the locking level one step at a time.  You
+** must go straight to locking level 0.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>locktype</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>    <comment type="block">/* Return code from subroutines */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>           <comment type="block">/* Result of a windows lock call */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>newLocktype</name></decl>;</decl_stmt>       <comment type="block">/* Set pFile-&gt;locktype to this value before exiting */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>gotPendingLock</name> =<init> <expr>0</expr></init></decl>;</decl_stmt><comment type="block">/* True if we acquired a PENDING lock this time */</comment>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>OSTRACE5</name><argument_list>(<argument><expr>"LOCK %d %d was %d(%d)\n"</expr></argument>,
+          <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>locktype</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>locktype</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>sharedLockByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* If there is already a lock of this type or more restrictive on the
+  ** OsFile, do nothing. Don't use the end_lock: exit path, as
+  ** sqlite3OsEnterMutex() hasn't been called yet.
+  */</comment>
+  <if>if<condition>( <expr><name>pFile</name>-&gt;<name>locktype</name>&gt;=<name>locktype</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* Make sure the locking sequence is correct
+  */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>-&gt;<name>locktype</name>!=<name>NO_LOCK</name> || <name>locktype</name>==<name>SHARED_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>locktype</name>!=<name>PENDING_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>locktype</name>!=<name>RESERVED_LOCK</name> || <name>pFile</name>-&gt;<name>locktype</name>==<name>SHARED_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Lock the PENDING_LOCK byte if we need to acquire a PENDING lock or
+  ** a SHARED lock.  If we are acquiring a SHARED lock, the acquisition of
+  ** the PENDING_LOCK byte is temporary.
+  */</comment>
+  <expr_stmt><expr><name>newLocktype</name> = <name>pFile</name>-&gt;<name>locktype</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pFile</name>-&gt;<name>locktype</name>==<name>NO_LOCK</name>
+   || (<name>locktype</name>==<name>EXCLUSIVE_LOCK</name> &amp;&amp; <name>pFile</name>-&gt;<name>locktype</name>==<name>RESERVED_LOCK</name>)</expr>
+  )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>3</expr></init></decl>;</decl_stmt>
+    <while>while<condition>( <expr><name>cnt</name>--&gt;0 &amp;&amp; (<name>res</name> = <call><name>LockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>PENDING_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>)==0</expr> )</condition><block>{
+      <comment type="block">/* Try 3 times to get the pending lock.  The pending lock might be
+      ** held by another reader process who will release it momentarily.
+      */</comment>
+      <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"could not get a PENDING lock. cnt=%d\n"</expr></argument>, <argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Sleep</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></while>
+    <expr_stmt><expr><name>gotPendingLock</name> = <name>res</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Acquire a shared lock
+  */</comment>
+  <if>if<condition>( <expr><name>locktype</name>==<name>SHARED_LOCK</name> &amp;&amp; <name>res</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>-&gt;<name>locktype</name>==<name>NO_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>getReadLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>res</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>newLocktype</name> = <name>SHARED_LOCK</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <comment type="block">/* Acquire a RESERVED lock
+  */</comment>
+  <if>if<condition>( <expr><name>locktype</name>==<name>RESERVED_LOCK</name> &amp;&amp; <name>res</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>-&gt;<name>locktype</name>==<name>SHARED_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>LockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>RESERVED_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>res</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>newLocktype</name> = <name>RESERVED_LOCK</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <comment type="block">/* Acquire a PENDING lock
+  */</comment>
+  <if>if<condition>( <expr><name>locktype</name>==<name>EXCLUSIVE_LOCK</name> &amp;&amp; <name>res</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>newLocktype</name> = <name>PENDING_LOCK</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>gotPendingLock</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Acquire an EXCLUSIVE lock
+  */</comment>
+  <if>if<condition>( <expr><name>locktype</name>==<name>EXCLUSIVE_LOCK</name> &amp;&amp; <name>res</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>-&gt;<name>locktype</name>&gt;=<name>SHARED_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>unlockReadLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"unreadlock = %d\n"</expr></argument>, <argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>res</name> = <call><name>LockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>SHARED_SIZE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>res</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>newLocktype</name> = <name>EXCLUSIVE_LOCK</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"error-code = %d\n"</expr></argument>, <argument><expr><call><name>GetLastError</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>getReadLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+
+  <comment type="block">/* If we are holding a PENDING lock that ought to be released, then
+  ** release it now.
+  */</comment>
+  <if>if<condition>( <expr><name>gotPendingLock</name> &amp;&amp; <name>locktype</name>==<name>SHARED_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>PENDING_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Update the state of the lock has held in the file descriptor then
+  ** return the appropriate result code.
+  */</comment>
+  <if>if<condition>( <expr><name>res</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>OSTRACE4</name><argument_list>(<argument><expr>"LOCK FAILED %d trying for %d but got %d\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>,
+           <argument><expr><name>locktype</name></expr></argument>, <argument><expr><name>newLocktype</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_BUSY</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>locktype</name> = (<name>u8</name>)<name>newLocktype</name></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This routine checks if there is a RESERVED lock held on the specified
+** file by this or any other process. If such a lock is held, return
+** non-zero, otherwise zero.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winCheckReservedLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pFile</name>-&gt;<name>locktype</name>&gt;=<name>RESERVED_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"TEST WR-LOCK %d %d (local)\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>LockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>RESERVED_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>RESERVED_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>rc</name> = !<name>rc</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>OSTRACE3</name><argument_list>(<argument><expr>"TEST WR-LOCK %d %d (remote)\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr>*<name>pResOut</name> = <name>rc</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Lower the locking level on file descriptor id to locktype.  locktype
+** must be either NO_LOCK or SHARED_LOCK.
+**
+** If the locking level of the file descriptor is already at or below
+** the requested locking level, this routine is a no-op.
+**
+** It is not possible for this routine to fail if the second argument
+** is NO_LOCK.  If the second argument is SHARED_LOCK then this routine
+** might return SQLITE_IOERR;
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winUnlock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>locktype</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>type</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>locktype</name>&lt;=<name>SHARED_LOCK</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>OSTRACE5</name><argument_list>(<argument><expr>"UNLOCK %d to %d was %d(%d)\n"</expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>locktype</name></expr></argument>,
+          <argument><expr><name>pFile</name>-&gt;<name>locktype</name></expr></argument>, <argument><expr><name>pFile</name>-&gt;<name>sharedLockByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>type</name> = <name>pFile</name>-&gt;<name>locktype</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>type</name>&gt;=<name>EXCLUSIVE_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>SHARED_FIRST</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>SHARED_SIZE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>locktype</name>==<name>SHARED_LOCK</name> &amp;&amp; !<call><name>getReadLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <comment type="block">/* This should never happen.  We should always be able to
+      ** reacquire the read lock */</comment>
+      <expr_stmt><expr><name>rc</name> = <name>SQLITE_IOERR_UNLOCK</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>type</name>&gt;=<name>RESERVED_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>RESERVED_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>locktype</name>==<name>NO_LOCK</name> &amp;&amp; <name>type</name>&gt;=<name>SHARED_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>unlockReadLock</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>type</name>&gt;=<name>PENDING_LOCK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>UnlockFile</name><argument_list>(<argument><expr><name>pFile</name>-&gt;<name>h</name></expr></argument>, <argument><expr><name>PENDING_BYTE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>locktype</name> = (<name>u8</name>)<name>locktype</name></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Control and query of the open file handle.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winFileControl</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pArg</name></decl></param>)</parameter_list><block>{
+  <switch>switch<condition>( <expr><name>op</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_FCNTL_LOCKSTATE</name></expr>: <block>{
+      <expr_stmt><expr>*(<name>int</name>*)<name>pArg</name> = ((<name>winFile</name>*)<name>id</name>)-&gt;<name>locktype</name></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block>
+  </case>}</block></switch>
+  <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the sector size in bytes of the underlying block device for
+** the specified file. This is almost always 512 bytes, but may be
+** larger for some devices.
+**
+** SQLite code assumes this function cannot fail. It also assumes that
+** if two files are created in the same file-system directory (i.e.
+** a database and its journal file) that the sector size will be the
+** same for both.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winSectorSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_DEFAULT_SECTOR_SIZE</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return a vector of device characteristics.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winDeviceCharacteristics</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This vector defines all the methods that can operate on an
+** sqlite3_file for win32.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>const</name> <name>sqlite3_io_methods</name></type> <name>winIoMethod</name> =<init> <expr><block>{
+  <expr>1</expr>,                        <comment type="block">/* iVersion */</comment>
+  <expr><name>winClose</name></expr>,
+  <expr><name>winRead</name></expr>,
+  <expr><name>winWrite</name></expr>,
+  <expr><name>winTruncate</name></expr>,
+  <expr><name>winSync</name></expr>,
+  <expr><name>winFileSize</name></expr>,
+  <expr><name>winLock</name></expr>,
+  <expr><name>winUnlock</name></expr>,
+  <expr><name>winCheckReservedLock</name></expr>,
+  <expr><name>winFileControl</name></expr>,
+  <expr><name>winSectorSize</name></expr>,
+  <expr><name>winDeviceCharacteristics</name></expr>
+}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/***************************************************************************
+** Here ends the I/O methods that form the sqlite3_io_methods object.
+**
+** The next block of code implements the VFS methods.
+****************************************************************************/</comment>
+
+<comment type="block">/*
+** Convert a UTF-8 filename into whatever form the underlying
+** operating system wants filenames in.  Space to hold the result
+** is obtained from malloc and must be freed by the calling
+** function.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>convertUtf8Filename</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zConverted</name> = <call><name>utf8ToUnicode</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>zConverted</name> = <call><name>utf8ToMbcs</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <comment type="block">/* caller will handle out of memory */</comment>
+  <return>return <expr><name>zConverted</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Create a temporary file name in zBuf.  zBuf must be big enough to
+** hold at pVfs-&gt;mxPathname characters.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>getTempname</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nBuf</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBuf</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>char</name></type> <name><name>zChars</name><index>[]</index></name> =<init>
+    <expr>"abcdefghijklmnopqrstuvwxyz"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "0123456789"</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>size_t</name></type> <name>i</name>, <name>j</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zTempPath</name><index>[<expr><name>MAX_PATH</name>+1</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>sqlite3_temp_directory</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>MAX_PATH</name>-30</expr></argument>, <argument><expr><name>zTempPath</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>sqlite3_temp_directory</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zMulti</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>WCHAR</name></type> <name><name>zWidePath</name><index>[<expr><name>MAX_PATH</name></expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>GetTempPathW</name><argument_list>(<argument><expr><name>MAX_PATH</name>-30</expr></argument>, <argument><expr><name>zWidePath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zMulti</name> = <call><name>unicodeToUtf8</name><argument_list>(<argument><expr><name>zWidePath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zMulti</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>MAX_PATH</name>-30</expr></argument>, <argument><expr><name>zTempPath</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>zMulti</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zMulti</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+    }</block></else></if>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zUtf8</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zMbcsPath</name><index>[<expr><name>MAX_PATH</name></expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>GetTempPathA</name><argument_list>(<argument><expr><name>MAX_PATH</name>-30</expr></argument>, <argument><expr><name>zMbcsPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zUtf8</name> = <call><name>sqlite3_win32_mbcs_to_utf8</name><argument_list>(<argument><expr><name>zMbcsPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zUtf8</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>MAX_PATH</name>-30</expr></argument>, <argument><expr><name>zTempPath</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>zUtf8</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zUtf8</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+    }</block></else></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if></else></if>
+  <for>for(<init><expr><name>i</name>=<call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>zTempPath</name></expr></argument>)</argument_list></call></expr>;</init> <condition><expr><name>i</name>&gt;0 &amp;&amp; <name><name>zTempPath</name><index>[<expr><name>i</name>-1</expr>]</index></name>=='\\'</expr>;</condition> <incr><expr><name>i</name>--</expr></incr>)<block>{}</block></for>
+  <expr_stmt><expr><name><name>zTempPath</name><index>[<expr><name>i</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>nBuf</name>-30</expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,
+                   <argument><expr>"%s\\"<name>SQLITE_TEMP_FILE_PREFIX</name></expr></argument>, <argument><expr><name>zTempPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>j</name> = <call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_randomness</name><argument_list>(<argument><expr>20</expr></argument>, <argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;20</expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>j</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name> = (<name>char</name>)<name><name>zChars</name><index>[ <expr>((<name>unsigned</name> <name>char</name>)<name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name>)%(<call><name>sizeof</name><argument_list>(<argument><expr><name>zChars</name></expr></argument>)</argument_list></call>-1)</expr> ]</index></name></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"TEMP FILENAME: %s\n"</expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return> 
+}</block></function>
+
+<comment type="block">/*
+** The return value of getLastErrorMsg
+** is zero if the error message fits in the buffer, or non-zero
+** otherwise (if the message was truncated).
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>getLastErrorMsg</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nBuf</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBuf</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>error</name> =<init> <expr><call><name>GetLastError</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>nBuf</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"OsError 0x%x (%u)"</expr></argument>, <argument><expr><name>error</name></expr></argument>, <argument><expr><name>error</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <comment type="block">/* FormatMessage returns 0 on failure.  Otherwise it
+  ** returns the number of TCHARs written to the output
+  ** buffer, excluding the terminating null char.
+  */</comment>
+  <if>if <condition>(<expr>!<call><name>FormatMessageA</name><argument_list>(<argument><expr><name>FORMAT_MESSAGE_FROM_SYSTEM</name></expr></argument>,
+                      <argument><expr><name>NULL</name></expr></argument>,
+                      <argument><expr><name>error</name></expr></argument>,
+                      <argument><expr>0</expr></argument>,
+                      <argument><expr><name>zBuf</name></expr></argument>,
+                      <argument><expr><name>nBuf</name>-1</expr></argument>,
+                      <argument><expr>0</expr></argument>)</argument_list></call></expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>nBuf</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"OsError 0x%x (%u)"</expr></argument>, <argument><expr><name>error</name></expr></argument>, <argument><expr><name>error</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Open a file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winOpen</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>,        <comment type="block">/* Not used */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>,        <comment type="block">/* Name of the file (UTF-8) */</comment>
+  <param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>,         <comment type="block">/* Write the SQLite file handle here */</comment>
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,                <comment type="block">/* Open mode flags */</comment>
+  <param><decl><type><name>int</name> *</type><name>pOutFlags</name></decl></param>            <comment type="block">/* Status return flags */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HANDLE</name></type> <name>h</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>dwDesiredAccess</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>dwShareMode</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>dwCreationDisposition</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>dwFlagsAndAttributes</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>int</name></type> <name>isTemp</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <decl_stmt><decl><type><name>winFile</name> *</type><name>pFile</name> =<init> <expr>(<name>winFile</name>*)<name>id</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name></decl>;</decl_stmt>                 <comment type="block">/* Filename in OS encoding */</comment>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zUtf8Name</name> =<init> <expr><name>zName</name></expr></init></decl>;</decl_stmt>    <comment type="block">/* Filename in UTF-8 encoding */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zTmpname</name><index>[<expr><name>MAX_PATH</name>+1</expr>]</index></name></decl>;</decl_stmt>        <comment type="block">/* Buffer used to create temp filename */</comment>
+
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* If the second argument to this function is NULL, generate a 
+  ** temporary file name to use 
+  */</comment>
+  <if>if<condition>( <expr>!<name>zUtf8Name</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>getTempname</name><argument_list>(<argument><expr><name>MAX_PATH</name>+1</expr></argument>, <argument><expr><name>zTmpname</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <return>return <expr><name>rc</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>zUtf8Name</name> = <name>zTmpname</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Convert the filename to the system encoding. */</comment>
+  <expr_stmt><expr><name>zConverted</name> = <call><name>convertUtf8Filename</name><argument_list>(<argument><expr><name>zUtf8Name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zConverted</name>==0</expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_READWRITE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>dwDesiredAccess</name> = <name>GENERIC_READ</name> | <name>GENERIC_WRITE</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>dwDesiredAccess</name> = <name>GENERIC_READ</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_CREATE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>dwCreationDisposition</name> = <name>OPEN_ALWAYS</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>dwCreationDisposition</name> = <name>OPEN_EXISTING</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_MAIN_DB</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>dwShareMode</name> = <name>FILE_SHARE_READ</name> | <name>FILE_SHARE_WRITE</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>dwShareMode</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_DELETEONCLOSE</name></expr> )</condition><then><block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+    <expr_stmt><expr><name>dwFlagsAndAttributes</name> = <name>FILE_ATTRIBUTE_HIDDEN</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>isTemp</name> = 1</expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+    <expr_stmt><expr><name>dwFlagsAndAttributes</name> = <name>FILE_ATTRIBUTE_TEMPORARY</name>
+                               | <name>FILE_ATTRIBUTE_HIDDEN</name>
+                               | <name>FILE_FLAG_DELETE_ON_CLOSE</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>dwFlagsAndAttributes</name> = <name>FILE_ATTRIBUTE_NORMAL</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <comment type="block">/* Reports from the internet are that performance is always
+  ** better if FILE_FLAG_RANDOM_ACCESS is used.  Ticket #2699. */</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <expr_stmt><expr><name>dwFlagsAndAttributes</name> |= <name>FILE_FLAG_RANDOM_ACCESS</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>h</name> = <call><name>CreateFileW</name><argument_list>(<argument><expr>(<name>WCHAR</name>*)<name>zConverted</name></expr></argument>,
+       <argument><expr><name>dwDesiredAccess</name></expr></argument>,
+       <argument><expr><name>dwShareMode</name></expr></argument>,
+       <argument><expr><name>NULL</name></expr></argument>,
+       <argument><expr><name>dwCreationDisposition</name></expr></argument>,
+       <argument><expr><name>dwFlagsAndAttributes</name></expr></argument>,
+       <argument><expr><name>NULL</name></expr></argument>
+    )</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>h</name> = <call><name>CreateFileA</name><argument_list>(<argument><expr>(<name>char</name>*)<name>zConverted</name></expr></argument>,
+       <argument><expr><name>dwDesiredAccess</name></expr></argument>,
+       <argument><expr><name>dwShareMode</name></expr></argument>,
+       <argument><expr><name>NULL</name></expr></argument>,
+       <argument><expr><name>dwCreationDisposition</name></expr></argument>,
+       <argument><expr><name>dwFlagsAndAttributes</name></expr></argument>,
+       <argument><expr><name>NULL</name></expr></argument>
+    )</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>h</name>==<name>INVALID_HANDLE_VALUE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_READWRITE</name></expr> )</condition><then><block>{
+      <return>return <expr><call><name>winOpen</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>id</name></expr></argument>, 
+             <argument><expr>((<name>flags</name>|<name>SQLITE_OPEN_READONLY</name>)&amp;~<name>SQLITE_OPEN_READWRITE</name>)</expr></argument>, <argument><expr><name>pOutFlags</name></expr></argument>)</argument_list></call></expr>;</return>
+    }</block></then><else>else<block>{
+      <return>return <expr><name>SQLITE_CANTOPEN</name></expr>;</return>
+    }</block></else></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pOutFlags</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>flags</name> &amp; <name>SQLITE_OPEN_READWRITE</name></expr> )</condition><then><block>{
+      <expr_stmt><expr>*<name>pOutFlags</name> = <name>SQLITE_OPEN_READWRITE</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr>*<name>pOutFlags</name> = <name>SQLITE_OPEN_READONLY</name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>pFile</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>pMethod</name> = &amp;<name>winIoMethod</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pFile</name>-&gt;<name>h</name> = <name>h</name></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <if>if<condition>( <expr>(<name>flags</name> &amp; (<name>SQLITE_OPEN_READWRITE</name>|<name>SQLITE_OPEN_MAIN_DB</name>)) ==
+               (<name>SQLITE_OPEN_READWRITE</name>|<name>SQLITE_OPEN_MAIN_DB</name>)
+       &amp;&amp; !<call><name>winceCreateLock</name><argument_list>(<argument><expr><name>zName</name></expr></argument>, <argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>
+  )</condition><then><block>{
+    <expr_stmt><expr><call><name>CloseHandle</name><argument_list>(<argument><expr><name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_CANTOPEN</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>isTemp</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>zDeleteOnClose</name> = <name>zConverted</name></expr>;</expr_stmt>
+  }</block></then><else>else
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>OpenCounter</name><argument_list>(<argument><expr>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Delete the named file.
+**
+** Note that windows does not allow a file to be deleted if some other
+** process has it open.  Sometimes a virus scanner or indexing program
+** will open a journal file shortly after it is created in order to do
+** whatever it does.  While this other process is holding the
+** file open, we will be unable to delete it.  To work around this
+** problem, we delay 100 milliseconds and try to delete again.  Up
+** to MX_DELETION_ATTEMPTs deletion attempts are run before giving
+** up and returning an error.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MX_DELETION_ATTEMPTS</name> 5</cpp:define>
+<function><type><name>static</name> <name>int</name></type> <name>winDelete</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>,          <comment type="block">/* Not used on win32 */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>,      <comment type="block">/* Name of file to delete */</comment>
+  <param><decl><type><name>int</name></type> <name>syncDir</name></decl></param>                 <comment type="block">/* Not used on win32 */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>error</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name> =<init> <expr><call><name>convertUtf8Filename</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>syncDir</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zConverted</name>==0</expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+  <macro><name>SimulateIOError</name><argument_list>(<argument>return SQLITE_IOERR_DELETE</argument>)</argument_list></macro><empty_stmt>;</empty_stmt>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <do>do<block>{
+      <expr_stmt><expr><call><name>DeleteFileW</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block>while<condition>(   <expr>(   ((<name>rc</name> = <call><name>GetFileAttributesW</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call>) != <name>INVALID_FILE_ATTRIBUTES</name>)
+               || ((<name>error</name> = <call><name>GetLastError</name><argument_list>()</argument_list></call>) == <name>ERROR_ACCESS_DENIED</name>))
+           &amp;&amp; (++<name>cnt</name> &lt; <name>MX_DELETION_ATTEMPTS</name>)
+           &amp;&amp; (<call><name>Sleep</name><argument_list>(<argument><expr>100</expr></argument>)</argument_list></call>, 1)</expr> )</condition>;</do>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <do>do<block>{
+      <expr_stmt><expr><call><name>DeleteFileA</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block>while<condition>(   <expr>(   ((<name>rc</name> = <call><name>GetFileAttributesA</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call>) != <name>INVALID_FILE_ATTRIBUTES</name>)
+               || ((<name>error</name> = <call><name>GetLastError</name><argument_list>()</argument_list></call>) == <name>ERROR_ACCESS_DENIED</name>))
+           &amp;&amp; (++<name>cnt</name> &lt; <name>MX_DELETION_ATTEMPTS</name>)
+           &amp;&amp; (<call><name>Sleep</name><argument_list>(<argument><expr>100</expr></argument>)</argument_list></call>, 1)</expr> )</condition>;</do>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>OSTRACE2</name><argument_list>(<argument><expr>"DELETE \"%s\"\n"</expr></argument>, <argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(   (<name>rc</name> == <name>INVALID_FILE_ATTRIBUTES</name>) 
+          &amp;&amp; (<name>error</name> == <name>ERROR_FILE_NOT_FOUND</name>)) ? <name>SQLITE_OK</name> : <name>SQLITE_IOERR_DELETE</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Check the existance and status of a file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winAccess</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>,         <comment type="block">/* Not used on win32 */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>,     <comment type="block">/* Name of file to check */</comment>
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,                 <comment type="block">/* Type of test to make on this file */</comment>
+  <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>               <comment type="block">/* OUT: Result */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>attr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name> =<init> <expr><call><name>convertUtf8Filename</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zConverted</name>==0</expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>attr</name> = <call><name>GetFileAttributesW</name><argument_list>(<argument><expr>(<name>WCHAR</name>*)<name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>attr</name> = <call><name>GetFileAttributesA</name><argument_list>(<argument><expr>(<name>char</name>*)<name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <switch>switch<condition>( <expr><name>flags</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_ACCESS_READ</name></expr>:
+    </case><case>case <expr><name>SQLITE_ACCESS_EXISTS</name></expr>:
+      <expr_stmt><expr><name>rc</name> = <name>attr</name>!=<name>INVALID_FILE_ATTRIBUTES</name></expr>;</expr_stmt>
+      <break>break;</break>
+    </case><case>case <expr><name>SQLITE_ACCESS_READWRITE</name></expr>:
+      <expr_stmt><expr><name>rc</name> = (<name>attr</name> &amp; <name>FILE_ATTRIBUTE_READONLY</name>)==0</expr>;</expr_stmt>
+      <break>break;</break>
+    </case><default>default:
+      <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>!"Invalid flags argument"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  </default>}</block></switch>
+  <expr_stmt><expr>*<name>pResOut</name> = <name>rc</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Turn a relative pathname into a full pathname.  Write the full
+** pathname into zOut[].  zOut[] will be at least pVfs-&gt;mxPathname
+** bytes in size.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winFullPathname</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>,            <comment type="block">/* Pointer to vfs object */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zRelative</name></decl></param>,        <comment type="block">/* Possibly relative input path */</comment>
+  <param><decl><type><name>int</name></type> <name>nFull</name></decl></param>,                    <comment type="block">/* Size of output buffer in bytes */</comment>
+  <param><decl><type><name>char</name> *</type><name>zFull</name></decl></param>                   <comment type="block">/* Output buffer */</comment>
+)</parameter_list><block>{
+  
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>__CYGWIN__</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>nFull</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>cygwin_conv_to_full_win32_path</name><argument_list>(<argument><expr><name>zRelative</name></expr></argument>, <argument><expr><name>zFull</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>nFull</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <comment type="block">/* WinCE has no concept of a relative pathname, or so I am told. */</comment>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>pVfs</name>-&gt;<name>mxPathname</name></expr></argument>, <argument><expr><name>zFull</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>zRelative</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<name>SQLITE_OS_WINCE</name> &amp;&amp; !<call><name>defined</name><argument_list>(<argument><expr><name>__CYGWIN__</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zOut</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>nFull</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zConverted</name> = <call><name>convertUtf8Filename</name><argument_list>(<argument><expr><name>zRelative</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>WCHAR</name> *</type><name>zTemp</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>nByte</name> = <call><name>GetFullPathNameW</name><argument_list>(<argument><expr>(<name>WCHAR</name>*)<name>zConverted</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call> + 3</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zTemp</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nByte</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name><name>zTemp</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zTemp</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>GetFullPathNameW</name><argument_list>(<argument><expr>(<name>WCHAR</name>*)<name>zConverted</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zTemp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zOut</name> = <call><name>unicodeToUtf8</name><argument_list>(<argument><expr><name>zTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zTemp</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>nByte</name> = <call><name>GetFullPathNameA</name><argument_list>(<argument><expr>(<name>char</name>*)<name>zConverted</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call> + 3</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zTemp</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>nByte</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name><name>zTemp</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zTemp</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>GetFullPathNameA</name><argument_list>(<argument><expr>(<name>char</name>*)<name>zConverted</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zTemp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zOut</name> = <call><name>sqlite3_win32_mbcs_to_utf8</name><argument_list>(<argument><expr><name>zTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>zOut</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><name>pVfs</name>-&gt;<name>mxPathname</name></expr></argument>, <argument><expr><name>zFull</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>zOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></else></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block></function>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOAD_EXTENSION</name></cpp:ifndef>
+<comment type="block">/*
+** Interfaces for opening a shared library, finding entry points
+** within the shared library, and closing the shared library.
+*/</comment>
+<comment type="block">/*
+** Interfaces for opening a shared library, finding entry points
+** within the shared library, and closing the shared library.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>winDlOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HANDLE</name></type> <name>h</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>zConverted</name> =<init> <expr><call><name>convertUtf8Filename</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zConverted</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>isNT</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>h</name> = <call><name>LoadLibraryW</name><argument_list>(<argument><expr>(<name>WCHAR</name>*)<name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/* isNT() is 1 if SQLITE_OS_WINCE==1, so this else is never executed. 
+** Since the ASCII version of these Windows API do not exist for WINCE,
+** it's important to not reference them for WINCE builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name>==0</expr></cpp:if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>h</name> = <call><name>LoadLibraryA</name><argument_list>(<argument><expr>(<name>char</name>*)<name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>zConverted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(<name>void</name>*)<name>h</name></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>winDlError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nBuf</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBufOut</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>getLastErrorMsg</name><argument_list>(<argument><expr><name>nBuf</name></expr></argument>, <argument><expr><name>zBufOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<macro><name>void</name> <argument_list>(<argument>*winDlSym(sqlite3_vfs *pVfs, void *pHandle, const char *zSymbol)</argument>)</argument_list><argument_list>(<argument>void</argument>)</argument_list></macro><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <comment type="block">/* The GetProcAddressA() routine is only available on wince. */</comment>
+  <return>return <expr>(<call><name>void</name><argument_list>(<argument><expr>*</expr></argument>)</argument_list></call>(<name>void</name>))<call><name>GetProcAddressA</name><argument_list>(<argument><expr>(<name>HANDLE</name>)<name>pHandle</name></expr></argument>, <argument><expr><name>zSymbol</name></expr></argument>)</argument_list></call></expr>;</return>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <comment type="block">/* All other windows platforms expect GetProcAddress() to take
+  ** an Ansi string regardless of the _UNICODE setting */</comment>
+  <return>return <expr>(<call><name>void</name><argument_list>(<argument><expr>*</expr></argument>)</argument_list></call>(<name>void</name>))<call><name>GetProcAddress</name><argument_list>(<argument><expr>(<name>HANDLE</name>)<name>pHandle</name></expr></argument>, <argument><expr><name>zSymbol</name></expr></argument>)</argument_list></call></expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block>
+<function><type><name>void</name></type> <name>winDlClose</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pHandle</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>FreeLibrary</name><argument_list>(<argument><expr>(<name>HANDLE</name>)<name>pHandle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else> <comment type="block">/* if SQLITE_OMIT_LOAD_EXTENSION is defined: */</comment>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>winDlOpen</name>  0</cpp:define>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>winDlError</name> 0</cpp:define>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>winDlSym</name>   0</cpp:define>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>winDlClose</name> 0</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*
+** Write up to nBuf bytes of randomness into zBuf.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winRandomness</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nBuf</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBuf</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><name>n</name> = <name>nBuf</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>SYSTEMTIME</name></expr></argument>)</argument_list></call>&lt;=<name>nBuf</name>-<name>n</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>SYSTEMTIME</name></type> <name>x</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>GetSystemTime</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>x</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> += <call><name>sizeof</name><argument_list>(<argument><expr><name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>DWORD</name></expr></argument>)</argument_list></call>&lt;=<name>nBuf</name>-<name>n</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>DWORD</name></type> <name>pid</name> =<init> <expr><call><name>GetCurrentProcessId</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>pid</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>pid</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> += <call><name>sizeof</name><argument_list>(<argument><expr><name>pid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>DWORD</name></expr></argument>)</argument_list></call>&lt;=<name>nBuf</name>-<name>n</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>DWORD</name></type> <name>cnt</name> =<init> <expr><call><name>GetTickCount</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>cnt</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> += <call><name>sizeof</name><argument_list>(<argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>LARGE_INTEGER</name></expr></argument>)</argument_list></call>&lt;=<name>nBuf</name>-<name>n</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>LARGE_INTEGER</name></type> <name>i</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>QueryPerformanceCounter</name><argument_list>(<argument><expr>&amp;<name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>i</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> += <call><name>sizeof</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>n</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Sleep for a little while.  Return the amount of time slept.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winSleep</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>microsec</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>Sleep</name><argument_list>(<argument><expr>(<name>microsec</name>+999)/1000</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>((<name>microsec</name>+999)/1000)*1000</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The following variable, if set to a non-zero value, becomes the result
+** returned from sqlite3OsCurrentTime().  This is used for testing.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<decl_stmt><decl><type><name>int</name></type> <name>sqlite3_current_time</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Find the current time (in Universal Coordinated Time).  Write the
+** current time and date as a Julian Day number into *prNow and
+** return 0.  Return 1 if the time and date cannot be found.
+*/</comment>
+<function><type><name>int</name></type> <name>winCurrentTime</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>double</name> *</type><name>prNow</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>FILETIME</name></type> <name>ft</name></decl>;</decl_stmt>
+  <comment type="block">/* FILETIME structure is a 64-bit value representing the number of 
+     100-nanosecond intervals since January 1, 1601 (= JD 2305813.5). 
+  */</comment>
+  <decl_stmt><decl><type><name>double</name></type> <name>now</name></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>SYSTEMTIME</name></type> <name>time</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>GetSystemTime</name><argument_list>(<argument><expr>&amp;<name>time</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <comment type="block">/* if SystemTimeToFileTime() fails, it returns zero. */</comment>
+  <if>if <condition>(<expr>!<call><name>SystemTimeToFileTime</name><argument_list>(<argument><expr>&amp;<name>time</name></expr></argument>,<argument><expr>&amp;<name>ft</name></expr></argument>)</argument_list></call></expr>)</condition><then><block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>GetSystemTimeAsFileTime</name><argument_list>( <argument><expr>&amp;<name>ft</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>now</name> = ((<name>double</name>)<name>ft</name>.<name>dwHighDateTime</name>) * 4294967296.0</expr>;</expr_stmt> 
+  <expr_stmt><expr>*<name>prNow</name> = (<name>now</name> + <name>ft</name>.<name>dwLowDateTime</name>)/864000000000.0 + 2305813.5</expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+  <if>if<condition>( <expr><name>sqlite3_current_time</name></expr> )</condition><then><block>{
+    <expr_stmt><expr>*<name>prNow</name> = <name>sqlite3_current_time</name>/86400.0 + 2440587.5</expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The idea is that this function works like a combination of
+** GetLastError() and FormatMessage() on windows (or errno and
+** strerror_r() on unix). After an error is returned by an OS
+** function, SQLite calls this function with zBuf pointing to
+** a buffer of nBuf bytes. The OS layer should populate the
+** buffer with a nul-terminated UTF-8 encoded error message
+** describing the last IO error to have occured within the calling
+** thread.
+**
+** If the error message is too large for the supplied buffer,
+** it should be truncated. The return value of xGetLastError
+** is zero if the error message fits in the buffer, or non-zero
+** otherwise (if the message was truncated). If non-zero is returned,
+** then it is not necessary to include the nul-terminator character
+** in the output buffer.
+**
+** Not supplying an error message will have no adverse effect
+** on SQLite. It is fine to have an implementation that never
+** returns an error message:
+**
+**   int xGetLastError(sqlite3_vfs *pVfs, int nBuf, char *zBuf){
+**     assert(zBuf[0]=='\0');
+**     return 0;
+**   }
+**
+** However if an error message is supplied, it will be incorporated
+** by sqlite into the error message available to the user using
+** sqlite3_errmsg(), possibly making IO errors easier to debug.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winGetLastError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nBuf</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBuf</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><call><name>getLastErrorMsg</name><argument_list>(<argument><expr><name>nBuf</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Initialize and deinitialize the operating system interface.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_os_init</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>sqlite3_vfs</name></type> <name>winVfs</name> =<init> <expr><block>{
+    <expr>1</expr>,                 <comment type="block">/* iVersion */</comment>
+    <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>winFile</name></expr></argument>)</argument_list></call></expr>,   <comment type="block">/* szOsFile */</comment>
+    <expr><name>MAX_PATH</name></expr>,          <comment type="block">/* mxPathname */</comment>
+    <expr>0</expr>,                 <comment type="block">/* pNext */</comment>
+    <expr>"win32"</expr>,           <comment type="block">/* zName */</comment>
+    <expr>0</expr>,                 <comment type="block">/* pAppData */</comment>
+ 
+    <expr><name>winOpen</name></expr>,           <comment type="block">/* xOpen */</comment>
+    <expr><name>winDelete</name></expr>,         <comment type="block">/* xDelete */</comment>
+    <expr><name>winAccess</name></expr>,         <comment type="block">/* xAccess */</comment>
+    <expr><name>winFullPathname</name></expr>,   <comment type="block">/* xFullPathname */</comment>
+    <expr><name>winDlOpen</name></expr>,         <comment type="block">/* xDlOpen */</comment>
+    <expr><name>winDlError</name></expr>,        <comment type="block">/* xDlError */</comment>
+    <expr><name>winDlSym</name></expr>,          <comment type="block">/* xDlSym */</comment>
+    <expr><name>winDlClose</name></expr>,        <comment type="block">/* xDlClose */</comment>
+    <expr><name>winRandomness</name></expr>,     <comment type="block">/* xRandomness */</comment>
+    <expr><name>winSleep</name></expr>,          <comment type="block">/* xSleep */</comment>
+    <expr><name>winCurrentTime</name></expr>,    <comment type="block">/* xCurrentTime */</comment>
+    <expr><name>winGetLastError</name></expr>    <comment type="block">/* xGetLastError */</comment>
+  }</block></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_vfs_register</name><argument_list>(<argument><expr>&amp;<name>winVfs</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return> 
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_os_end</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ 
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OS_WIN */</comment>
+</unit>

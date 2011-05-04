@@ -1,0 +1,995 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="util.c" filename=""><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Utility functions used throughout sqlite.
+**
+** This file contains functions for allocating memory, comparing
+** strings, and stuff like that.
+**
+** $Id: util.c,v 1.246 2009/01/10 16:15:22 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdarg.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+
+
+<comment type="block">/*
+** Routine needed to support the testcase() macro.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_COVERAGE_TEST</name></cpp:ifdef>
+<function><type><name>void</name></type> <name>sqlite3Coverage</name><parameter_list>(<param><decl><type><name>int</name></type> <name>x</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>dummy</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>dummy</name> += <name>x</name></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Routine needed to support the ALWAYS() and NEVER() macros.
+**
+** The argument to ALWAYS() should always be true and the argument
+** to NEVER() should always be false.  If either is not the case
+** then this routine is called in order to throw an error.
+**
+** This routine only exists if assert() is operational.  It always
+** throws an assert on its first invocation.  The variable has a long
+** name to help the assert() message be more readable.  The variable
+** is used to prevent a too-clever optimizer from optimizing out the
+** entire call.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NDEBUG</name></cpp:ifndef>
+<function><type><name>int</name></type> <name>sqlite3Assert</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>volatile</name> <name>int</name></type> <name>ALWAYS_was_false_or_NEVER_was_true</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>ALWAYS_was_false_or_NEVER_was_true</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>      <comment type="block">/* Always fails */</comment>
+  <return>return <expr><name>ALWAYS_was_false_or_NEVER_was_true</name>++</expr>;</return>       <comment type="block">/* Not Reached */</comment>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Return true if the floating point value is Not a Number (NaN).
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3IsNaN</name><parameter_list>(<param><decl><type><name>double</name></type> <name>x</name></decl></param>)</parameter_list><block>{
+  <comment type="block">/* This NaN test sometimes fails if compiled on GCC with -ffast-math.
+  ** On the other hand, the use of -ffast-math comes with the following
+  ** warning:
+  **
+  **      This option [-ffast-math] should never be turned on by any
+  **      -O option since it can result in incorrect output for programs
+  **      which depend on an exact implementation of IEEE or ISO 
+  **      rules/specifications for math functions.
+  **
+  ** Under MSVC, this NaN test may fail if compiled with a floating-
+  ** point precision mode other than /fp:precise.  From the MSDN 
+  ** documentation:
+  **
+  **      The compiler [with /fp:precise] will properly handle comparisons 
+  **      involving NaN. For example, x != x evaluates to true if x is NaN 
+  **      ...
+  */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>__FAST_MATH__</name></cpp:ifdef>
+<cpp:error># <cpp:directive>error</cpp:directive> SQLite will not work correctly with the -ffast-math option of GCC.</cpp:error>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <decl_stmt><decl><type><name>volatile</name> <name>double</name></type> <name>y</name> =<init> <expr><name>x</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>volatile</name> <name>double</name></type> <name>z</name> =<init> <expr><name>y</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>y</name>!=<name>z</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Compute a string length that is limited to what can be stored in
+** lower 30 bits of a 32-bit signed integer.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Strlen30</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z2</name> =<init> <expr><name>z</name></expr></init></decl>;</decl_stmt>
+  <while>while<condition>( <expr>*<name>z2</name></expr> )</condition><block>{ <expr_stmt><expr><name>z2</name>++</expr>;</expr_stmt> }</block></while>
+  <return>return <expr>0x3fffffff &amp; (<name>int</name>)(<name>z2</name> - <name>z</name>)</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the length of a string, except do not allow the string length
+** to exceed the SQLITE_LIMIT_LENGTH setting.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Strlen</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z2</name> =<init> <expr><name>z</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>len</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>x</name></decl>;</decl_stmt>
+  <while>while<condition>( <expr>*<name>z2</name></expr> )</condition><block>{ <expr_stmt><expr><name>z2</name>++</expr>;</expr_stmt> }</block></while>
+  <expr_stmt><expr><name>x</name> = (<name>int</name>)(<name>z2</name> - <name>z</name>)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>len</name> = 0x7fffffff &amp; <name>x</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>len</name>!=<name>x</name> || <name>len</name> &gt; <name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_LENGTH</name></expr>]</index></name></expr> )</condition><then><block>{
+    <return>return <expr><name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_LENGTH</name></expr>]</index></name></expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr><name>len</name></expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Set the most recent error code and error string for the sqlite
+** handle "db". The error code is set to "err_code".
+**
+** If it is not NULL, string zFormat specifies the format of the
+** error string in the style of the printf functions: The following
+** format characters are allowed:
+**
+**      %s      Insert a string
+**      %z      A string that should be freed after use
+**      %d      Insert an integer
+**      %T      Insert a token
+**      %S      Insert the first element of a SrcList
+**
+** zFormat and any string tokens that follow it are assumed to be
+** encoded in UTF-8.
+**
+** To clear the most recent error for sqlite handle "db", sqlite3Error
+** should be called with err_code set to SQLITE_OK and zFormat set
+** to NULL.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3Error</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>int</name></type> <name>err_code</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zFormat</name></decl></param>, <param>...</param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>db</name> &amp;&amp; (<name>db</name>-&gt;<name>pErr</name> || (<name>db</name>-&gt;<name>pErr</name> = <call><name>sqlite3ValueNew</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call>)!=0)</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>errCode</name> = <name>err_code</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zFormat</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>va_list</name></type> <name>ap</name></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>va_start</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>zFormat</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>z</name> = <call><name>sqlite3VMPrintf</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zFormat</name></expr></argument>, <argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>va_end</name><argument_list>(<argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3ValueSetStr</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pErr</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>SQLITE_DYNAMIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>sqlite3ValueSetStr</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pErr</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Add an error message to pParse-&gt;zErrMsg and increment pParse-&gt;nErr.
+** The following formatting characters are allowed:
+**
+**      %s      Insert a string
+**      %z      A string that should be freed after use
+**      %d      Insert an integer
+**      %T      Insert a token
+**      %S      Insert the first element of a SrcList
+**
+** This function should be used to report any error that occurs whilst
+** compiling an SQL statement (i.e. within sqlite3_prepare()). The
+** last thing the sqlite3_prepare() function does is copy the error
+** stored by this function into the database handle using sqlite3Error().
+** Function sqlite3Error() should be used during statement execution
+** (sqlite3_step() etc.).
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3ErrorMsg</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zFormat</name></decl></param>, <param>...</param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>va_list</name></type> <name>ap</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>va_start</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>zFormat</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>zErrMsg</name> = <call><name>sqlite3VMPrintf</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zFormat</name></expr></argument>, <argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>va_end</name><argument_list>(<argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pParse</name>-&gt;<name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Clear the error message in pParse, if any
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3ErrorClear</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>zErrMsg</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>nErr</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Convert an SQL-style quoted string into a normal string by removing
+** the quote characters.  The conversion is done in-place.  If the
+** input does not begin with a quote character, then this routine
+** is a no-op.
+**
+** 2002-Feb-14: This routine is extended to remove MS-Access style
+** brackets from around identifers.  For example:  "[a-b-c]" becomes
+** "a-b-c".
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3Dequote</name><parameter_list>(<param><decl><type><name>char</name> *</type><name>z</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name></type> <name>quote</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>j</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>z</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><name>quote</name> = <name><name>z</name><index>[<expr>0</expr>]</index></name></expr>;</expr_stmt>
+  <switch>switch<condition>( <expr><name>quote</name></expr> )</condition><block>{
+    <case>case <expr>'\''</expr>:  <break>break;</break>
+    </case><case>case <expr>'"'</expr>:   <break>break;</break>
+    </case><case>case <expr>'`'</expr>:   <break>break;</break>                <comment type="block">/* For MySQL compatibility */</comment>
+    </case><case>case <expr>'['</expr>:   <expr_stmt><expr><name>quote</name> = ']'</expr>;</expr_stmt>  <break>break;</break>  <comment type="block">/* For MS SqlServer compatibility */</comment>
+    </case><default>default:    <return>return;</return>
+  </default>}</block></switch>
+  <for>for(<init><expr><name>i</name>=1</expr>, <expr><name>j</name>=0</expr>;</init> <condition><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>==<name>quote</name></expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name>==<name>quote</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = <name>quote</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = 0</expr>;</expr_stmt>
+        <break>break;</break>
+      }</block></else></if>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = <name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></for>
+}</block></function>
+
+<comment type="block">/* Convenient short-hand */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>UpperToLower</name> <name>sqlite3UpperToLower</name></cpp:define>
+
+<comment type="block">/*
+** Some systems have stricmp().  Others have strcasecmp().  Because
+** there is no consistency, we will define our own.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3StrICmp</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zLeft</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zRight</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>register</name> <name>unsigned</name> <name>char</name> *</type><name>a</name>, *<name>b</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>a</name> = (<name>unsigned</name> <name>char</name> *)<name>zLeft</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = (<name>unsigned</name> <name>char</name> *)<name>zRight</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr>*<name>a</name>!=0 &amp;&amp; <name><name>UpperToLower</name><index>[<expr>*<name>a</name></expr>]</index></name>==<name><name>UpperToLower</name><index>[<expr>*<name>b</name></expr>]</index></name></expr>)</condition><block>{ <expr_stmt><expr><name>a</name>++</expr>;</expr_stmt> <expr_stmt><expr><name>b</name>++</expr>;</expr_stmt> }</block></while>
+  <return>return <expr><name><name>UpperToLower</name><index>[<expr>*<name>a</name></expr>]</index></name> - <name><name>UpperToLower</name><index>[<expr>*<name>b</name></expr>]</index></name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3StrNICmp</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zLeft</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zRight</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>register</name> <name>unsigned</name> <name>char</name> *</type><name>a</name>, *<name>b</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>a</name> = (<name>unsigned</name> <name>char</name> *)<name>zLeft</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = (<name>unsigned</name> <name>char</name> *)<name>zRight</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>N</name>-- &gt; 0 &amp;&amp; *<name>a</name>!=0 &amp;&amp; <name><name>UpperToLower</name><index>[<expr>*<name>a</name></expr>]</index></name>==<name><name>UpperToLower</name><index>[<expr>*<name>b</name></expr>]</index></name></expr>)</condition><block>{ <expr_stmt><expr><name>a</name>++</expr>;</expr_stmt> <expr_stmt><expr><name>b</name>++</expr>;</expr_stmt> }</block></while>
+  <return>return <expr><name>N</name>&lt;0 ? 0 : <name><name>UpperToLower</name><index>[<expr>*<name>a</name></expr>]</index></name> - <name><name>UpperToLower</name><index>[<expr>*<name>b</name></expr>]</index></name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return TRUE if z is a pure numeric string.  Return FALSE if the
+** string contains any character which is not part of a number. If
+** the string is numeric and contains the '.' character, set *realnum
+** to TRUE (otherwise FALSE).
+**
+** An empty string is considered non-numeric.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3IsNumber</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name> *</type><name>realnum</name></decl></param>, <param><decl><type><name>u8</name></type> <name>enc</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>incr</name> =<init> <expr>(<name>enc</name>==<name>SQLITE_UTF8</name>?1:2)</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>enc</name>==<name>SQLITE_UTF16BE</name></expr> )</condition><then> <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr>*<name>z</name>=='-' || *<name>z</name>=='+'</expr> )</condition><then> <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>realnum</name></expr> )</condition><then> <expr_stmt><expr>*<name>realnum</name> = 0</expr>;</expr_stmt></then></if>
+  <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt> }</block></while>
+  <if>if<condition>( <expr>*<name>z</name>=='.'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+    <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt> }</block></while>
+    <if>if<condition>( <expr><name>realnum</name></expr> )</condition><then> <expr_stmt><expr>*<name>realnum</name> = 1</expr>;</expr_stmt></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr>*<name>z</name>=='e' || *<name>z</name>=='E'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr>*<name>z</name>=='+' || *<name>z</name>=='-'</expr> )</condition><then> <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt></then></if>
+    <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+    <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>z</name> += <name>incr</name></expr>;</expr_stmt> }</block></while>
+    <if>if<condition>( <expr><name>realnum</name></expr> )</condition><then> <expr_stmt><expr>*<name>realnum</name> = 1</expr>;</expr_stmt></then></if>
+  }</block></then></if>
+  <return>return <expr>*<name>z</name>==0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The string z[] is an ascii representation of a real number.
+** Convert this string to a double.
+**
+** This routine assumes that z[] really is a valid number.  If it
+** is not, the result is undefined.
+**
+** This routine is used instead of the library atof() function because
+** the library atof() might want to use "," as the decimal point instead
+** of "." depending on how locale is set.  But that would cause problems
+** for SQL.  So this routine always uses "." regardless of locale.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3AtoF</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>double</name> *</type><name>pResult</name></decl></param>)</parameter_list><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_FLOATING_POINT</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>int</name></type> <name>sign</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zBegin</name> =<init> <expr><name>z</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>LONGDOUBLE_TYPE</name></type> <name>v1</name> =<init> <expr>0.0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nSignificant</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition> <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt></while>
+  <if>if<condition>( <expr>*<name>z</name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sign</name> = -1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr>*<name>z</name>=='+'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <while>while<condition>( <expr><name><name>z</name><index>[<expr>0</expr>]</index></name>=='0'</expr> )</condition><block>{
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+  }</block></while>
+  <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+    <expr_stmt><expr><name>v1</name> = <name>v1</name>*10.0 + (*<name>z</name> - '0')</expr>;</expr_stmt>
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>nSignificant</name>++</expr>;</expr_stmt>
+  }</block></while>
+  <if>if<condition>( <expr>*<name>z</name>=='.'</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>LONGDOUBLE_TYPE</name></type> <name>divisor</name> =<init> <expr>1.0</expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>nSignificant</name>==0</expr> )</condition><then><block>{
+      <while>while<condition>( <expr><name><name>z</name><index>[<expr>0</expr>]</index></name>=='0'</expr> )</condition><block>{
+        <expr_stmt><expr><name>divisor</name> *= 10.0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+      }</block></while>
+    }</block></then></if>
+    <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+      <if>if<condition>( <expr><name>nSignificant</name>&lt;18</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>v1</name> = <name>v1</name>*10.0 + (*<name>z</name> - '0')</expr>;</expr_stmt>
+        <expr_stmt><expr><name>divisor</name> *= 10.0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>nSignificant</name>++</expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    }</block></while>
+    <expr_stmt><expr><name>v1</name> /= <name>divisor</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr>*<name>z</name>=='e' || *<name>z</name>=='E'</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>esign</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>eval</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>LONGDOUBLE_TYPE</name></type> <name>scale</name> =<init> <expr>1.0</expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr>*<name>z</name>=='-'</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>esign</name> = -1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    }</block></then><else>else <if>if<condition>( <expr>*<name>z</name>=='+'</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    }</block></then></if></else></if>
+    <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+      <expr_stmt><expr><name>eval</name> = <name>eval</name>*10 + *<name>z</name> - '0'</expr>;</expr_stmt>
+      <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    }</block></while>
+    <while>while<condition>( <expr><name>eval</name>&gt;=64</expr> )</condition><block>{ <expr_stmt><expr><name>scale</name> *= 1.0e+64</expr>;</expr_stmt> <expr_stmt><expr><name>eval</name> -= 64</expr>;</expr_stmt> }</block></while>
+    <while>while<condition>( <expr><name>eval</name>&gt;=16</expr> )</condition><block>{ <expr_stmt><expr><name>scale</name> *= 1.0e+16</expr>;</expr_stmt> <expr_stmt><expr><name>eval</name> -= 16</expr>;</expr_stmt> }</block></while>
+    <while>while<condition>( <expr><name>eval</name>&gt;=4</expr> )</condition><block>{ <expr_stmt><expr><name>scale</name> *= 1.0e+4</expr>;</expr_stmt> <expr_stmt><expr><name>eval</name> -= 4</expr>;</expr_stmt> }</block></while>
+    <while>while<condition>( <expr><name>eval</name>&gt;=1</expr> )</condition><block>{ <expr_stmt><expr><name>scale</name> *= 1.0e+1</expr>;</expr_stmt> <expr_stmt><expr><name>eval</name> -= 1</expr>;</expr_stmt> }</block></while>
+    <if>if<condition>( <expr><name>esign</name>&lt;0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>v1</name> /= <name>scale</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>v1</name> *= <name>scale</name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+  <expr_stmt><expr>*<name>pResult</name> = (<name>double</name>)(<name>sign</name>&lt;0 ? -<name>v1</name> : <name>v1</name>)</expr>;</expr_stmt>
+  <return>return <expr>(<name>int</name>)(<name>z</name> - <name>zBegin</name>)</expr>;</return>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <return>return <expr><call><name>sqlite3Atoi64</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>pResult</name></expr></argument>)</argument_list></call></expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_FLOATING_POINT */</comment>
+}</block></function>
+
+<comment type="block">/*
+** Compare the 19-character string zNum against the text representation
+** value 2^63:  9223372036854775808.  Return negative, zero, or positive
+** if zNum is less than, equal to, or greater than the string.
+**
+** Unlike memcmp() this routine is guaranteed to return the difference
+** in the values of the last digit if the only difference is in the
+** last digit.  So, for example,
+**
+**      compare2pow63("9223372036854775800")
+**
+** will return -8.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>compare2pow63</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zNum</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>c</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>c</name> = <call><name>memcmp</name><argument_list>(<argument><expr><name>zNum</name></expr></argument>,<argument><expr>"922337203685477580"</expr></argument>,<argument><expr>18</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>c</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>c</name> = <name><name>zNum</name><index>[<expr>18</expr>]</index></name> - '8'</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>c</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Return TRUE if zNum is a 64-bit signed integer and write
+** the value of the integer into *pNum.  If zNum is not an integer
+** or is an integer that is too large to be expressed with 64 bits,
+** then return false.
+**
+** When this routine was originally written it dealt with only
+** 32-bit numbers.  At that time, it was much faster than the
+** atoi() library routine in RedHat 7.2.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Atoi64</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zNum</name></decl></param>, <param><decl><type><name>i64</name> *</type><name>pNum</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>i64</name></type> <name>v</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>neg</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>c</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zStart</name></decl>;</decl_stmt>
+  <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zNum</name></expr></argument>)</argument_list></call></expr> )</condition> <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt></while>
+  <if>if<condition>( <expr>*<name>zNum</name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>neg</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr>*<name>zNum</name>=='+'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>neg</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>neg</name> = 0</expr>;</expr_stmt>
+  }</block></else></if></else></if>
+  <expr_stmt><expr><name>zStart</name> = <name>zNum</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name><name>zNum</name><index>[<expr>0</expr>]</index></name>=='0'</expr> )</condition><block>{ <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt> }</block></while> <comment type="block">/* Skip over leading zeros. Ticket #2454 */</comment>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr>(<name>c</name>=<name><name>zNum</name><index>[<expr><name>i</name></expr>]</index></name>)&gt;='0' &amp;&amp; <name>c</name>&lt;='9'</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>v</name> = <name>v</name>*10 + <name>c</name> - '0'</expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr>*<name>pNum</name> = <name>neg</name> ? -<name>v</name> : <name>v</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>c</name>!=0 || (<name>i</name>==0 &amp;&amp; <name>zStart</name>==<name>zNum</name>) || <name>i</name>&gt;19</expr> )</condition><then><block>{
+    <comment type="block">/* zNum is empty or contains non-numeric text or is longer
+    ** than 19 digits (thus guaranting that it is too large) */</comment>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><name>i</name>&lt;19</expr> )</condition><then><block>{
+    <comment type="block">/* Less than 19 digits, so we know that it fits in 64 bits */</comment>
+    <return>return <expr>1</expr>;</return>
+  }</block></then><else>else<block>{
+    <comment type="block">/* 19-digit numbers must be no larger than 9223372036854775807 if positive
+    ** or 9223372036854775808 if negative.  Note that 9223372036854665808
+    ** is 2^63. */</comment>
+    <return>return <expr><call><name>compare2pow63</name><argument_list>(<argument><expr><name>zNum</name></expr></argument>)</argument_list></call>&lt;<name>neg</name></expr>;</return>
+  }</block></else></if></else></if>
+}</block></function>
+
+<comment type="block">/*
+** The string zNum represents an integer.  There might be some other
+** information following the integer too, but that part is ignored.
+** If the integer that the prefix of zNum represents will fit in a
+** 64-bit signed integer, return TRUE.  Otherwise return FALSE.
+**
+** This routine returns FALSE for the string -9223372036854775808 even that
+** that number will, in theory fit in a 64-bit integer.  Positive
+** 9223373036854775808 will not fit in 64 bits.  So it seems safer to return
+** false.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3FitsIn64Bits</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zNum</name></decl></param>, <param><decl><type><name>int</name></type> <name>negFlag</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>c</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>neg</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr>*<name>zNum</name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>neg</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr>*<name>zNum</name>=='+'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <if>if<condition>( <expr><name>negFlag</name></expr> )</condition><then> <expr_stmt><expr><name>neg</name> = 1-<name>neg</name></expr>;</expr_stmt></then></if>
+  <while>while<condition>( <expr>*<name>zNum</name>=='0'</expr> )</condition><block>{
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>   <comment type="block">/* Skip leading zeros.  Ticket #2454 */</comment>
+  }</block></while>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr>(<name>c</name>=<name><name>zNum</name><index>[<expr><name>i</name></expr>]</index></name>)&gt;='0' &amp;&amp; <name>c</name>&lt;='9'</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+  <if>if<condition>( <expr><name>i</name>&lt;19</expr> )</condition><then><block>{
+    <comment type="block">/* Guaranteed to fit if less than 19 digits */</comment>
+    <return>return <expr>1</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><name>i</name>&gt;19</expr> )</condition><then><block>{
+    <comment type="block">/* Guaranteed to be too big if greater than 19 digits */</comment>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else<block>{
+    <comment type="block">/* Compare against 2^63. */</comment>
+    <return>return <expr><call><name>compare2pow63</name><argument_list>(<argument><expr><name>zNum</name></expr></argument>)</argument_list></call>&lt;<name>neg</name></expr>;</return>
+  }</block></else></if></else></if>
+}</block></function>
+
+<comment type="block">/*
+** If zNum represents an integer that will fit in 32-bits, then set
+** *pValue to that integer and return true.  Otherwise return false.
+**
+** Any non-numeric characters that following zNum are ignored.
+** This is different from sqlite3Atoi64() which requires the
+** input number to be zero-terminated.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3GetInt32</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zNum</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pValue</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite_int64</name></type> <name>v</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>c</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>neg</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name><name>zNum</name><index>[<expr>0</expr>]</index></name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>neg</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name><name>zNum</name><index>[<expr>0</expr>]</index></name>=='+'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <while>while<condition>( <expr><name><name>zNum</name><index>[<expr>0</expr>]</index></name>=='0'</expr> )</condition> <expr_stmt><expr><name>zNum</name>++</expr>;</expr_stmt></while>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;11 &amp;&amp; (<name>c</name> = <name><name>zNum</name><index>[<expr><name>i</name></expr>]</index></name> - '0')&gt;=0 &amp;&amp; <name>c</name>&lt;=9</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>v</name> = <name>v</name>*10 + <name>c</name></expr>;</expr_stmt>
+  }</block></for>
+
+  <comment type="block">/* The longest decimal representation of a 32 bit integer is 10 digits:
+  **
+  **             1234567890
+  **     2^31 -&gt; 2147483648
+  */</comment>
+  <if>if<condition>( <expr><name>i</name>&gt;10</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>v</name>-<name>neg</name>&gt;2147483647</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>neg</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>v</name> = -<name>v</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr>*<name>pValue</name> = (<name>int</name>)<name>v</name></expr>;</expr_stmt>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The variable-length integer encoding is as follows:
+**
+** KEY:
+**         A = 0xxxxxxx    7 bits of data and one flag bit
+**         B = 1xxxxxxx    7 bits of data and one flag bit
+**         C = xxxxxxxx    8 bits of data
+**
+**  7 bits - A
+** 14 bits - BA
+** 21 bits - BBA
+** 28 bits - BBBA
+** 35 bits - BBBBA
+** 42 bits - BBBBBA
+** 49 bits - BBBBBBA
+** 56 bits - BBBBBBBA
+** 64 bits - BBBBBBBBC
+*/</comment>
+
+<comment type="block">/*
+** Write a 64-bit variable-length integer to memory starting at p[0].
+** The length of data write will be between 1 and 9 bytes.  The number
+** of bytes written is returned.
+**
+** A variable-length integer consists of the lower 7 bits of each byte
+** for all bytes that have the 8th bit set and one byte with the 8th
+** bit clear.  Except, if we get to the 9th byte, it stores the full
+** 8 bits and is the last byte.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3PutVarint</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u64</name></type> <name>v</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>j</name>, <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name></type> <name><name>buf</name><index>[<expr>10</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>v</name> &amp; (((<name>u64</name>)0xff000000)&lt;&lt;32)</expr> )</condition><then><block>{
+    <expr_stmt><expr><name><name>p</name><index>[<expr>8</expr>]</index></name> = (<name>u8</name>)<name>v</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>v</name> &gt;&gt;= 8</expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=7</expr>;</init> <condition><expr><name>i</name>&gt;=0</expr>;</condition> <incr><expr><name>i</name>--</expr></incr>)<block>{
+      <expr_stmt><expr><name><name>p</name><index>[<expr><name>i</name></expr>]</index></name> = (<name>u8</name>)((<name>v</name> &amp; 0x7f) | 0x80)</expr>;</expr_stmt>
+      <expr_stmt><expr><name>v</name> &gt;&gt;= 7</expr>;</expr_stmt>
+    }</block></for>
+    <return>return <expr>9</expr>;</return>
+  }</block></then></if>    
+  <expr_stmt><expr><name>n</name> = 0</expr>;</expr_stmt>
+  <do>do<block>{
+    <expr_stmt><expr><name><name>buf</name><index>[<expr><name>n</name>++</expr>]</index></name> = (<name>u8</name>)((<name>v</name> &amp; 0x7f) | 0x80)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>v</name> &gt;&gt;= 7</expr>;</expr_stmt>
+  }</block>while<condition>( <expr><name>v</name>!=0</expr> )</condition>;</do>
+  <expr_stmt><expr><name><name>buf</name><index>[<expr>0</expr>]</index></name> &amp;= 0x7f</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&lt;=9</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>j</name>=<name>n</name>-1</expr>;</init> <condition><expr><name>j</name>&gt;=0</expr>;</condition> <incr><expr><name>j</name>--</expr>, <expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name><name>p</name><index>[<expr><name>i</name></expr>]</index></name> = <name><name>buf</name><index>[<expr><name>j</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>n</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This routine is a faster version of sqlite3PutVarint() that only
+** works for 32-bit positive integers and which is optimized for
+** the common case of small integers.  A MACRO version, putVarint32,
+** is provided which inlines the single-byte case.  All code should use
+** the MACRO version as this function assumes the single-byte case has
+** already been handled.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3PutVarint32</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name></type> <name>v</name></decl></param>)</parameter_list><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>putVarint32</name></cpp:ifndef>
+  <if>if<condition>( <expr>(<name>v</name> &amp; ~0x7f)==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name><name>p</name><index>[<expr>0</expr>]</index></name> = <name>v</name></expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <if>if<condition>( <expr>(<name>v</name> &amp; ~0x3fff)==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name><name>p</name><index>[<expr>0</expr>]</index></name> = (<name>u8</name>)((<name>v</name>&gt;&gt;7) | 0x80)</expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>p</name><index>[<expr>1</expr>]</index></name> = (<name>u8</name>)(<name>v</name> &amp; 0x7f)</expr>;</expr_stmt>
+    <return>return <expr>2</expr>;</return>
+  }</block></then></if>
+  <return>return <expr><call><name>sqlite3PutVarint</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read a 64-bit variable-length integer from memory starting at p[0].
+** Return the number of bytes read.  The value is stored in *v.
+*/</comment>
+<function><type><name>u8</name></type> <name>sqlite3GetVarint</name><parameter_list>(<param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u64</name> *</type><name>v</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>a</name>,<name>b</name>,<name>s</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>a</name> = *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr>*<name>v</name> = <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p1 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= 0x7f</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>2</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0&lt;&lt;14 | p2 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> &amp;= 0x7f</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>3</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* CSE1 from below */</comment>
+  <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p1&lt;&lt;14 | p3 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <comment type="block">/* moved CSE1 up */</comment>
+    <comment type="block">/* a &amp;= (0x7f&lt;&lt;14)|(0x7f); */</comment>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>4</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* a: p0&lt;&lt;14 | p2 (masked) */</comment>
+  <comment type="block">/* b: p1&lt;&lt;14 | p3 (unmasked) */</comment>
+  <comment type="block">/* 1:save off p0&lt;&lt;21 | p1&lt;&lt;14 | p2&lt;&lt;7 | p3 (masked) */</comment>
+  <comment type="block">/* moved CSE1 up */</comment>
+  <comment type="block">/* a &amp;= (0x7f&lt;&lt;14)|(0x7f); */</comment>
+  <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> = <name>a</name></expr>;</expr_stmt>
+  <comment type="block">/* s: p0&lt;&lt;14 | p2 (masked) */</comment>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0&lt;&lt;28 | p2&lt;&lt;14 | p4 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <comment type="block">/* we can skip these cause they were (effectively) done above in calc'ing s */</comment>
+    <comment type="block">/* a &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f); */</comment>
+    <comment type="block">/* b &amp;= (0x7f&lt;&lt;14)|(0x7f); */</comment>
+    <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>s</name> = <name>s</name>&gt;&gt;18</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = ((<name>u64</name>)<name>s</name>)&lt;&lt;32 | <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>5</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* 2:save off p0&lt;&lt;21 | p1&lt;&lt;14 | p2&lt;&lt;7 | p3 (masked) */</comment>
+  <expr_stmt><expr><name>s</name> = <name>s</name>&lt;&lt;7</expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> |= <name>b</name></expr>;</expr_stmt>
+  <comment type="block">/* s: p0&lt;&lt;21 | p1&lt;&lt;14 | p2&lt;&lt;7 | p3 (masked) */</comment>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p1&lt;&lt;28 | p3&lt;&lt;14 | p5 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <comment type="block">/* we can skip this cause it was (effectively) done above in calc'ing s */</comment>
+    <comment type="block">/* b &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f); */</comment>
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>s</name> = <name>s</name>&gt;&gt;18</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = ((<name>u64</name>)<name>s</name>)&lt;&lt;32 | <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>6</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p2&lt;&lt;28 | p4&lt;&lt;14 | p6 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>s</name> = <name>s</name>&gt;&gt;11</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = ((<name>u64</name>)<name>s</name>)&lt;&lt;32 | <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>7</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* CSE2 from below */</comment>
+  <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p3&lt;&lt;28 | p5&lt;&lt;14 | p7 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <comment type="block">/* moved CSE2 up */</comment>
+    <comment type="block">/* a &amp;= (0x7f&lt;&lt;14)|(0x7f); */</comment>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>s</name> = <name>s</name>&gt;&gt;4</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = ((<name>u64</name>)<name>s</name>)&lt;&lt;32 | <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>8</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;15</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p4&lt;&lt;29 | p6&lt;&lt;15 | p8 (unmasked) */</comment>
+
+  <comment type="block">/* moved CSE2 up */</comment>
+  <comment type="block">/* a &amp;= (0x7f&lt;&lt;29)|(0x7f&lt;&lt;15)|(0xff); */</comment>
+  <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;8</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= <name>b</name></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>s</name> = <name>s</name>&lt;&lt;4</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name><name>p</name><index>[<expr>-4</expr>]</index></name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> &amp;= 0x7f</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&gt;&gt;3</expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> |= <name>b</name></expr>;</expr_stmt>
+
+  <expr_stmt><expr>*<name>v</name> = ((<name>u64</name>)<name>s</name>)&lt;&lt;32 | <name>a</name></expr>;</expr_stmt>
+
+  <return>return <expr>9</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read a 32-bit variable-length integer from memory starting at p[0].
+** Return the number of bytes read.  The value is stored in *v.
+** A MACRO version, getVarint32, is provided which inlines the 
+** single-byte case.  All code should use the MACRO version as 
+** this function assumes the single-byte case has already been handled.
+*/</comment>
+<function><type><name>u8</name></type> <name>sqlite3GetVarint32</name><parameter_list>(<param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name> *</type><name>v</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>a</name>,<name>b</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>a</name> = *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0 (unmasked) */</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>getVarint32</name></cpp:ifndef>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr>*<name>v</name> = <name>a</name></expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p1 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= 0x7f</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name> | <name>b</name></expr>;</expr_stmt>
+    <return>return <expr>2</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0&lt;&lt;14 | p2 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> &amp;= 0x7f</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name> | <name>b</name></expr>;</expr_stmt>
+    <return>return <expr>3</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>b</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* b: p1&lt;&lt;14 | p3 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>b</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name> | <name>b</name></expr>;</expr_stmt>
+    <return>return <expr>4</expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>p</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <name>a</name>&lt;&lt;14</expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> |= *<name>p</name></expr>;</expr_stmt>
+  <comment type="block">/* a: p0&lt;&lt;28 | p2&lt;&lt;14 | p4 (unmasked) */</comment>
+  <if>if <condition>(<expr>!(<name>a</name>&amp;0x80)</expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>a</name> &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> &amp;= (0x7f&lt;&lt;28)|(0x7f&lt;&lt;14)|(0x7f)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>b</name> = <name>b</name>&lt;&lt;7</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = <name>a</name> | <name>b</name></expr>;</expr_stmt>
+    <return>return <expr>5</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* We can only reach this point when reading a corrupt database
+  ** file.  In that case we are not in any hurry.  Use the (relatively
+  ** slow) general-purpose sqlite3GetVarint() routine to extract the
+  ** value. */</comment>
+  <block>{
+    <decl_stmt><decl><type><name>u64</name></type> <name>v64</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u8</name></type> <name>n</name></decl>;</decl_stmt>
+
+    <expr_stmt><expr><name>p</name> -= 4</expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> = <call><name>sqlite3GetVarint</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr>&amp;<name>v64</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;5 &amp;&amp; <name>n</name>&lt;=9</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>v</name> = (<name>u32</name>)<name>v64</name></expr>;</expr_stmt>
+    <return>return <expr><name>n</name></expr>;</return>
+  }</block>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of bytes that will be needed to store the given
+** 64-bit integer.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3VarintLen</name><parameter_list>(<param><decl><type><name>u64</name></type> <name>v</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <do>do<block>{
+    <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>v</name> &gt;&gt;= 7</expr>;</expr_stmt>
+  }</block>while<condition>( <expr><name>v</name>!=0 &amp;&amp; <name>i</name>&lt;9</expr> )</condition>;</do>
+  <return>return <expr><name>i</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Read or write a four-byte big-endian integer value.
+*/</comment>
+<function><type><name>u32</name></type> <name>sqlite3Get4byte</name><parameter_list>(<param><decl><type><name>const</name> <name>u8</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name><name>p</name><index>[<expr>0</expr>]</index></name>&lt;&lt;24) | (<name><name>p</name><index>[<expr>1</expr>]</index></name>&lt;&lt;16) | (<name><name>p</name><index>[<expr>2</expr>]</index></name>&lt;&lt;8) | <name><name>p</name><index>[<expr>3</expr>]</index></name></expr>;</return>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3Put4byte</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name></type> <name>v</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name><name>p</name><index>[<expr>0</expr>]</index></name> = (<name>u8</name>)(<name>v</name>&gt;&gt;24)</expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>p</name><index>[<expr>1</expr>]</index></name> = (<name>u8</name>)(<name>v</name>&gt;&gt;16)</expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>p</name><index>[<expr>2</expr>]</index></name> = (<name>u8</name>)(<name>v</name>&gt;&gt;8)</expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>p</name><index>[<expr>3</expr>]</index></name> = (<name>u8</name>)<name>v</name></expr>;</expr_stmt>
+}</block></function>
+
+
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_BLOB_LITERAL</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_HAS_CODEC</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<comment type="block">/*
+** Translate a single byte of Hex into an integer.
+** This routinen only works if h really is a valid hexadecimal
+** character:  0..9a..fA..F
+*/</comment>
+<function><type><name>static</name> <name>u8</name></type> <name>hexToInt</name><parameter_list>(<param><decl><type><name>int</name></type> <name>h</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>h</name>&gt;='0' &amp;&amp; <name>h</name>&lt;='9') ||  (<name>h</name>&gt;='a' &amp;&amp; <name>h</name>&lt;='f') ||  (<name>h</name>&gt;='A' &amp;&amp; <name>h</name>&lt;='F')</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ASCII</name></cpp:ifdef>
+  <expr_stmt><expr><name>h</name> += 9*(1&amp;(<name>h</name>&gt;&gt;6))</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_EBCDIC</name></cpp:ifdef>
+  <expr_stmt><expr><name>h</name> += 9*(1&amp;~(<name>h</name>&gt;&gt;4))</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr>(<name>u8</name>)(<name>h</name> &amp; 0xf)</expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* !SQLITE_OMIT_BLOB_LITERAL || SQLITE_HAS_CODEC */</comment>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_BLOB_LITERAL</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_HAS_CODEC</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<comment type="block">/*
+** Convert a BLOB literal of the form "x'hhhhhh'" into its binary
+** value.  Return a pointer to its binary value.  Space to hold the
+** binary value has been obtained from malloc and must be freed by
+** the calling routine.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3HexToBlob</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zBlob</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>zBlob</name> = (<name>char</name> *)<call><name>sqlite3DbMallocRaw</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>n</name>/2 + 1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>n</name>--</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zBlob</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>n</name></expr>;</condition> <incr><expr><name>i</name>+=2</expr></incr>)<block>{
+      <expr_stmt><expr><name><name>zBlob</name><index>[<expr><name>i</name>/2</expr>]</index></name> = (<call><name>hexToInt</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call>&lt;&lt;4) | <call><name>hexToInt</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><name><name>zBlob</name><index>[<expr><name>i</name>/2</expr>]</index></name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>zBlob</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* !SQLITE_OMIT_BLOB_LITERAL || SQLITE_HAS_CODEC */</comment>
+
+
+<comment type="block">/*
+** Change the sqlite.magic from SQLITE_MAGIC_OPEN to SQLITE_MAGIC_BUSY.
+** Return an error (non-zero) if the magic was not SQLITE_MAGIC_OPEN
+** when this routine is called.
+**
+** This routine is called when entering an SQLite API.  The SQLITE_MAGIC_OPEN
+** value indicates that the database connection passed into the API is
+** open and is not being used by another thread.  By changing the value
+** to SQLITE_MAGIC_BUSY we indicate that the connection is in use.
+** sqlite3SafetyOff() below will change the value back to SQLITE_MAGIC_OPEN
+** when the API exits. 
+**
+** This routine is a attempt to detect if two threads use the
+** same sqlite* pointer at the same time.  There is a race 
+** condition so it is possible that the error is not detected.
+** But usually the problem will be seen.  The result will be an
+** error which can be used to debug the application that is
+** using SQLite incorrectly.
+**
+** Ticket #202:  If db-&gt;magic is not a valid open value, take care not
+** to modify the db structure at all.  It could be that db is a stale
+** pointer.  In other words, it could be that there has been a prior
+** call to sqlite3_close(db) and db has been deallocated.  And we do
+** not want to write into deallocated memory.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+<function><type><name>int</name></type> <name>sqlite3SafetyOn</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>magic</name>==<name>SQLITE_MAGIC_OPEN</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>magic</name> = <name>SQLITE_MAGIC_BUSY</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><name>db</name>-&gt;<name>magic</name>==<name>SQLITE_MAGIC_BUSY</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>magic</name> = <name>SQLITE_MAGIC_ERROR</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>u1</name>.<name>isInterrupted</name> = 1</expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Change the magic from SQLITE_MAGIC_BUSY to SQLITE_MAGIC_OPEN.
+** Return an error (non-zero) if the magic was not SQLITE_MAGIC_BUSY
+** when this routine is called.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+<function><type><name>int</name></type> <name>sqlite3SafetyOff</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>magic</name>==<name>SQLITE_MAGIC_BUSY</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>magic</name> = <name>SQLITE_MAGIC_OPEN</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>magic</name> = <name>SQLITE_MAGIC_ERROR</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>u1</name>.<name>isInterrupted</name> = 1</expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></else></if>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Check to make sure we have a valid db pointer.  This test is not
+** foolproof but it does provide some measure of protection against
+** misuse of the interface such as passing in db pointers that are
+** NULL or which have been previously closed.  If this routine returns
+** 1 it means that the db pointer is valid and 0 if it should not be
+** dereferenced for any reason.  The calling function should invoke
+** SQLITE_MISUSE immediately.
+**
+** sqlite3SafetyCheckOk() requires that the db pointer be valid for
+** use.  sqlite3SafetyCheckSickOrOk() allows a db pointer that failed to
+** open properly and is not fit for general use but which can be
+** used as an argument to sqlite3_errmsg() or sqlite3_close().
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3SafetyCheckOk</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>magic</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>db</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>magic</name> = <name>db</name>-&gt;<name>magic</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>magic</name>!=<name>SQLITE_MAGIC_OPEN</name> &amp;&amp;
+      <name>magic</name>!=<name>SQLITE_MAGIC_BUSY</name></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3SafetyCheckSickOrOk</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>magic</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>db</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>magic</name> = <name>db</name>-&gt;<name>magic</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>magic</name>!=<name>SQLITE_MAGIC_SICK</name> &amp;&amp;
+      <name>magic</name>!=<name>SQLITE_MAGIC_OPEN</name> &amp;&amp;
+      <name>magic</name>!=<name>SQLITE_MAGIC_BUSY</name></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+</unit>

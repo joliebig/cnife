@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="mem2.c" filename=""><comment type="block">/*
+** 2007 August 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains low-level memory allocation drivers for when
+** SQLite will use the standard C-library malloc/realloc/free interface
+** to obtain the memory it needs while adding lots of additional debugging
+** information to each allocation in order to help detect and fix memory
+** leaks and memory usage errors.
+**
+** This file contains implementations of the low-level memory allocation
+** routines specified in the sqlite3_mem_methods object.
+**
+** $Id: mem2.c,v 1.42 2008/12/10 19:26:24 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** This version of the memory allocator is used only if the
+** SQLITE_MEMDEBUG macro is defined
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+
+<comment type="block">/*
+** The backtrace functionality is only available with GLIBC
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>__GLIBC__</name></cpp:ifdef>
+  <function_decl><type><name>extern</name> <name>int</name></type> <name>backtrace</name><parameter_list>(<param><decl><type><name>void</name>**</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>extern</name> <name>void</name></type> <name>backtrace_symbols_fd</name><parameter_list>(<param><decl><type><name>void</name>*<name>const</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>backtrace</name>(A,B) 1</cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>backtrace_symbols_fd</name>(A,B,C)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Each memory allocation looks like this:
+**
+**  ------------------------------------------------------------------------
+**  | Title |  backtrace pointers |  MemBlockHdr |  allocation |  EndGuard |
+**  ------------------------------------------------------------------------
+**
+** The application code sees only a pointer to the allocation.  We have
+** to back up from the allocation pointer to find the MemBlockHdr.  The
+** MemBlockHdr tells us the size of the allocation and the number of
+** backtrace pointers.  There is also a guard word at the end of the
+** MemBlockHdr.
+*/</comment>
+<struct>struct <name>MemBlockHdr</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>i64</name></type> <name>iSize</name></decl>;</decl_stmt>                          <comment type="block">/* Size of this allocation */</comment>
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pNext</name>, *<name>pPrev</name></decl>;</decl_stmt>  <comment type="block">/* Linked list of all unfreed memory */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>nBacktrace</name></decl>;</decl_stmt>                    <comment type="block">/* Number of backtraces on this alloc */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>nBacktraceSlots</name></decl>;</decl_stmt>               <comment type="block">/* Available backtrace slots */</comment>
+  <decl_stmt><decl><type><name>short</name></type> <name>nTitle</name></decl>;</decl_stmt>                       <comment type="block">/* Bytes of title; includes '\0' */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>iForeGuard</name></decl>;</decl_stmt>                     <comment type="block">/* Guard word for sanity */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Guard words
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FOREGUARD</name> 0x80F5E153</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>REARGUARD</name> 0xE4676B53</cpp:define>
+
+<comment type="block">/*
+** Number of malloc size increments to track.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>NCSIZE</name>  1000</cpp:define>
+
+<comment type="block">/*
+** All of the static variables used by this module are collected
+** into a single structure named "mem".  This is to keep the
+** static variables organized and to reduce namespace pollution
+** when this module is combined with other in the amalgamation.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+  
+  <comment type="block">/*
+  ** Mutex to control access to the memory allocation subsystem.
+  */</comment>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name></decl>;</decl_stmt>
+
+  <comment type="block">/*
+  ** Head and tail of a linked list of all outstanding allocations
+  */</comment>
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pFirst</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pLast</name></decl>;</decl_stmt>
+  
+  <comment type="block">/*
+  ** The number of levels of backtrace to save in new allocations.
+  */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nBacktrace</name></decl>;</decl_stmt>
+  <function_decl><type><name>void</name></type> (*<name>xBacktrace</name>)<parameter_list>(<param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>void</name> **</type></decl></param>)</parameter_list>;</function_decl>
+
+  <comment type="block">/*
+  ** Title text to insert in front of each block
+  */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nTitle</name></decl>;</decl_stmt>        <comment type="block">/* Bytes of zTitle to save.  Includes '\0' and padding */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zTitle</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>  <comment type="block">/* The title text */</comment>
+
+  <comment type="block">/* 
+  ** sqlite3MallocDisallow() increments the following counter.
+  ** sqlite3MallocAllow() decrements it.
+  */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>disallow</name></decl>;</decl_stmt> <comment type="block">/* Do not allow memory allocation */</comment>
+
+  <comment type="block">/*
+  ** Gather statistics on the sizes of memory allocations.
+  ** nAlloc[i] is the number of allocation attempts of i*8
+  ** bytes.  i==NCSIZE is the number of allocation attempts for
+  ** sizes more than NCSIZE*8 bytes.
+  */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>nAlloc</name><index>[<expr><name>NCSIZE</name></expr>]</index></name></decl>;</decl_stmt>      <comment type="block">/* Total number of allocations */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>nCurrent</name><index>[<expr><name>NCSIZE</name></expr>]</index></name></decl>;</decl_stmt>    <comment type="block">/* Current number of allocations */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>mxCurrent</name><index>[<expr><name>NCSIZE</name></expr>]</index></name></decl>;</decl_stmt>   <comment type="block">/* Highwater mark for nCurrent */</comment>
+
+}</block> <decl><name>mem</name></decl>;</struct></type></decl></decl_stmt>
+
+
+<comment type="block">/*
+** Adjust memory usage statistics
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>adjustStats</name><parameter_list>(<param><decl><type><name>int</name></type> <name>iSize</name></decl></param>, <param><decl><type><name>int</name></type> <name>increment</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr>((<name>iSize</name>+7)&amp;~7)/8</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>i</name>&gt;<name>NCSIZE</name>-1</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>i</name> = <name>NCSIZE</name> - 1</expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>increment</name>&gt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>i</name></expr>]</index></name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name>&gt;<name>mem</name>.<name><name>mxCurrent</name><index>[<expr><name>i</name></expr>]</index></name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>mem</name>.<name><name>mxCurrent</name><index>[<expr><name>i</name></expr>]</index></name> = <name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name>--</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name>&gt;=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Given an allocation, find the MemBlockHdr for that allocation.
+**
+** This routine checks the guards at either end of the allocation and
+** if they are incorrect it asserts.
+*/</comment>
+<function><type><name>static</name> struct <name>MemBlockHdr</name> *</type><name>sqlite3MemsysGetHeader</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pAllocation</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name> *</type><name>pInt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name> *</type><name>pU8</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nReserve</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>p</name> = (struct <name>MemBlockHdr</name>*)<name>pAllocation</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>--</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>iForeGuard</name>==(<name>int</name>)<name>FOREGUARD</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nReserve</name> = (<name>p</name>-&gt;<name>iSize</name>+7)&amp;~7</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pInt</name> = (<name>int</name>*)<name>pAllocation</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pU8</name> = (<name>u8</name>*)<name>pAllocation</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name><name>pInt</name><index>[<expr><name>nReserve</name>/<call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>]</index></name>==(<name>int</name>)<name>REARGUARD</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>nReserve</name>-0)&lt;=<name>p</name>-&gt;<name>iSize</name> || <name><name>pU8</name><index>[<expr><name>nReserve</name>-1</expr>]</index></name>==0x65</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>nReserve</name>-1)&lt;=<name>p</name>-&gt;<name>iSize</name> || <name><name>pU8</name><index>[<expr><name>nReserve</name>-2</expr>]</index></name>==0x65</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>nReserve</name>-2)&lt;=<name>p</name>-&gt;<name>iSize</name> || <name><name>pU8</name><index>[<expr><name>nReserve</name>-3</expr>]</index></name>==0x65</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of bytes currently allocated at address p.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3MemSize</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pHdr</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr>!<name>p</name></expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pHdr</name> = <call><name>sqlite3MemsysGetHeader</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>pHdr</name>-&gt;<name>iSize</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Initialize the memory allocation subsystem.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3MemInit</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>sqlite3GlobalConfig</name>.<name>bMemstat</name></expr> )</condition><then><block>{
+    <comment type="block">/* If memory status is enabled, then the malloc.c wrapper will already
+    ** hold the STATIC_MEM mutex when the routines here are invoked. */</comment>
+    <expr_stmt><expr><name>mem</name>.<name>mutex</name> = <call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MEM</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Deinitialize the memory allocation subsystem.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>sqlite3MemShutdown</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem</name>.<name>mutex</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Round up a request size to the next valid allocation size.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3MemRoundup</name><parameter_list>(<param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name>n</name>+7) &amp; ~7</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Allocate nByte bytes of memory.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>sqlite3MemMalloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pHdr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> **</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name> *</type><name>pInt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>totalSize</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nReserve</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem</name>.<name>disallow</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nReserve</name> = (<name>nByte</name>+7)&amp;~7</expr>;</expr_stmt>
+  <expr_stmt><expr><name>totalSize</name> = <name>nReserve</name> + <call><name>sizeof</name><argument_list>(<argument><expr>*<name>pHdr</name></expr></argument>)</argument_list></call> + <call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call> +
+               <name>mem</name>.<name>nBacktrace</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call> + <name>mem</name>.<name>nTitle</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name> = <call><name>malloc</name><argument_list>(<argument><expr><name>totalSize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name> = <name>p</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBt</name> = (<name>void</name>**)&amp;<name><name>z</name><index>[<expr><name>mem</name>.<name>nTitle</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name> = (struct <name>MemBlockHdr</name>*)&amp;<name><name>pBt</name><index>[<expr><name>mem</name>.<name>nBacktrace</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>pPrev</name> = <name>mem</name>.<name>pLast</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>mem</name>.<name>pLast</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>mem</name>.<name>pLast</name>-&gt;<name>pNext</name> = <name>pHdr</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>mem</name>.<name>pFirst</name> = <name>pHdr</name></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><name>mem</name>.<name>pLast</name> = <name>pHdr</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>iForeGuard</name> = <name>FOREGUARD</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>nBacktraceSlots</name> = <name>mem</name>.<name>nBacktrace</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>nTitle</name> = <name>mem</name>.<name>nTitle</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>mem</name>.<name>nBacktrace</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>void</name> *</type><name><name>aAddr</name><index>[<expr>40</expr>]</index></name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>pHdr</name>-&gt;<name>nBacktrace</name> = <call><name>backtrace</name><argument_list>(<argument><expr><name>aAddr</name></expr></argument>, <argument><expr><name>mem</name>.<name>nBacktrace</name>+1</expr></argument>)</argument_list></call>-1</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr>&amp;<name><name>aAddr</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>pHdr</name>-&gt;<name>nBacktrace</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>mem</name>.<name>xBacktrace</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>mem</name>.<call><name>xBacktrace</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>pHdr</name>-&gt;<name>nBacktrace</name>-1</expr></argument>, <argument><expr>&amp;<name><name>aAddr</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>pHdr</name>-&gt;<name>nBacktrace</name> = 0</expr>;</expr_stmt>
+    }</block></else></if>
+    <if>if<condition>( <expr><name>mem</name>.<name>nTitle</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>mem</name>.<name>zTitle</name></expr></argument>, <argument><expr><name>mem</name>.<name>nTitle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>iSize</name> = <name>nByte</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>adjustStats</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>, <argument><expr>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pInt</name> = (<name>int</name>*)&amp;<name><name>pHdr</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>pInt</name><index>[<expr><name>nReserve</name>/<call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>]</index></name> = <name>REARGUARD</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pInt</name></expr></argument>, <argument><expr>0x65</expr></argument>, <argument><expr><name>nReserve</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name> = (<name>void</name>*)<name>pInt</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name></expr>;</return> 
+}</block></function>
+
+<comment type="block">/*
+** Free memory.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>sqlite3MemFree</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pPrior</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pHdr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> **</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>sqlite3GlobalConfig</name>.<name>bMemstat</name> || <name>mem</name>.<name>mutex</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pHdr</name> = <call><name>sqlite3MemsysGetHeader</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pBt</name> = (<name>void</name>**)<name>pHdr</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pBt</name> -= <name>pHdr</name>-&gt;<name>nBacktraceSlots</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pHdr</name>-&gt;<name>pPrev</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pHdr</name>-&gt;<name>pPrev</name>-&gt;<name>pNext</name>==<name>pHdr</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>pPrev</name>-&gt;<name>pNext</name> = <name>pHdr</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem</name>.<name>pFirst</name>==<name>pHdr</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem</name>.<name>pFirst</name> = <name>pHdr</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>pHdr</name>-&gt;<name>pNext</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pHdr</name>-&gt;<name>pNext</name>-&gt;<name>pPrev</name>==<name>pHdr</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHdr</name>-&gt;<name>pNext</name>-&gt;<name>pPrev</name> = <name>pHdr</name>-&gt;<name>pPrev</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem</name>.<name>pLast</name>==<name>pHdr</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem</name>.<name>pLast</name> = <name>pHdr</name>-&gt;<name>pPrev</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>z</name> = (<name>char</name>*)<name>pBt</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>z</name> -= <name>pHdr</name>-&gt;<name>nTitle</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>adjustStats</name><argument_list>(<argument><expr><name>pHdr</name>-&gt;<name>iSize</name></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>0x2b</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call>*<name>pHdr</name>-&gt;<name>nBacktraceSlots</name> + <call><name>sizeof</name><argument_list>(<argument><expr>*<name>pHdr</name></expr></argument>)</argument_list></call> +
+                  <name>pHdr</name>-&gt;<name>iSize</name> + <call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call> + <name>pHdr</name>-&gt;<name>nTitle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>  
+}</block></function>
+
+<comment type="block">/*
+** Change the size of an existing memory allocation.
+**
+** For this debugging implementation, we *always* make a copy of the
+** allocation into a new place in memory.  In this way, if the 
+** higher level code is using pointer to the old allocation, it is 
+** much more likely to break and we are much more liking to find
+** the error.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>sqlite3MemRealloc</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pPrior</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pOldHdr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pNew</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem</name>.<name>disallow</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pOldHdr</name> = <call><name>sqlite3MemsysGetHeader</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name> = <call><name>sqlite3MemMalloc</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pNew</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pNew</name></expr></argument>, <argument><expr><name>pPrior</name></expr></argument>, <argument><expr><name>nByte</name>&lt;<name>pOldHdr</name>-&gt;<name>iSize</name> ? <name>nByte</name> : <name>pOldHdr</name>-&gt;<name>iSize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>nByte</name>&gt;<name>pOldHdr</name>-&gt;<name>iSize</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;((<name>char</name>*)<name>pNew</name>)[<name>pOldHdr</name>-&gt;<name>iSize</name>]</expr></argument>, <argument><expr>0x2b</expr></argument>, <argument><expr><name>nByte</name> - <name>pOldHdr</name>-&gt;<name>iSize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3MemFree</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>pNew</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Populate the low-level memory allocation function pointers in
+** sqlite3GlobalConfig.m with pointers to the routines in this file.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3MemSetDefault</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>sqlite3_mem_methods</name></type> <name>defaultMethods</name> =<init> <expr><block>{
+     <expr><name>sqlite3MemMalloc</name></expr>,
+     <expr><name>sqlite3MemFree</name></expr>,
+     <expr><name>sqlite3MemRealloc</name></expr>,
+     <expr><name>sqlite3MemSize</name></expr>,
+     <expr><name>sqlite3MemRoundup</name></expr>,
+     <expr><name>sqlite3MemInit</name></expr>,
+     <expr><name>sqlite3MemShutdown</name></expr>,
+     <expr>0</expr>
+  }</block></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MALLOC</name></expr></argument>, <argument><expr>&amp;<name>defaultMethods</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Set the number of backtrace levels kept for each allocation.
+** A value of zero turns off backtracing.  The number is always rounded
+** up to a multiple of 2.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3MemdebugBacktrace</name><parameter_list>(<param><decl><type><name>int</name></type> <name>depth</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>depth</name>&lt;0</expr> )</condition><then><block>{ <expr_stmt><expr><name>depth</name> = 0</expr>;</expr_stmt> }</block></then></if>
+  <if>if<condition>( <expr><name>depth</name>&gt;20</expr> )</condition><then><block>{ <expr_stmt><expr><name>depth</name> = 20</expr>;</expr_stmt> }</block></then></if>
+  <expr_stmt><expr><name>depth</name> = (<name>depth</name>+1)&amp;0xfe</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem</name>.<name>nBacktrace</name> = <name>depth</name></expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>void</name></type> <name>sqlite3MemdebugBacktraceCallback</name><parameter_list>(<param><function_decl><type><name>void</name></type> (*<name>xBacktrace</name>)<parameter_list>(<param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>void</name> **</type></decl></param>)</parameter_list></function_decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>mem</name>.<name>xBacktrace</name> = <name>xBacktrace</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Set the title string for subsequent allocations.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3MemdebugSettitle</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zTitle</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>n</name> =<init> <expr><call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>zTitle</name></expr></argument>)</argument_list></call> + 1</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>n</name>&gt;=<call><name>sizeof</name><argument_list>(<argument><expr><name>mem</name>.<name>zTitle</name></expr></argument>)</argument_list></call></expr> )</condition><then> <expr_stmt><expr><name>n</name> = <call><name>sizeof</name><argument_list>(<argument><expr><name>mem</name>.<name>zTitle</name></expr></argument>)</argument_list></call>-1</expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>mem</name>.<name>zTitle</name></expr></argument>, <argument><expr><name>zTitle</name></expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem</name>.<name><name>zTitle</name><index>[<expr><name>n</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem</name>.<name>nTitle</name> = (<name>n</name>+7)&amp;~7</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>void</name></type> <name>sqlite3MemdebugSync</name><parameter_list>()</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pHdr</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>pHdr</name>=<name>mem</name>.<name>pFirst</name></expr>;</init> <condition><expr><name>pHdr</name></expr>;</condition> <incr><expr><name>pHdr</name>=<name>pHdr</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>void</name> **</type><name>pBt</name> =<init> <expr>(<name>void</name>**)<name>pHdr</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pBt</name> -= <name>pHdr</name>-&gt;<name>nBacktraceSlots</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem</name>.<call><name>xBacktrace</name><argument_list>(<argument><expr><name>pHdr</name>-&gt;<name>iSize</name></expr></argument>, <argument><expr><name>pHdr</name>-&gt;<name>nBacktrace</name>-1</expr></argument>, <argument><expr>&amp;<name><name>pBt</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+}</block></function>
+
+<comment type="block">/*
+** Open the file indicated and write a log of all unfreed memory 
+** allocations into that log.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3MemdebugDump</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>FILE</name> *</type><name>out</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>MemBlockHdr</name> *</type><name>pHdr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> **</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>out</name> = <call><name>fopen</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>, <argument><expr>"w"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>out</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"** Unable to output memory debug output log: %s **\n"</expr></argument>,
+                    <argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return;</return>
+  }</block></then></if>
+  <for>for(<init><expr><name>pHdr</name>=<name>mem</name>.<name>pFirst</name></expr>;</init> <condition><expr><name>pHdr</name></expr>;</condition> <incr><expr><name>pHdr</name>=<name>pHdr</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>z</name> =<init> <expr>(<name>char</name>*)<name>pHdr</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>z</name> -= <name>pHdr</name>-&gt;<name>nBacktraceSlots</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call> + <name>pHdr</name>-&gt;<name>nTitle</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"**** %lld bytes at %p from %s ****\n"</expr></argument>, 
+            <argument><expr><name>pHdr</name>-&gt;<name>iSize</name></expr></argument>, <argument><expr>&amp;<name><name>pHdr</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>pHdr</name>-&gt;<name>nTitle</name> ? <name>z</name> : "???"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pHdr</name>-&gt;<name>nBacktrace</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fflush</name><argument_list>(<argument><expr><name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pBt</name> = (<name>void</name>**)<name>pHdr</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pBt</name> -= <name>pHdr</name>-&gt;<name>nBacktraceSlots</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>backtrace_symbols_fd</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>pHdr</name>-&gt;<name>nBacktrace</name></expr></argument>, <argument><expr><call><name>fileno</name><argument_list>(<argument><expr><name>out</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"COUNTS:\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>NCSIZE</name>-1</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>i</name></expr>]</index></name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"   %5d: %10d %10d %10d\n"</expr></argument>, 
+            <argument><expr><name>i</name>*8</expr></argument>, <argument><expr><name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>, <argument><expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>, <argument><expr><name>mem</name>.<name><name>mxCurrent</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+  <if>if<condition>( <expr><name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>NCSIZE</name>-1</expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"   %5d: %10d %10d %10d\n"</expr></argument>,
+             <argument><expr><name>NCSIZE</name>*8-8</expr></argument>, <argument><expr><name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>NCSIZE</name>-1</expr>]</index></name></expr></argument>,
+             <argument><expr><name>mem</name>.<name><name>nCurrent</name><index>[<expr><name>NCSIZE</name>-1</expr>]</index></name></expr></argument>, <argument><expr><name>mem</name>.<name><name>mxCurrent</name><index>[<expr><name>NCSIZE</name>-1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of times sqlite3MemMalloc() has been called.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3MemdebugMallocCount</name><parameter_list>()</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nTotal</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>NCSIZE</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>nTotal</name> += <name>mem</name>.<name><name>nAlloc</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>nTotal</name></expr>;</return>
+}</block></function>
+
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_MEMDEBUG */</comment>
+</unit>

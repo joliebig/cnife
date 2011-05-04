@@ -1,0 +1,657 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test2.c" filename=""><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Code for testing the pager.c module in SQLite.  This code
+** is not included in the SQLite library.  It is used for automated
+** testing of the SQLite library.
+**
+** $Id: test2.c,v 1.65 2009/01/07 15:18:21 danielk1977 Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Interpret an SQLite error number
+*/</comment>
+<function><type><name>static</name> <name>char</name> *</type><name>errorName</name><parameter_list>(<param><decl><type><name>int</name></type> <name>rc</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+  <switch>switch<condition>( <expr><name>rc</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_OK</name></expr>:         <expr_stmt><expr><name>zName</name> = "SQLITE_OK"</expr>;</expr_stmt>          <break>break;</break>
+    </case><case>case <expr><name>SQLITE_ERROR</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_ERROR"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_PERM</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_PERM"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_ABORT</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_ABORT"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_BUSY</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_BUSY"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_NOMEM</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_NOMEM"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_READONLY</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_READONLY"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_INTERRUPT</name></expr>:  <expr_stmt><expr><name>zName</name> = "SQLITE_INTERRUPT"</expr>;</expr_stmt>   <break>break;</break>
+    </case><case>case <expr><name>SQLITE_IOERR</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_IOERR"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_CORRUPT</name></expr>:    <expr_stmt><expr><name>zName</name> = "SQLITE_CORRUPT"</expr>;</expr_stmt>     <break>break;</break>
+    </case><case>case <expr><name>SQLITE_FULL</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_FULL"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_CANTOPEN</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_CANTOPEN"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_PROTOCOL</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_PROTOCOL"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_EMPTY</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_EMPTY"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_SCHEMA</name></expr>:     <expr_stmt><expr><name>zName</name> = "SQLITE_SCHEMA"</expr>;</expr_stmt>      <break>break;</break>
+    </case><case>case <expr><name>SQLITE_CONSTRAINT</name></expr>: <expr_stmt><expr><name>zName</name> = "SQLITE_CONSTRAINT"</expr>;</expr_stmt>  <break>break;</break>
+    </case><case>case <expr><name>SQLITE_MISMATCH</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_MISMATCH"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_MISUSE</name></expr>:     <expr_stmt><expr><name>zName</name> = "SQLITE_MISUSE"</expr>;</expr_stmt>      <break>break;</break>
+    </case><case>case <expr><name>SQLITE_NOLFS</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_NOLFS"</expr>;</expr_stmt>       <break>break;</break>
+    </case><default>default:                <expr_stmt><expr><name>zName</name> = "SQLITE_Unknown"</expr>;</expr_stmt>     <break>break;</break>
+  </default>}</block></switch>
+  <return>return <expr><name>zName</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Page size and reserved size used for testing.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>test_pagesize</name> =<init> <expr>1024</expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** Usage:   pager_open FILENAME N-PAGE
+**
+** Open a new pager
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_open</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u16</name></type> <name>pageSize</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" FILENAME N-PAGE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nPage</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerOpen</name><argument_list>(<argument><expr><call><name>sqlite3_vfs_find</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>pPager</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>,
+      <argument><expr><name>SQLITE_OPEN_READWRITE</name> | <name>SQLITE_OPEN_CREATE</name> | <name>SQLITE_OPEN_MAIN_DB</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3PagerSetCachesize</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>nPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pageSize</name> = <name>test_pagesize</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3PagerSetPagesize</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr>&amp;<name>pageSize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%p"</expr></argument>,<argument><expr><name>pPager</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_close ID
+**
+** Close the given pager.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_close</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerClose</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_rollback ID
+**
+** Rollback changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_rollback</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerRollback</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_commit ID
+**
+** Commit all changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_commit</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerCommitPhaseOne</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerCommitPhaseTwo</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_stmt_begin ID
+**
+** Start a new checkpoint.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_stmt_begin</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerOpenSavepoint</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_stmt_rollback ID
+**
+** Rollback changes to a checkpoint
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_stmt_rollback</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerSavepoint</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>SAVEPOINT_ROLLBACK</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3PagerSavepoint</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>SAVEPOINT_RELEASE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_stmt_commit ID
+**
+** Commit changes to a checkpoint
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_stmt_commit</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerSavepoint</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>SAVEPOINT_RELEASE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_stats ID
+**
+** Return pager statistics.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_stats</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, *<name>a</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <call><name>sqlite3PagerStats</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;9</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>static</name> <name>char</name> *</type><name><name>zName</name><index>[]</index></name> =<init> <expr><block>{
+      <expr>"ref"</expr>, <expr>"page"</expr>, <expr>"max"</expr>, <expr>"size"</expr>, <expr>"state"</expr>, <expr>"err"</expr>,
+      <expr>"hit"</expr>, <expr>"miss"</expr>, <expr>"ovfl"</expr>,
+    }</block></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>zName</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name><name>a</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_pagecount ID
+**
+** Return the size of the database file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_pagecount</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nPage</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3PagerPagecount</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr>&amp;<name>nPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><name>nPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   page_get ID PGNO
+**
+** Return a pointer to a page from the database.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_get</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>pgno</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID PGNO\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerGet</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr>&amp;<name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%p"</expr></argument>,<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   page_lookup ID PGNO
+**
+** Return a pointer to a page if the page is already in cache.
+** If not in cache, return an empty string.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_lookup</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>pgno</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID PGNO\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>pPage</name> = <call><name>sqlite3PagerLookup</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pPage</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%p"</expr></argument>,<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   pager_truncate ID PGNO
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>pager_truncate</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>pgno</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID PGNO\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>pgno</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3PagerTruncateImage</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Usage:   page_unref PAGE
+**
+** Drop a pointer to a page.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_unref</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" PAGE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPage</name> = (<name>DbPage</name> *)<call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerUnref</name><argument_list>(<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   page_read PAGE
+**
+** Return the content of a page
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_read</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" PAGE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPage</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr><call><name>sqlite3PagerGetData</name><argument_list>(<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   page_number PAGE
+**
+** Return the page number for a page.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_number</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" PAGE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPage</name> = (<name>DbPage</name> *)<call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><call><name>sqlite3PagerPagenumber</name><argument_list>(<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   page_write PAGE DATA
+**
+** Write something into a page.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>page_write</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DbPage</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>pData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" PAGE DATA\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pPage</name> = (<name>DbPage</name> *)<call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3PagerWrite</name><argument_list>(<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pData</name> = <call><name>sqlite3PagerGetData</name><argument_list>(<argument><expr><name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>strncpy</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr><name>test_pagesize</name>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>pData</name><index>[<expr><name>test_pagesize</name>-1</expr>]</index></name> = 0</expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DISKIO</name></cpp:ifndef>
+<comment type="block">/*
+** Usage:   fake_big_file  N  FILENAME
+**
+** Write a few bytes at the N megabyte point of FILENAME.  This will
+** create a large file.  If the file was a valid SQLite database, then
+** the next time the database is opened, SQLite will begin allocating
+** new pages after N.  If N is 2096 or bigger, this will test the
+** ability of SQLite to write to large files.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>fake_big_file</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>fd</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>i64</name></type> <name>offset</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" N-MEGABYTES FILE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+
+  <expr_stmt><expr><name>pVfs</name> = <call><name>sqlite3_vfs_find</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsOpenMalloc</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>fd</name></expr></argument>, 
+      <argument><expr>(<name>SQLITE_OPEN_CREATE</name>|<name>SQLITE_OPEN_READWRITE</name>|<name>SQLITE_OPEN_MAIN_DB</name>)</expr></argument>, <argument><expr>0</expr></argument>
+  )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"open failed: "</expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>offset</name> = <name>n</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>offset</name> *= 1024*1024</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsWrite</name><argument_list>(<argument><expr><name>fd</name></expr></argument>, <argument><expr>"Hello, World!"</expr></argument>, <argument><expr>14</expr></argument>, <argument><expr><name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3OsCloseFree</name><argument_list>(<argument><expr><name>fd</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"write failed: "</expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*
+** sqlite3BitvecBuiltinTest SIZE PROGRAM
+**
+** Invoke the SQLITE_TESTCTRL_BITVEC_TEST operator on test_control.
+** See comments on sqlite3BitvecBuiltinTest() for additional information.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testBitvecBuiltinTest</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>sz</name>, <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nProg</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>aProg</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+                     <argument><expr>" SIZE PROGRAM\""</expr></argument>, <argument><expr>(<name>void</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sz</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>z</name> = <name><name>argv</name><index>[<expr>2</expr>]</index></name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>nProg</name>&lt;99 &amp;&amp; *<name>z</name></expr> )</condition><block>{
+    <while>while<condition>( <expr>*<name>z</name> &amp;&amp; !<call><name>isdigit</name><argument_list>(<argument><expr>*<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt> }</block></while>
+    <if>if<condition>( <expr>*<name>z</name>==0</expr> )</condition><then> <break>break;</break></then></if>
+    <expr_stmt><expr><name><name>aProg</name><index>[<expr><name>nProg</name>++</expr>]</index></name> = <call><name>atoi</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt> }</block></while>
+  }</block></while>
+  <expr_stmt><expr><name><name>aProg</name><index>[<expr><name>nProg</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_test_control</name><argument_list>(<argument><expr><name>SQLITE_TESTCTRL_BITVEC_TEST</name></expr></argument>, <argument><expr><name>sz</name></expr></argument>, <argument><expr><name>aProg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>  
+
+<comment type="block">/*
+** Register commands with the TCL interpreter.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetest2_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_io_error_persist</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_io_error_pending</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_io_error_hit</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_io_error_hardhit</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_diskfull_pending</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_diskfull</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>extern</name> <name>int</name></type> <name>sqlite3_pager_n_sort_bucket</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Tcl_CmdProc</name> *</type><name>xProc</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aCmd</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{ <expr>"pager_open"</expr>,              <expr>(<name>Tcl_CmdProc</name>*)<name>pager_open</name></expr>          }</block></expr>,
+    <expr><block>{ <expr>"pager_close"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>pager_close</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"pager_commit"</expr>,            <expr>(<name>Tcl_CmdProc</name>*)<name>pager_commit</name></expr>        }</block></expr>,
+    <expr><block>{ <expr>"pager_rollback"</expr>,          <expr>(<name>Tcl_CmdProc</name>*)<name>pager_rollback</name></expr>      }</block></expr>,
+    <expr><block>{ <expr>"pager_stmt_begin"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>pager_stmt_begin</name></expr>    }</block></expr>,
+    <expr><block>{ <expr>"pager_stmt_commit"</expr>,       <expr>(<name>Tcl_CmdProc</name>*)<name>pager_stmt_commit</name></expr>   }</block></expr>,
+    <expr><block>{ <expr>"pager_stmt_rollback"</expr>,     <expr>(<name>Tcl_CmdProc</name>*)<name>pager_stmt_rollback</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"pager_stats"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>pager_stats</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"pager_pagecount"</expr>,         <expr>(<name>Tcl_CmdProc</name>*)<name>pager_pagecount</name></expr>     }</block></expr>,
+    <expr><block>{ <expr>"page_get"</expr>,                <expr>(<name>Tcl_CmdProc</name>*)<name>page_get</name></expr>            }</block></expr>,
+    <expr><block>{ <expr>"page_lookup"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>page_lookup</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"page_unref"</expr>,              <expr>(<name>Tcl_CmdProc</name>*)<name>page_unref</name></expr>          }</block></expr>,
+    <expr><block>{ <expr>"page_read"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>page_read</name></expr>           }</block></expr>,
+    <expr><block>{ <expr>"page_write"</expr>,              <expr>(<name>Tcl_CmdProc</name>*)<name>page_write</name></expr>          }</block></expr>,
+    <expr><block>{ <expr>"page_number"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>page_number</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"pager_truncate"</expr>,          <expr>(<name>Tcl_CmdProc</name>*)<name>pager_truncate</name></expr>      }</block></expr>,
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DISKIO</name></cpp:ifndef>
+    <expr><block>{ <expr>"fake_big_file"</expr>,           <expr>(<name>Tcl_CmdProc</name>*)<name>fake_big_file</name></expr>       }</block></expr>,
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <expr><block>{ <expr>"sqlite3BitvecBuiltinTest"</expr>,<expr>(<name>Tcl_CmdProc</name>*)<name>testBitvecBuiltinTest</name></expr>}</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aCmd</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aCmd</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>Tcl_CreateCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>xProc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_io_error_pending"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_io_error_pending</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_io_error_persist"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_io_error_persist</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_io_error_hit"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_io_error_hit</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_io_error_hardhit"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_io_error_hardhit</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_diskfull_pending"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_diskfull_pending</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_diskfull"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_diskfull</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_pending_byte"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_pending_byte</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_pager_n_sort_bucket"</expr></argument>,
+     <argument><expr>(<name>char</name>*)&amp;<name>sqlite3_pager_n_sort_bucket</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

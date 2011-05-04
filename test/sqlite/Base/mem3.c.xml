@@ -1,0 +1,690 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="mem3.c" filename=""><comment type="block">/*
+** 2007 October 14
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains the C functions that implement a memory
+** allocation subsystem for use by SQLite. 
+**
+** This version of the memory allocation subsystem omits all
+** use of malloc(). The SQLite user supplies a block of memory
+** before calling sqlite3_initialize() from which allocations
+** are made and returned by the xMalloc() and xRealloc() 
+** implementations. Once sqlite3_initialize() has been called,
+** the amount of memory available to SQLite is fixed and cannot
+** be changed.
+**
+** This version of the memory allocation subsystem is included
+** in the build only if SQLITE_ENABLE_MEMSYS3 is defined.
+**
+** $Id: mem3.c,v 1.25 2008/11/19 16:52:44 danielk1977 Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** This version of the memory allocator is only built into the library
+** SQLITE_ENABLE_MEMSYS3 is defined. Defining this symbol does not
+** mean that the library will use a memory-pool by default, just that
+** it is available. The mempool allocator is activated by calling
+** sqlite3_config().
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMSYS3</name></cpp:ifdef>
+
+<comment type="block">/*
+** Maximum size (in Mem3Blocks) of a "small" chunk.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MX_SMALL</name> 10</cpp:define>
+
+
+<comment type="block">/*
+** Number of freelist hash slots
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>N_HASH</name>  61</cpp:define>
+
+<comment type="block">/*
+** A memory allocation (also called a "chunk") consists of two or 
+** more blocks where each block is 8 bytes.  The first 8 bytes are 
+** a header that is not returned to the user.
+**
+** A chunk is two or more blocks that is either checked out or
+** free.  The first block has format u.hdr.  u.hdr.size4x is 4 times the
+** size of the allocation in blocks if the allocation is free.
+** The u.hdr.size4x&amp;1 bit is true if the chunk is checked out and
+** false if the chunk is on the freelist.  The u.hdr.size4x&amp;2 bit
+** is true if the previous chunk is checked out and false if the
+** previous chunk is free.  The u.hdr.prevSize field is the size of
+** the previous chunk in blocks if the previous chunk is on the
+** freelist. If the previous chunk is checked out, then
+** u.hdr.prevSize can be part of the data for that chunk and should
+** not be read or written.
+**
+** We often identify a chunk by its index in mem3.aPool[].  When
+** this is done, the chunk index refers to the second block of
+** the chunk.  In this way, the first chunk has an index of 1.
+** A chunk index of 0 means "no such chunk" and is the equivalent
+** of a NULL pointer.
+**
+** The second block of free chunks is of the form u.list.  The
+** two fields form a double-linked list of chunks of related sizes.
+** Pointers to the head of the list are stored in mem3.aiSmall[] 
+** for smaller chunks and mem3.aiHash[] for larger chunks.
+**
+** The second block of a chunk is user data if the chunk is checked 
+** out.  If a chunk is checked out, the user data may extend into
+** the u.hdr.prevSize value of the following chunk.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>Mem3Block</name> Mem3Block;</struct></type></typedef>
+<struct>struct <name>Mem3Block</name> <block>{<public type="default">
+  <decl_stmt><decl><type><struct>union <block>{<public type="default"/>
+    <decl_stmt><decl><type><struct>struct <block>{<public type="default"/>
+      <decl_stmt><decl><type><name>u32</name></type> <name>prevSize</name></decl>;</decl_stmt>   <comment type="block">/* Size of previous chunk in Mem3Block elements */</comment>
+      <decl_stmt><decl><type><name>u32</name></type> <name>size4x</name></decl>;</decl_stmt>     <comment type="block">/* 4x the size of current chunk in Mem3Block elements */</comment>
+    }</block> <decl><name>hdr</name></decl>;</struct></type></decl></decl_stmt>
+    <decl_stmt><decl><type><struct>struct <block>{<public type="default"/>
+      <decl_stmt><decl><type><name>u32</name></type> <name>next</name></decl>;</decl_stmt>       <comment type="block">/* Index in mem3.aPool[] of next free chunk */</comment>
+      <decl_stmt><decl><type><name>u32</name></type> <name>prev</name></decl>;</decl_stmt>       <comment type="block">/* Index in mem3.aPool[] of previous free chunk */</comment>
+    }</block> <decl><name>list</name></decl>;</struct></type></decl></decl_stmt>
+  }</block> <decl><name>u</name></decl>;</struct></type></decl></decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** All of the static variables used by this module are collected
+** into a single structure named "mem3".  This is to keep the
+** static variables organized and to reduce namespace pollution
+** when this module is combined with other in the amalgamation.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>SQLITE_WSD</name> struct</type> <name>Mem3Global</name> <block>{
+  <comment type="block">/*
+  ** Memory available for allocation. nPool is the size of the array
+  ** (in Mem3Blocks) pointed to by aPool less 2.
+  */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nPool</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Mem3Block</name> *</type><name>aPool</name></decl>;</decl_stmt>
+
+  <comment type="block">/*
+  ** True if we are evaluating an out-of-memory callback.
+  */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>alarmBusy</name></decl>;</decl_stmt>
+  
+  <comment type="block">/*
+  ** Mutex to control access to the memory allocation subsystem.
+  */</comment>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name></decl>;</decl_stmt>
+  
+  <comment type="block">/*
+  ** The minimum amount of free space that we have seen.
+  */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>mnMaster</name></decl>;</decl_stmt>
+
+  <comment type="block">/*
+  ** iMaster is the index of the master chunk.  Most new allocations
+  ** occur off of this chunk.  szMaster is the size (in Mem3Blocks)
+  ** of the current master.  iMaster is 0 if there is not master chunk.
+  ** The master chunk is not in either the aiHash[] or aiSmall[].
+  */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>iMaster</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>szMaster</name></decl>;</decl_stmt>
+
+  <comment type="block">/*
+  ** Array of lists of free blocks according to the block size 
+  ** for smaller chunks, or a hash on the block size for larger
+  ** chunks.
+  */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name><name>aiSmall</name><index>[<expr><name>MX_SMALL</name>-1</expr>]</index></name></decl>;</decl_stmt>   <comment type="block">/* For sizes 2 through MX_SMALL, inclusive */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name><name>aiHash</name><index>[<expr><name>N_HASH</name></expr>]</index></name></decl>;</decl_stmt>        <comment type="block">/* For sizes MX_SMALL+1 and larger */</comment>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>mem3</name> = <block>{ <expr>97535575</expr> }</block></expr>;</expr_stmt>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>mem3</name> <name>GLOBAL</name>(struct Mem3Global, mem3)</cpp:define>
+
+<comment type="block">/*
+** Unlink the chunk at mem3.aPool[i] from list it is currently
+** on.  *pRoot is the list that i is a member of.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3UnlinkFromList</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>i</name></decl></param>, <param><decl><type><name>u32</name> *</type><name>pRoot</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>next</name> =<init> <expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>prev</name> =<init> <expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>prev</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>prev</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr>*<name>pRoot</name> = <name>next</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>prev</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name> = <name>next</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>next</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>next</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>prev</name> = <name>prev</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>prev</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Unlink the chunk at index i from 
+** whatever list is currently a member of.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Unlink</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>size</name>, <name>hash</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 1)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;=1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>size</name>==<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>size</name>&gt;=2</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>size</name> &lt;= <name>MX_SMALL</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memsys3UnlinkFromList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>size</name>-2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>hash</name> = <name>size</name> % <name>N_HASH</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memsys3UnlinkFromList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>hash</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Link the chunk at mem3.aPool[i] so that is on the list rooted
+** at *pRoot.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3LinkIntoList</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>i</name></decl></param>, <param><decl><type><name>u32</name> *</type><name>pRoot</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name> = *<name>pRoot</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>prev</name> = 0</expr>;</expr_stmt>
+  <if>if<condition>( <expr>*<name>pRoot</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr>*<name>pRoot</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>prev</name> = <name>i</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr>*<name>pRoot</name> = <name>i</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Link the chunk at index i into either the appropriate
+** small chunk list, or into the large chunk hash table.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Link</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>size</name>, <name>hash</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;=1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 1)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>size</name>==<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>size</name>&gt;=2</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>size</name> &lt;= <name>MX_SMALL</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memsys3LinkIntoList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>size</name>-2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>hash</name> = <name>size</name> % <name>N_HASH</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memsys3LinkIntoList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>hash</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** If the STATIC_MEM mutex is not already held, obtain it now. The mutex
+** will already be held (obtained by code in malloc.c) if
+** sqlite3GlobalConfig.bMemStat is true.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Enter</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>sqlite3GlobalConfig</name>.<name>bMemstat</name>==0 &amp;&amp; <name>mem3</name>.<name>mutex</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>mem3</name>.<name>mutex</name> = <call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MEM</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Leave</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Called when we are unable to satisfy an allocation of nBytes.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3OutOfMemory</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr>!<name>mem3</name>.<name>alarmBusy</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>mem3</name>.<name>alarmBusy</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_release_memory</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name>alarmBusy</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+
+<comment type="block">/*
+** Chunk i is a free chunk that has been unlinked.  Adjust its 
+** size parameters for check-out and return a pointer to the 
+** user portion of the chunk.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>memsys3Checkout</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>i</name></decl></param>, <param><decl><type><name>u32</name></type> <name>nBlock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>x</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;=1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4==<name>nBlock</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>nBlock</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name>==<name>nBlock</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>x</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>nBlock</name>*4 | 1 | (<name>x</name>&amp;2)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>nBlock</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>nBlock</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>nBlock</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> |= 2</expr>;</expr_stmt>
+  <return>return <expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Carve a piece off of the end of the mem3.iMaster free chunk.
+** Return a pointer to the new allocation.  Or, if the master chunk
+** is not large enough, return 0.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>memsys3FromMaster</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>nBlock</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>mem3</name>.<name>szMaster</name>&gt;=<name>nBlock</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nBlock</name>&gt;=<name>mem3</name>.<name>szMaster</name>-1</expr> )</condition><then><block>{
+    <comment type="block">/* Use the entire master */</comment>
+    <decl_stmt><decl><type><name>void</name> *</type><name>p</name> =<init> <expr><call><name>memsys3Checkout</name><argument_list>(<argument><expr><name>mem3</name>.<name>iMaster</name></expr></argument>, <argument><expr><name>mem3</name>.<name>szMaster</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name>iMaster</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name>mnMaster</name> = 0</expr>;</expr_stmt>
+    <return>return <expr><name>p</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <comment type="block">/* Split the master block.  Return the tail. */</comment>
+    <decl_stmt><decl><type><name>u32</name></type> <name>newi</name>, <name>x</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>newi</name> = <name>mem3</name>.<name>iMaster</name> + <name>mem3</name>.<name>szMaster</name> - <name>nBlock</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>newi</name> &gt; <name>mem3</name>.<name>iMaster</name>+1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>nBlock</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> |= 2</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>newi</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>nBlock</name>*4 + 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> -= <name>nBlock</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>newi</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>mem3</name>.<name>szMaster</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 2</expr>;</expr_stmt>
+    <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>mem3</name>.<name>szMaster</name>*4 | <name>x</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>mem3</name>.<name>szMaster</name> &lt; <name>mem3</name>.<name>mnMaster</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>mem3</name>.<name>mnMaster</name> = <name>mem3</name>.<name>szMaster</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <return>return <expr>(<name>void</name>*)&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>newi</name></expr>]</index></name></expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** *pRoot is the head of a list of free chunks of the same size
+** or same size hash.  In other words, *pRoot is an entry in either
+** mem3.aiSmall[] or mem3.aiHash[].  
+**
+** This routine examines all entries on the given list and tries
+** to coalesce each entries with adjacent free chunks.  
+**
+** If it sees a chunk that is larger than mem3.iMaster, it replaces 
+** the current mem3.iMaster with the new larger chunk.  In order for
+** this mem3.iMaster replacement to work, the master chunk must be
+** linked into the hash tables.  That is not the normal state of
+** affairs, of course.  The calling routine must link the master
+** chunk before invoking this routine, then must unlink the (possibly
+** changed) master chunk once this routine has finished.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Merge</name><parameter_list>(<param><decl><type><name>u32</name> *</type><name>pRoot</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>iNext</name>, <name>prev</name>, <name>size</name>, <name>i</name>, <name>x</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=*<name>pRoot</name></expr>;</init> <condition><expr><name>i</name>&gt;0</expr>;</condition> <incr><expr><name>i</name>=<name>iNext</name></expr></incr>)<block>{
+    <expr_stmt><expr><name>iNext</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>size</name>&amp;1)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>(<name>size</name>&amp;2)==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memsys3UnlinkFromList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr><name>pRoot</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name> &gt; <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>prev</name> = <name>i</name> - <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>prev</name>==<name>iNext</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>iNext</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>prev</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>memsys3Unlink</name><argument_list>(<argument><expr><name>prev</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>size</name> = <name>i</name> + <name>size</name>/4 - <name>prev</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>x</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>prev</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 2</expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>prev</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>size</name>*4 | <name>x</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>prev</name>+<name>size</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>size</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memsys3Link</name><argument_list>(<argument><expr><name>prev</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>i</name> = <name>prev</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>size</name> /= 4</expr>;</expr_stmt>
+    }</block></else></if>
+    <if>if<condition>( <expr><name>size</name>&gt;<name>mem3</name>.<name>szMaster</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>mem3</name>.<name>iMaster</name> = <name>i</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> = <name>size</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+}</block></function>
+
+<comment type="block">/*
+** Return a block of memory of at least nBytes in size.
+** Return NULL if unable.
+**
+** This function assumes that the necessary mutexes, if any, are
+** already held by the caller. Hence "Unsafe".
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>memsys3MallocUnsafe</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nBlock</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>toFree</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Mem3Block</name></expr></argument>)</argument_list></call>==8</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nByte</name>&lt;=12</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>nBlock</name> = 2</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>nBlock</name> = (<name>nByte</name> + 11)/8</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>nBlock</name>&gt;=2</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* STEP 1:
+  ** Look for an entry of the correct size in either the small
+  ** chunk table or in the large chunk hash table.  This is
+  ** successful most of the time (about 9 times out of 10).
+  */</comment>
+  <if>if<condition>( <expr><name>nBlock</name> &lt;= <name>MX_SMALL</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>i</name> = <name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>nBlock</name>-2</expr>]</index></name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>i</name>&gt;0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memsys3UnlinkFromList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>nBlock</name>-2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><call><name>memsys3Checkout</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr><name>nBlock</name></expr></argument>)</argument_list></call></expr>;</return>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>hash</name> =<init> <expr><name>nBlock</name> % <name>N_HASH</name></expr></init></decl>;</decl_stmt>
+    <for>for(<init><expr><name>i</name>=<name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>hash</name></expr>]</index></name></expr>;</init> <condition><expr><name>i</name>&gt;0</expr>;</condition> <incr><expr><name>i</name>=<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr></incr>)<block>{
+      <if>if<condition>( <expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4==<name>nBlock</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>memsys3UnlinkFromList</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>hash</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr><call><name>memsys3Checkout</name><argument_list>(<argument><expr><name>i</name></expr></argument>, <argument><expr><name>nBlock</name></expr></argument>)</argument_list></call></expr>;</return>
+      }</block></then></if>
+    }</block></for>
+  }</block></else></if>
+
+  <comment type="block">/* STEP 2:
+  ** Try to satisfy the allocation by carving a piece off of the end
+  ** of the master chunk.  This step usually works if step 1 fails.
+  */</comment>
+  <if>if<condition>( <expr><name>mem3</name>.<name>szMaster</name>&gt;=<name>nBlock</name></expr> )</condition><then><block>{
+    <return>return <expr><call><name>memsys3FromMaster</name><argument_list>(<argument><expr><name>nBlock</name></expr></argument>)</argument_list></call></expr>;</return>
+  }</block></then></if>
+
+
+  <comment type="block">/* STEP 3:  
+  ** Loop through the entire memory pool.  Coalesce adjacent free
+  ** chunks.  Recompute the master chunk as the largest free chunk.
+  ** Then try again to satisfy the allocation by carving a piece off
+  ** of the end of the master chunk.  This step happens very
+  ** rarely (we hope!)
+  */</comment>
+  <for>for(<init><expr><name>toFree</name>=<name>nBlock</name>*16</expr>;</init> <condition><expr><name>toFree</name>&lt;(<name>mem3</name>.<name>nPool</name>*16)</expr>;</condition> <incr><expr><name>toFree</name> *= 2</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>memsys3OutOfMemory</name><argument_list>(<argument><expr><name>toFree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>mem3</name>.<name>iMaster</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memsys3Link</name><argument_list>(<argument><expr><name>mem3</name>.<name>iMaster</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>iMaster</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>N_HASH</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>memsys3Merge</name><argument_list>(<argument><expr>&amp;<name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>MX_SMALL</name>-1</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>memsys3Merge</name><argument_list>(<argument><expr>&amp;<name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <if>if<condition>( <expr><name>mem3</name>.<name>szMaster</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memsys3Unlink</name><argument_list>(<argument><expr><name>mem3</name>.<name>iMaster</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>mem3</name>.<name>szMaster</name>&gt;=<name>nBlock</name></expr> )</condition><then><block>{
+        <return>return <expr><call><name>memsys3FromMaster</name><argument_list>(<argument><expr><name>nBlock</name></expr></argument>)</argument_list></call></expr>;</return>
+      }</block></then></if>
+    }</block></then></if>
+  }</block></for>
+
+  <comment type="block">/* If none of the above worked, then we fail. */</comment>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Free an outstanding memory allocation.
+**
+** This function assumes that the necessary mutexes, if any, are
+** already held by the caller. Hence "Unsafe".
+*/</comment>
+<function><type><name>void</name></type> <name>memsys3FreeUnsafe</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pOld</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem3Block</name> *</type><name>p</name> =<init> <expr>(<name>Mem3Block</name>*)<name>pOld</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>size</name>, <name>x</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>&gt;<name>mem3</name>.<name>aPool</name> &amp;&amp; <name>p</name>&lt;&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>nPool</name></expr>]</index></name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>i</name> = <name>p</name> - <name>mem3</name>.<name>aPool</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;1)==1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>+<name>size</name>&lt;=<name>mem3</name>.<name>nPool</name>+1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp;= ~1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>size</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp;= ~2</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memsys3Link</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Try to expand the master using the newly freed chunk */</comment>
+  <if>if<condition>( <expr><name>mem3</name>.<name>iMaster</name></expr> )</condition><then><block>{
+    <while>while<condition>( <expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;2)==0</expr> )</condition><block>{
+      <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>iMaster</name> -= <name>size</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> += <name>size</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memsys3Unlink</name><argument_list>(<argument><expr><name>mem3</name>.<name>iMaster</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>x</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 2</expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>mem3</name>.<name>szMaster</name>*4 | <name>x</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>mem3</name>.<name>szMaster</name></expr>;</expr_stmt>
+    }</block></while>
+    <expr_stmt><expr><name>x</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> &amp; 2</expr>;</expr_stmt>
+    <while>while<condition>( <expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;1)==0</expr> )</condition><block>{
+      <expr_stmt><expr><call><name>memsys3Unlink</name><argument_list>(<argument><expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> += <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4</expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = <name>mem3</name>.<name>szMaster</name>*4 | <name>x</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>iMaster</name>+<name>mem3</name>.<name>szMaster</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>mem3</name>.<name>szMaster</name></expr>;</expr_stmt>
+    }</block></while>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Return the size of an outstanding allocation, in bytes.  The
+** size returned omits the 8-byte header overhead.  This only
+** works for chunks that are currently checked out.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memsys3Size</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem3Block</name> *</type><name>pBlock</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>pBlock</name> = (<name>Mem3Block</name>*)<name>p</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name><name>pBlock</name><index>[<expr>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;1)!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(<name><name>pBlock</name><index>[<expr>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;~3)*2 - 4</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Round up a request size to the next valid allocation size.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memsys3Roundup</name><parameter_list>(<param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>n</name>&lt;=12</expr> )</condition><then><block>{
+    <return>return <expr>12</expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr>((<name>n</name>+11)&amp;~7) - 4</expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Allocate nBytes of memory.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>memsys3Malloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_int64</name> *</type><name>p</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>nBytes</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>          <comment type="block">/* malloc.c filters out 0 byte requests */</comment>
+  <expr_stmt><expr><call><name>memsys3Enter</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name> = <call><name>memsys3MallocUnsafe</name><argument_list>(<argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memsys3Leave</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(<name>void</name>*)<name>p</name></expr>;</return> 
+}</block></function>
+
+<comment type="block">/*
+** Free memory.
+*/</comment>
+<function><type><name>void</name></type> <name>memsys3Free</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pPrior</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pPrior</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memsys3Enter</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memsys3FreeUnsafe</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memsys3Leave</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Change the size of an existing memory allocation
+*/</comment>
+<function><type><name>void</name> *</type><name>memsys3Realloc</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pPrior</name></decl></param>, <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nOld</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pPrior</name>==0</expr> )</condition><then><block>{
+    <return>return <expr><call><name>sqlite3_malloc</name><argument_list>(<argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>nBytes</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nOld</name> = <call><name>memsys3Size</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nBytes</name>&lt;=<name>nOld</name> &amp;&amp; <name>nBytes</name>&gt;=<name>nOld</name>-128</expr> )</condition><then><block>{
+    <return>return <expr><name>pPrior</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>memsys3Enter</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name> = <call><name>memsys3MallocUnsafe</name><argument_list>(<argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>nOld</name>&lt;<name>nBytes</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>pPrior</name></expr></argument>, <argument><expr><name>nOld</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>pPrior</name></expr></argument>, <argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><call><name>memsys3FreeUnsafe</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>memsys3Leave</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Initialize this module.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memsys3Init</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>sqlite3GlobalConfig</name>.<name>pHeap</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* Store a pointer to the memory block in global structure mem3. */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Mem3Block</name></expr></argument>)</argument_list></call>==8</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name>aPool</name> = (<name>Mem3Block</name> *)<name>sqlite3GlobalConfig</name>.<name>pHeap</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name>nPool</name> = (<name>sqlite3GlobalConfig</name>.<name>nHeap</name> / <call><name>sizeof</name><argument_list>(<argument><expr><name>Mem3Block</name></expr></argument>)</argument_list></call>) - 2</expr>;</expr_stmt>
+
+  <comment type="block">/* Initialize the master block. */</comment>
+  <expr_stmt><expr><name>mem3</name>.<name>szMaster</name> = <name>mem3</name>.<name>nPool</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name>mnMaster</name> = <name>mem3</name>.<name>szMaster</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name>iMaster</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr>0</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = (<name>mem3</name>.<name>szMaster</name>&lt;&lt;2) + 2</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>nPool</name></expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name> = <name>mem3</name>.<name>nPool</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>mem3</name>.<name><name>aPool</name><index>[<expr><name>mem3</name>.<name>nPool</name></expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name> = 1</expr>;</expr_stmt>
+
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Deinitialize this module.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>memsys3Shutdown</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return;</return>
+}</block></function>
+
+
+
+<comment type="block">/*
+** Open the file indicated and write a log of all unfreed memory 
+** allocations into that log.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3Memsys3Dump</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list><block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+  <decl_stmt><decl><type><name>FILE</name> *</type><name>out</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>i</name>, <name>j</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>size</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>zFilename</name>==0 || <name><name>zFilename</name><index>[<expr>0</expr>]</index></name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>out</name> = <name>stdout</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>out</name> = <call><name>fopen</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>, <argument><expr>"w"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>out</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"** Unable to output memory debug output log: %s **\n"</expr></argument>,
+                      <argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return;</return>
+    }</block></then></if>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>memsys3Enter</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"CHUNKS:\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><name>i</name>&lt;=<name>mem3</name>.<name>nPool</name></expr>;</condition> <incr><expr><name>i</name>+=<name>size</name>/4</expr></incr>)<block>{
+    <expr_stmt><expr><name>size</name> = <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>size</name>/4&lt;=1</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"%p size error\n"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+    <if>if<condition>( <expr>(<name>size</name>&amp;1)==0 &amp;&amp; <name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>/4-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>prevSize</name>!=<name>size</name>/4</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"%p tail size does not match\n"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+    <if>if<condition>( <expr>((<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name>+<name>size</name>/4-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>&amp;2)&gt;&gt;1)!=(<name>size</name>&amp;1)</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"%p tail checkout bit is incorrect\n"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>size</name>&amp;1</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"%p %6d bytes checked out\n"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>, <argument><expr>(<name>size</name>/4)*8-8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"%p %6d bytes free%s\n"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>, <argument><expr>(<name>size</name>/4)*8-8</expr></argument>,
+                  <argument><expr><name>i</name>==<name>mem3</name>.<name>iMaster</name> ? " **master**" : ""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></for>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>MX_SMALL</name>-1</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>i</name></expr>]</index></name>==0</expr> )</condition><then> <continue>continue;</continue></then></if>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"small(%2d):"</expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>j</name> = <name>mem3</name>.<name><name>aiSmall</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</init> <condition><expr><name>j</name>&gt;0</expr>;</condition> <incr><expr><name>j</name>=<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr></incr>)<block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>" %p(%d)"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,
+              <argument><expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4)*8-8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+  }</block></for>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>N_HASH</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>i</name></expr>]</index></name>==0</expr> )</condition><then> <continue>continue;</continue></then></if>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"hash(%2d):"</expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>j</name> = <name>mem3</name>.<name><name>aiHash</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</init> <condition><expr><name>j</name>&gt;0</expr>;</condition> <incr><expr><name>j</name>=<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name></expr>]</index></name>.<name>u</name>.<name>list</name>.<name>next</name></expr></incr>)<block>{
+      <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>" %p(%d)"</expr></argument>, <argument><expr>&amp;<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,
+              <argument><expr>(<name>mem3</name>.<name><name>aPool</name><index>[<expr><name>j</name>-1</expr>]</index></name>.<name>u</name>.<name>hdr</name>.<name>size4x</name>/4)*8-8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+  }</block></for>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"master=%d\n"</expr></argument>, <argument><expr><name>mem3</name>.<name>iMaster</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"nowUsed=%d\n"</expr></argument>, <argument><expr><name>mem3</name>.<name>nPool</name>*8 - <name>mem3</name>.<name>szMaster</name>*8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>out</name></expr></argument>, <argument><expr>"mxUsed=%d\n"</expr></argument>, <argument><expr><name>mem3</name>.<name>nPool</name>*8 - <name>mem3</name>.<name>mnMaster</name>*8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mem3</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>out</name>==<name>stdout</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>fflush</name><argument_list>(<argument><expr><name>stdout</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>zFilename</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block></function>
+
+<comment type="block">/*
+** This routine is the only routine in this file with external 
+** linkage.
+**
+** Populate the low-level memory allocation function pointers in
+** sqlite3GlobalConfig.m with pointers to the routines in this file. The
+** arguments specify the block of memory to manage.
+**
+** This routine is only called by sqlite3_config(), and therefore
+** is not required to be threadsafe (it is not).
+*/</comment>
+<function><type><name>const</name> <name>sqlite3_mem_methods</name> *</type><name>sqlite3MemGetMemsys3</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>sqlite3_mem_methods</name></type> <name>mempoolMethods</name> =<init> <expr><block>{
+     <expr><name>memsys3Malloc</name></expr>,
+     <expr><name>memsys3Free</name></expr>,
+     <expr><name>memsys3Realloc</name></expr>,
+     <expr><name>memsys3Size</name></expr>,
+     <expr><name>memsys3Roundup</name></expr>,
+     <expr><name>memsys3Init</name></expr>,
+     <expr><name>memsys3Shutdown</name></expr>,
+     <expr>0</expr>
+  }</block></expr></init></decl>;</decl_stmt>
+  <return>return <expr>&amp;<name>mempoolMethods</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_ENABLE_MEMSYS3 */</comment>
+</unit>

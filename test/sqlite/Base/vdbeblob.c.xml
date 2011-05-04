@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="vdbeblob.c" filename=""><comment type="block">/*
+** 2007 May 1
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains code used to implement incremental BLOB I/O.
+**
+** $Id: vdbeblob.c,v 1.26 2008/10/02 14:49:02 danielk1977 Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"vdbeInt.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_INCRBLOB</name></cpp:ifndef>
+
+<comment type="block">/*
+** Valid sqlite3_blob* handles point to Incrblob structures.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>Incrblob</name> Incrblob;</struct></type></typedef>
+<struct>struct <name>Incrblob</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>int</name></type> <name>flags</name></decl>;</decl_stmt>              <comment type="block">/* Copy of "flags" passed to sqlite3_blob_open() */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>              <comment type="block">/* Size of open blob, in bytes */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>iOffset</name></decl>;</decl_stmt>            <comment type="block">/* Byte offset of blob in cursor data */</comment>
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCsr</name></decl>;</decl_stmt>         <comment type="block">/* Cursor pointing at blob row */</comment>
+  <decl_stmt><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl>;</decl_stmt>    <comment type="block">/* Statement holding cursor open */</comment>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>            <comment type="block">/* The associated database */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Open a blob handle.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_blob_open</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name>*</type> <name>db</name></decl></param>,            <comment type="block">/* The database connection */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zDb</name></decl></param>,        <comment type="block">/* The attached database containing the blob */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zTable</name></decl></param>,     <comment type="block">/* The table containing the blob */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zColumn</name></decl></param>,    <comment type="block">/* The column containing the blob */</comment>
+  <param><decl><type><name>sqlite_int64</name></type> <name>iRow</name></decl></param>,      <comment type="block">/* The row containing the glob */</comment>
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,              <comment type="block">/* True -&gt; read/write access, false -&gt; read-only */</comment>
+  <param><decl><type><name>sqlite3_blob</name> **</type><name>ppBlob</name></decl></param>   <comment type="block">/* Handle for accessing the blob returned here */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nAttempt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iCol</name></decl>;</decl_stmt>               <comment type="block">/* Index of zColumn in row-record */</comment>
+
+  <comment type="block">/* This VDBE program seeks a btree cursor to the identified 
+  ** db/table/row entry. The reason for using a vdbe program instead
+  ** of writing code to use the b-tree layer directly is that the
+  ** vdbe program will take advantage of the various transaction,
+  ** locking and error handling infrastructure built into the vdbe.
+  **
+  ** After seeking the cursor, the vdbe executes an OP_ResultRow.
+  ** Code external to the Vdbe then "borrows" the b-tree cursor and
+  ** uses it to implement the blob_read(), blob_write() and 
+  ** blob_bytes() functions.
+  **
+  ** The sqlite3_blob_close() function finalizes the vdbe program,
+  ** which closes the b-tree cursor and (possibly) commits the 
+  ** transaction.
+  */</comment>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>VdbeOpList</name></type> <name><name>openBlob</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{<expr><name>OP_Transaction</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,     <comment type="block">/* 0: Start a transaction */</comment>
+    <expr><block>{<expr><name>OP_VerifyCookie</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,    <comment type="block">/* 1: Check the schema cookie */</comment>
+
+    <comment type="block">/* One of the following two instructions is replaced by an
+    ** OP_Noop before exection.
+    */</comment>
+    <expr><block>{<expr><name>OP_SetNumColumns</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,   <comment type="block">/* 2: Num cols for cursor */</comment>
+    <expr><block>{<expr><name>OP_OpenRead</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,        <comment type="block">/* 3: Open cursor 0 for reading */</comment>
+    <expr><block>{<expr><name>OP_SetNumColumns</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,   <comment type="block">/* 4: Num cols for cursor */</comment>
+    <expr><block>{<expr><name>OP_OpenWrite</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,       <comment type="block">/* 5: Open cursor 0 for read/write */</comment>
+
+    <expr><block>{<expr><name>OP_Variable</name></expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>}</block></expr>,        <comment type="block">/* 6: Push the rowid to the stack */</comment>
+    <expr><block>{<expr><name>OP_NotExists</name></expr>, <expr>0</expr>, <expr>10</expr>, <expr>1</expr>}</block></expr>,      <comment type="block">/* 7: Seek the cursor */</comment>
+    <expr><block>{<expr><name>OP_Column</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>}</block></expr>,          <comment type="block">/* 8  */</comment>
+    <expr><block>{<expr><name>OP_ResultRow</name></expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,       <comment type="block">/* 9  */</comment>
+    <expr><block>{<expr><name>OP_Close</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,           <comment type="block">/* 10  */</comment>
+    <expr><block>{<expr><name>OP_Halt</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>,            <comment type="block">/* 11 */</comment>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zErr</name><index>[<expr>128</expr>]</index></name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name><name>zErr</name><index>[<expr>0</expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <do>do <block>{
+    <decl_stmt><decl><type><name>Parse</name></type> <name>sParse</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name></decl>;</decl_stmt>
+
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Parse</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>sParse</name>.<name>db</name> = <name>db</name></expr>;</expr_stmt>
+
+    <if>if<condition>( <expr><call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+    }</block></then></if>
+
+    <expr_stmt><expr><call><name>sqlite3BtreeEnterAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pTab</name> = <call><name>sqlite3LocateTable</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>zTable</name></expr></argument>, <argument><expr><name>zDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pTab</name> &amp;&amp; <call><name>IsVirtual</name><argument_list>(<argument><expr><name>pTab</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pTab</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr>"cannot open virtual table: %s"</expr></argument>, <argument><expr><name>zTable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_VIEW</name></cpp:ifndef>
+    <if>if<condition>( <expr><name>pTab</name> &amp;&amp; <name>pTab</name>-&gt;<name>pSelect</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pTab</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr>"cannot open view: %s"</expr></argument>, <argument><expr><name>zTable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <if>if<condition>( <expr>!<name>pTab</name></expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>sParse</name>.<name>zErrMsg</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>sParse</name>.<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>sParse</name>.<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+      <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3BtreeLeaveAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <goto>goto <name>blob_open_out</name>;</goto>
+    }</block></then></if>
+
+    <comment type="block">/* Now search pTab for the exact column. */</comment>
+    <for>for(<init><expr><name>iCol</name>=0</expr>;</init> <condition><expr><name>iCol</name> &lt; <name>pTab</name>-&gt;<name>nCol</name></expr>;</condition> <incr><expr><name>iCol</name>++</expr></incr>) <block>{
+      <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>pTab</name>-&gt;<name><name>aCol</name><index>[<expr><name>iCol</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zColumn</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <break>break;</break>
+      }</block></then></if>
+    }</block></for>
+    <if>if<condition>( <expr><name>iCol</name>==<name>pTab</name>-&gt;<name>nCol</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>"no such column: \"%s\""</expr></argument>, <argument><expr><name>zColumn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+      <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3BtreeLeaveAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <goto>goto <name>blob_open_out</name>;</goto>
+    }</block></then></if>
+
+    <comment type="block">/* If the value is being opened for writing, check that the
+    ** column is not indexed. It is against the rules to open an
+    ** indexed column for writing.
+    */</comment>
+    <if>if<condition>( <expr><name>flags</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>Index</name> *</type><name>pIdx</name></decl>;</decl_stmt>
+      <for>for(<init><expr><name>pIdx</name>=<name>pTab</name>-&gt;<name>pIndex</name></expr>;</init> <condition><expr><name>pIdx</name></expr>;</condition> <incr><expr><name>pIdx</name>=<name>pIdx</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+        <decl_stmt><decl><type><name>int</name></type> <name>j</name></decl>;</decl_stmt>
+        <for>for(<init><expr><name>j</name>=0</expr>;</init> <condition><expr><name>j</name>&lt;<name>pIdx</name>-&gt;<name>nColumn</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>)<block>{
+          <if>if<condition>( <expr><name>pIdx</name>-&gt;<name><name>aiColumn</name><index>[<expr><name>j</name></expr>]</index></name>==<name>iCol</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>,
+                             <argument><expr>"cannot open indexed column for writing"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+            <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><call><name>sqlite3BtreeLeaveAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <goto>goto <name>blob_open_out</name>;</goto>
+          }</block></then></if>
+        }</block></for>
+      }</block></for>
+    }</block></then></if>
+
+    <expr_stmt><expr><name>v</name> = <call><name>sqlite3VdbeCreate</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>v</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>iDb</name> =<init> <expr><call><name>sqlite3SchemaToIndex</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>pSchema</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOpList</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>openBlob</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name>VdbeOpList</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>openBlob</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* Configure the OP_Transaction */</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>(<name>flags</name> ? 1 : 0)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* Configure the OP_VerifyCookie */</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>pSchema</name>-&gt;<name>schema_cookie</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* Make sure a mutex is held on the table to be accessed */</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeUsesBtree</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+
+      <comment type="block">/* Remove either the OP_OpenWrite or OpenRead. Set the P2 
+      ** parameter of the other to pTab-&gt;tnum. 
+      */</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeToNoop</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>(<name>flags</name> ? 3 : 5)</expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>(<name>flags</name> ? 5 : 3)</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>tnum</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>(<name>flags</name> ? 5 : 3)</expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* Configure the OP_SetNumColumns. Configure the cursor to
+      ** think that the table has one more column than it really
+      ** does. An OP_Column to retrieve this imaginary column will
+      ** always return an SQL NULL. This is useful because it means
+      ** we can invoke OP_Column to fill in the vdbe cursors type 
+      ** and offset cache without causing any IO.
+      */</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>flags</name> ? 4 : 2</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>nCol</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>8</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>nCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr>!<name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3VdbeMakeReady</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then></if>
+   
+    <expr_stmt><expr><call><name>sqlite3BtreeLeaveAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> || <name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+      <goto>goto <name>blob_open_out</name>;</goto>
+    }</block></then></if>
+
+    <expr_stmt><expr><call><name>sqlite3_bind_int64</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name> *)<name>v</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>iRow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_step</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name> *)<name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_ROW</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>nAttempt</name>++</expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_finalize</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name> *)<name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr><call><name>sqlite3_errmsg</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>v</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block> while<condition>( <expr><name>nAttempt</name>&lt;5 &amp;&amp; <name>rc</name>==<name>SQLITE_SCHEMA</name></expr> )</condition>;</do>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_ROW</name></expr> )</condition><then><block>{
+    <comment type="block">/* The row-record has been opened successfully. Check that the
+    ** column in question contains text or a blob. If it contains
+    ** text, it is up to the caller to get the encoding right.
+    */</comment>
+    <decl_stmt><decl><type><name>Incrblob</name> *</type><name>pBlob</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name>type</name> =<init> <expr><name>v</name>-&gt;<name><name>apCsr</name><index>[<expr>0</expr>]</index></name>-&gt;<name><name>aType</name><index>[<expr><name>iCol</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+
+    <if>if<condition>( <expr><name>type</name>&lt;12</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>"cannot open value of type %s"</expr></argument>,
+          <argument><expr><name>type</name>==0?"null": <name>type</name>==7?"real": "integer"</expr></argument>
+      )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+      <goto>goto <name>blob_open_out</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr><name>pBlob</name> = (<name>Incrblob</name> *)<call><name>sqlite3DbMallocZero</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Incrblob</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pBlob</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <goto>goto <name>blob_open_out</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>flags</name> = <name>flags</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>pCsr</name> =  <name>v</name>-&gt;<name><name>apCsr</name><index>[<expr>0</expr>]</index></name>-&gt;<name>pCursor</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeEnterCursor</name><argument_list>(<argument><expr><name>pBlob</name>-&gt;<name>pCsr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeCacheOverflow</name><argument_list>(<argument><expr><name>pBlob</name>-&gt;<name>pCsr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeaveCursor</name><argument_list>(<argument><expr><name>pBlob</name>-&gt;<name>pCsr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>pStmt</name> = (<name>sqlite3_stmt</name> *)<name>v</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>iOffset</name> = <name>v</name>-&gt;<name><name>apCsr</name><index>[<expr>0</expr>]</index></name>-&gt;<name><name>aOffset</name><index>[<expr><name>iCol</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>nByte</name> = <call><name>sqlite3VdbeSerialTypeLen</name><argument_list>(<argument><expr><name>type</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBlob</name>-&gt;<name>db</name> = <name>db</name></expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>ppBlob</name> = (<name>sqlite3_blob</name> *)<name>pBlob</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>"no such rowid: %lld"</expr></argument>, <argument><expr><name>iRow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+  }</block></then></if></else></if>
+
+<label><name>blob_open_out</name>:</label>
+  <expr_stmt><expr><name><name>zErr</name><index>[<expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call>-1</expr>]</index></name> = '\0'</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> || <name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_finalize</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name> *)<name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>, <argument><expr>(<name>rc</name>==<name>SQLITE_OK</name>?0:<name>zErr</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Close a blob handle that was previously created using
+** sqlite3_blob_open().
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_blob_close</name><parameter_list>(<param><decl><type><name>sqlite3_blob</name> *</type><name>pBlob</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Incrblob</name> *</type><name>p</name> =<init> <expr>(<name>Incrblob</name> *)<name>pBlob</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_finalize</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Perform a read or write operation on a blob
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>blobReadWrite</name><parameter_list>(
+  <param><decl><type><name>sqlite3_blob</name> *</type><name>pBlob</name></decl></param>, 
+  <param><decl><type><name>void</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>iOffset</name></decl></param>, 
+  <param><function_decl><type><name>int</name></type> (*<name>xCall</name>)<parameter_list>(<param><decl><type><name>BtCursor</name>*</type></decl></param>, <param><decl><type><name>u32</name></type></decl></param>, <param><decl><type><name>u32</name></type></decl></param>, <param><decl><type><name>void</name>*</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Incrblob</name> *</type><name>p</name> =<init> <expr>(<name>Incrblob</name> *)<name>pBlob</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>p</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>  
+
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>v</name> = (<name>Vdbe</name>*)<name>p</name>-&gt;<name>pStmt</name></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>n</name>&lt;0 || <name>iOffset</name>&lt;0 || (<name>iOffset</name>+<name>n</name>)&gt;<name>p</name>-&gt;<name>nByte</name></expr> )</condition><then><block>{
+    <comment type="block">/* Request is out of range. Return a transient error. */</comment>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_ERROR</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then> <else>else <if>if<condition>( <expr><name>v</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* If there is no statement handle, then the blob-handle has
+    ** already been invalidated. Return SQLITE_ABORT in this case.
+    */</comment>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_ABORT</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <comment type="block">/* Call either BtreeData() or BtreePutData(). If SQLITE_ABORT is
+    ** returned, clean-up the statement handle.
+    */</comment>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name> == <name>v</name>-&gt;<name>db</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeEnterCursor</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pCsr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>xCall</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pCsr</name></expr></argument>, <argument><expr><name>iOffset</name>+<name>p</name>-&gt;<name>iOffset</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeaveCursor</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pCsr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_ABORT</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeFinalize</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>pStmt</name> = 0</expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>db</name>-&gt;<name>errCode</name> = <name>rc</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>v</name>-&gt;<name>rc</name> = <name>rc</name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></else></if></else></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read data from a blob handle.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_blob_read</name><parameter_list>(<param><decl><type><name>sqlite3_blob</name> *</type><name>pBlob</name></decl></param>, <param><decl><type><name>void</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>, <param><decl><type><name>int</name></type> <name>iOffset</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>blobReadWrite</name><argument_list>(<argument><expr><name>pBlob</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>iOffset</name></expr></argument>, <argument><expr><name>sqlite3BtreeData</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Write data to a blob handle.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_blob_write</name><parameter_list>(<param><decl><type><name>sqlite3_blob</name> *</type><name>pBlob</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>, <param><decl><type><name>int</name></type> <name>iOffset</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>blobReadWrite</name><argument_list>(<argument><expr><name>pBlob</name></expr></argument>, <argument><expr>(<name>void</name> *)<name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>iOffset</name></expr></argument>, <argument><expr><name>sqlite3BtreePutData</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Query a blob handle for the size of the data.
+**
+** The Incrblob.nByte field is fixed for the lifetime of the Incrblob
+** so no mutex is required for access.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_blob_bytes</name><parameter_list>(<param><decl><type><name>sqlite3_blob</name> *</type><name>pBlob</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Incrblob</name> *</type><name>p</name> =<init> <expr>(<name>Incrblob</name> *)<name>pBlob</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>p</name>-&gt;<name>nByte</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* #ifndef SQLITE_OMIT_INCRBLOB */</comment>
+</unit>

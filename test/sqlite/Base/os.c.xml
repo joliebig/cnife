@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="os.c" filename=""><comment type="block">/*
+** 2005 November 29
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+******************************************************************************
+**
+** This file contains OS interface code that is common to all
+** architectures.
+**
+** $Id: os.c,v 1.125 2008/12/08 18:19:18 drh Exp $
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>_SQLITE_OS_C_</name> 1</cpp:define>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:undef>#<cpp:directive>undef</cpp:directive> <name>_SQLITE_OS_C_</name></cpp:undef>
+
+<comment type="block">/*
+** The default SQLite sqlite3_vfs implementations do not allocate
+** memory (actually, os_unix.c allocates a small amount of memory
+** from within OsOpen()), but some third-party implementations may.
+** So we test the effects of a malloc() failing and the sqlite3OsXXX()
+** function returning SQLITE_IOERR_NOMEM using the DO_OS_MALLOC_TEST macro.
+**
+** The following functions are instrumented for malloc() failure 
+** testing:
+**
+**     sqlite3OsOpen()
+**     sqlite3OsRead()
+**     sqlite3OsWrite()
+**     sqlite3OsSync()
+**     sqlite3OsLock()
+**
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call> &amp;&amp; (<name>SQLITE_OS_WIN</name>==0)</expr></cpp:if>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>DO_OS_MALLOC_TEST</name> if (1) {            \
+    void *pTstAlloc = sqlite3Malloc(10);       \
+    if (!pTstAlloc) return SQLITE_IOERR_NOMEM;  \
+    sqlite3_free(pTstAlloc);                    \
+  }</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>DO_OS_MALLOC_TEST</name></cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The following routines are convenience wrappers around methods
+** of the sqlite3_file object.  This is mostly just syntactic sugar. All
+** of this would be completely automatic if SQLite were coded using
+** C++ instead of plain old C.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3OsClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pId</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pId</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>pId</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pId</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pId</name>-&gt;<name>pMethods</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsRead</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pBuf</name></decl></param>, <param><decl><type><name>int</name></type> <name>amt</name></decl></param>, <param><decl><type><name>i64</name></type> <name>offset</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xRead</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>, <argument><expr><name>amt</name></expr></argument>, <argument><expr><name>offset</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsWrite</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pBuf</name></decl></param>, <param><decl><type><name>int</name></type> <name>amt</name></decl></param>, <param><decl><type><name>i64</name></type> <name>offset</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xWrite</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>, <argument><expr><name>amt</name></expr></argument>, <argument><expr><name>offset</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>i64</name></type> <name>size</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xTruncate</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>size</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xSync</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>i64</name> *</type><name>pSize</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xFileSize</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>pSize</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>lockType</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xLock</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>lockType</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsUnlock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>lockType</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xUnlock</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>lockType</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsCheckReservedLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xCheckReservedLock</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>pResOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsFileControl</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pArg</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xFileControl</name><argument_list>(<argument><expr><name>id</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>pArg</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsSectorSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>)</parameter_list><block>{
+  <function_decl><type><name>int</name></type> (*<name>xSectorSize</name>)<parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>)</parameter_list> <specifier/>= <specifier>id</specifier>-&gt;<specifier>pMethods</specifier>-&gt;<specifier>xSectorSize</specifier>;</function_decl>
+  <return>return <expr>(<name>xSectorSize</name> ? <call><name>xSectorSize</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call> : <name>SQLITE_DEFAULT_SECTOR_SIZE</name>)</expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsDeviceCharacteristics</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>id</name>-&gt;<name>pMethods</name>-&gt;<call><name>xDeviceCharacteristics</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The next group of routines are convenience wrappers around the
+** VFS methods.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3OsOpen</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, 
+  <param><decl><type><name>int</name> *</type><name>pFlagsOut</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>pFile</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pFlagsOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsDelete</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, <param><decl><type><name>int</name></type> <name>dirSync</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xDelete</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>dirSync</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsAccess</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, 
+  <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><name>DO_OS_MALLOC_TEST</name></expr>;</expr_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xAccess</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pResOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsFullPathname</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>nPathOut</name></decl></param>, 
+  <param><decl><type><name>char</name> *</type><name>zPathOut</name></decl></param>
+)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xFullPathname</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>nPathOut</name></expr></argument>, <argument><expr><name>zPathOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOAD_EXTENSION</name></cpp:ifndef>
+<function><type><name>void</name> *</type><name>sqlite3OsDlOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xDlOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3OsDlError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBufOut</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>pVfs</name>-&gt;<call><name>xDlError</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zBufOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<macro><name>void</name> <argument_list>(<argument>*sqlite3OsDlSym(sqlite3_vfs *pVfs, void *pHdle, const char *zSym)</argument>)</argument_list><argument_list>(<argument>void</argument>)</argument_list></macro><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xDlSym</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pHdle</name></expr></argument>, <argument><expr><name>zSym</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block>
+<function><type><name>void</name></type> <name>sqlite3OsDlClose</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pHandle</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>pVfs</name>-&gt;<call><name>xDlClose</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pHandle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_LOAD_EXTENSION */</comment>
+<function><type><name>int</name></type> <name>sqlite3OsRandomness</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBufOut</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xRandomness</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zBufOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsSleep</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nMicro</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xSleep</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nMicro</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsCurrentTime</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>double</name> *</type><name>pTimeOut</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xCurrentTime</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pTimeOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name>sqlite3OsOpenMalloc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zFile</name></decl></param>, 
+  <param><decl><type><name>sqlite3_file</name> **</type><name>ppFile</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,
+  <param><decl><type><name>int</name> *</type><name>pOutFlags</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_NOMEM</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pFile</name> = (<name>sqlite3_file</name> *)<call><name>sqlite3Malloc</name><argument_list>(<argument><expr><name>pVfs</name>-&gt;<name>szOsFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pFile</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zFile</name></expr></argument>, <argument><expr><name>pFile</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pOutFlags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr>*<name>ppFile</name> = <name>pFile</name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3OsCloseFree</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pFile</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsClose</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The list of all registered VFS implementations.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>sqlite3_vfs</name> * <name>SQLITE_WSD</name></type> <name>vfsList</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>vfsList</name> <name>GLOBAL</name>(sqlite3_vfs *, vfsList)</cpp:define>
+
+<comment type="block">/*
+** Locate a VFS by name.  If no name is given, simply return the
+** first VFS on the list.
+*/</comment>
+<function><type><name>sqlite3_vfs</name> *</type><name>sqlite3_vfs_find</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zVfs</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTOINIT</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>sqlite3_initialize</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <expr_stmt><expr><name>mutex</name> = <call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>pVfs</name> = <name>vfsList</name></expr>;</init> <condition><expr><name>pVfs</name></expr>;</condition> <incr><expr><name>pVfs</name>=<name>pVfs</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <if>if<condition>( <expr><name>zVfs</name>==0</expr> )</condition><then> <break>break;</break></then></if>
+    <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>zVfs</name></expr></argument>, <argument><expr><name>pVfs</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then> <break>break;</break></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>pVfs</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Unlink a VFS from the linked list
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>vfsUnlink</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pVfs</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* No-op */</comment>
+  }</block></then><else>else <if>if<condition>( <expr><name>vfsList</name>==<name>pVfs</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>vfsList</name> = <name>pVfs</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>vfsList</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>p</name> =<init> <expr><name>vfsList</name></expr></init></decl>;</decl_stmt>
+    <while>while<condition>( <expr><name>p</name>-&gt;<name>pNext</name> &amp;&amp; <name>p</name>-&gt;<name>pNext</name>!=<name>pVfs</name></expr> )</condition><block>{
+      <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    }</block></while>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>pNext</name>==<name>pVfs</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>pNext</name> = <name>pVfs</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if></else></if></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Register a VFS with the system.  It is harmless to register the same
+** VFS multiple times.  The new VFS becomes the default if makeDflt is
+** true.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_vfs_register</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>makeDflt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTOINIT</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>sqlite3_initialize</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then> <return>return <expr><name>rc</name></expr>;</return></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><name>mutex</name> = <call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>vfsUnlink</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>makeDflt</name> || <name>vfsList</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pVfs</name>-&gt;<name>pNext</name> = <name>vfsList</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>vfsList</name> = <name>pVfs</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pVfs</name>-&gt;<name>pNext</name> = <name>vfsList</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>vfsList</name>-&gt;<name>pNext</name> = <name>pVfs</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>vfsList</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Unregister a VFS so that it is no longer accessible.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_vfs_unregister</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>)</parameter_list><block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name> =<init> <expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>vfsUnlink</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+</unit>

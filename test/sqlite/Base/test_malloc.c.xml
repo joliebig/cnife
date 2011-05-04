@@ -1,0 +1,1382 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_malloc.c" filename=""><comment type="block">/*
+** 2007 August 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains code used to implement test interfaces to the
+** memory allocation subsystem.
+**
+** $Id: test_malloc.c,v 1.52 2009/01/07 03:59:47 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** This structure is used to encapsulate the global state variables used 
+** by malloc() fault simulation.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> struct</type> <name>MemFault</name> <block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iCountdown</name></decl>;</decl_stmt>         <comment type="block">/* Number of pending successes before a failure */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRepeat</name></decl>;</decl_stmt>            <comment type="block">/* Number of times to repeat the failure */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nBenign</name></decl>;</decl_stmt>            <comment type="block">/* Number of benign failures seen since last config */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nFail</name></decl>;</decl_stmt>              <comment type="block">/* Number of failures seen since last config */</comment>
+  <decl_stmt><decl><type><name>u8</name></type> <name>enable</name></decl>;</decl_stmt>              <comment type="block">/* True if enabled */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>isInstalled</name></decl>;</decl_stmt>        <comment type="block">/* True if the fault simulation layer is installed */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>isBenignMode</name></decl>;</decl_stmt>       <comment type="block">/* True if malloc failures are considered benign */</comment>
+  <decl_stmt><decl><type><name>sqlite3_mem_methods</name></type> <name>m</name></decl>;</decl_stmt>  <comment type="block">/* 'Real' malloc implementation */</comment>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>memfault</name></expr>;</expr_stmt>
+
+<comment type="block">/*
+** This routine exists as a place to set a breakpoint that will
+** fire on any simulated malloc() failure.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>sqlite3Fault</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>cnt</name>++</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Check to see if a fault should be simulated.  Return true to simulate
+** the fault.  Return false if the fault should not be simulated.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimStep</name><parameter_list>()</parameter_list><block>{
+  <if>if<condition>( <expr><call><name>likely</name><argument_list>(<argument><expr>!<name>memfault</name>.<name>enable</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>memfault</name>.<name>iCountdown</name>&gt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>memfault</name>.<name>iCountdown</name>--</expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3Fault</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>memfault</name>.<name>nFail</name>++</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>memfault</name>.<name>isBenignMode</name>&gt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>memfault</name>.<name>nBenign</name>++</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>memfault</name>.<name>nRepeat</name>--</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>memfault</name>.<name>nRepeat</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>memfault</name>.<name>enable</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr>1</expr>;</return>  
+}</block></function>
+
+<comment type="block">/*
+** A version of sqlite3_mem_methods.xMalloc() that includes fault simulation
+** logic.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>faultsimMalloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr>!<call><name>faultsimStep</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name> = <name>memfault</name>.<name>m</name>.<call><name>xMalloc</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** A version of sqlite3_mem_methods.xRealloc() that includes fault simulation
+** logic.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>faultsimRealloc</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pOld</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr>!<call><name>faultsimStep</name><argument_list>()</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name> = <name>memfault</name>.<name>m</name>.<call><name>xRealloc</name><argument_list>(<argument><expr><name>pOld</name></expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* 
+** The following method calls are passed directly through to the underlying
+** malloc system:
+**
+**     xFree
+**     xSize
+**     xRoundup
+**     xInit
+**     xShutdown
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>faultsimFree</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>memfault</name>.<name>m</name>.<call><name>xFree</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimSize</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>memfault</name>.<name>m</name>.<call><name>xSize</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimRoundup</name><parameter_list>(<param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>memfault</name>.<name>m</name>.<call><name>xRoundup</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimInit</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>memfault</name>.<name>m</name>.<call><name>xInit</name><argument_list>(<argument><expr><name>memfault</name>.<name>m</name>.<name>pAppData</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>faultsimShutdown</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>memfault</name>.<name>m</name>.<call><name>xShutdown</name><argument_list>(<argument><expr><name>memfault</name>.<name>m</name>.<name>pAppData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** This routine configures the malloc failure simulation.  After
+** calling this routine, the next nDelay mallocs will succeed, followed
+** by a block of nRepeat failures, after which malloc() calls will begin
+** to succeed again.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>faultsimConfig</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nDelay</name></decl></param>, <param><decl><type><name>int</name></type> <name>nRepeat</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>memfault</name>.<name>iCountdown</name> = <name>nDelay</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>memfault</name>.<name>nRepeat</name> = <name>nRepeat</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>memfault</name>.<name>nBenign</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>memfault</name>.<name>nFail</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>memfault</name>.<name>enable</name> = <name>nDelay</name>&gt;=0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of faults (both hard and benign faults) that have
+** occurred since the injector was last configured.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimFailures</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>memfault</name>.<name>nFail</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of benign faults that have occurred since the
+** injector was last configured.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimBenignFailures</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>memfault</name>.<name>nBenign</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of successes that will occur before the next failure.
+** If no failures are scheduled, return -1.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimPending</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>memfault</name>.<name>enable</name></expr> )</condition><then><block>{
+    <return>return <expr><name>memfault</name>.<name>iCountdown</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr>-1</expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+
+<function><type><name>static</name> <name>void</name></type> <name>faultsimBeginBenign</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>memfault</name>.<name>isBenignMode</name>++</expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>faultsimEndBenign</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>memfault</name>.<name>isBenignMode</name>--</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Add or remove the fault-simulation layer using sqlite3_config(). If
+** the argument is non-zero, the 
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>faultsimInstall</name><parameter_list>(<param><decl><type><name>int</name></type> <name>install</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> struct <name>sqlite3_mem_methods</name></type> <name>m</name> =<init> <expr><block>{
+    <expr><name>faultsimMalloc</name></expr>,                   <comment type="block">/* xMalloc */</comment>
+    <expr><name>faultsimFree</name></expr>,                     <comment type="block">/* xFree */</comment>
+    <expr><name>faultsimRealloc</name></expr>,                  <comment type="block">/* xRealloc */</comment>
+    <expr><name>faultsimSize</name></expr>,                     <comment type="block">/* xSize */</comment>
+    <expr><name>faultsimRoundup</name></expr>,                  <comment type="block">/* xRoundup */</comment>
+    <expr><name>faultsimInit</name></expr>,                     <comment type="block">/* xInit */</comment>
+    <expr><name>faultsimShutdown</name></expr>,                 <comment type="block">/* xShutdown */</comment>
+    <expr>0</expr>                                 <comment type="block">/* pAppData */</comment>
+  }</block></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>install</name> = (<name>install</name> ? 1 : 0)</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>memfault</name>.<name>isInstalled</name>==1 || <name>memfault</name>.<name>isInstalled</name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>install</name>==<name>memfault</name>.<name>isInstalled</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>install</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_GETMALLOC</name></expr></argument>, <argument><expr>&amp;<name>memfault</name>.<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>memfault</name>.<name>m</name>.<name>xMalloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MALLOC</name></expr></argument>, <argument><expr>&amp;<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3_test_control</name><argument_list>(<argument><expr><name>SQLITE_TESTCTRL_BENIGN_MALLOC_HOOKS</name></expr></argument>, 
+        <argument><expr><name>faultsimBeginBenign</name></expr></argument>, <argument><expr><name>faultsimEndBenign</name></expr></argument>
+    )</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>sqlite3_mem_methods</name></type> <name>m</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>memfault</name>.<name>m</name>.<name>xMalloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* One should be able to reset the default memory allocator by storing
+    ** a zeroed allocator then calling GETMALLOC. */</comment>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>m</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MALLOC</name></expr></argument>, <argument><expr>&amp;<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_GETMALLOC</name></expr></argument>, <argument><expr>&amp;<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>memcmp</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>, <argument><expr>&amp;<name>memfault</name>.<name>m</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>m</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MALLOC</name></expr></argument>, <argument><expr>&amp;<name>memfault</name>.<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_test_control</name><argument_list>(<argument><expr><name>SQLITE_TESTCTRL_BENIGN_MALLOC_HOOKS</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>memfault</name>.<name>isInstalled</name> = 1</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+
+<comment type="block">/*
+** This function is implemented in test1.c. Returns a pointer to a static
+** buffer containing the symbolic SQLite error code that corresponds to
+** the least-significant 8-bits of the integer passed as an argument.
+** For example:
+**
+**   sqlite3TestErrorName(1) -&gt; "SQLITE_ERROR"
+*/</comment>
+<function_decl><type><name>const</name> <name>char</name> *</type><name>sqlite3TestErrorName</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/*
+** Transform pointers to text and back again
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>pointerToText</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>, <param><decl><type><name>char</name> *</type><name>z</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name></type> <name><name>zHex</name><index>[]</index></name> =<init> <expr>"0123456789abcdef"</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>k</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>u</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_uint64</name></type> <name>n</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>strcpy</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"0"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call>==<call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name>n</name></expr></argument>, <argument><expr>&amp;<name>p</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>u</name></expr></argument>)</argument_list></call>==<call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name>u</name></expr></argument>, <argument><expr>&amp;<name>p</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>u</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> = <name>u</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if></else></if>
+  <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>k</name>=<call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call>*2-1</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call>*2</expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>k</name>--</expr></incr>)<block>{
+    <expr_stmt><expr><name><name>z</name><index>[<expr><name>k</name></expr>]</index></name> = <name><name>zHex</name><index>[<expr><name>n</name>&amp;0xf</expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> &gt;&gt;= 4</expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><name><name>z</name><index>[<expr><call><name>sizeof</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call>*2</expr>]</index></name> = 0</expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>hexToInt</name><parameter_list>(<param><decl><type><name>int</name></type> <name>h</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>h</name>&gt;='0' &amp;&amp; <name>h</name>&lt;='9'</expr> )</condition><then><block>{
+    <return>return <expr><name>h</name> - '0'</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><name>h</name>&gt;='a' &amp;&amp; <name>h</name>&lt;='f'</expr> )</condition><then><block>{
+    <return>return <expr><name>h</name> - 'a' + 10</expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr>-1</expr>;</return>
+  }</block></else></if></else></if>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>textToPointer</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>void</name> **</type><name>pp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_uint64</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>u</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call>*2 &amp;&amp; <name><name>z</name><index>[<expr>0</expr>]</index></name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>v</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>v</name> = <call><name>hexToInt</name><argument_list>(<argument><expr>*<name>z</name>++</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>v</name>&lt;0</expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+    <expr_stmt><expr><name>n</name> = <name>n</name>*16 + <name>v</name></expr>;</expr_stmt>
+  }</block></for>
+  <if>if<condition>( <expr>*<name>z</name>!=0</expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call>==<call><name>sizeof</name><argument_list>(<argument><expr>*<name>pp</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pp</name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>u</name></expr></argument>)</argument_list></call>==<call><name>sizeof</name><argument_list>(<argument><expr>*<name>pp</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>u</name> = (<name>unsigned</name> <name>int</name>)<name>n</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pp</name></expr></argument>, <argument><expr>&amp;<name>u</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>u</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_malloc  NBYTES
+**
+** Raw test interface for sqlite3_malloc().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_malloc</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zOut</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"NBYTES"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nByte</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>p</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr>(<name>unsigned</name>)<name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>pointerToText</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_realloc  PRIOR  NBYTES
+**
+** Raw test interface for sqlite3_realloc().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_realloc</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pPrior</name>, *<name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zOut</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"PRIOR NBYTES"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nByte</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>textToPointer</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>pPrior</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"bad pointer: "</expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>p</name> = <call><name>sqlite3_realloc</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>, <argument><expr>(<name>unsigned</name>)<name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>pointerToText</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_free  PRIOR
+**
+** Raw test interface for sqlite3_free().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_free</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>pPrior</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"PRIOR"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>textToPointer</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>pPrior</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"bad pointer: "</expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pPrior</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** These routines are in test_hexio.c
+*/</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3TestHexToBin</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>char</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3TestBinToHex</name><parameter_list>(<param><decl><type><name>char</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/*
+** Usage:    memset  ADDRESS  SIZE  HEX
+**
+** Set a chunk of memory (obtained from malloc, probably) to a
+** specified hex pattern.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memset</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>size</name>, <name>n</name>, <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zHex</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zOut</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBin</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=4</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"ADDRESS SIZE HEX"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>textToPointer</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"bad pointer: "</expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>size</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>size</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"size must be positive"</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zHex</name> = <call><name>Tcl_GetStringFromObj</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>n</name>&gt;<call><name>sizeof</name><argument_list>(<argument><expr><name>zBin</name></expr></argument>)</argument_list></call>*2</expr> )</condition><then> <expr_stmt><expr><name>n</name> = <call><name>sizeof</name><argument_list>(<argument><expr><name>zBin</name></expr></argument>)</argument_list></call>*2</expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><name>n</name> = <call><name>sqlite3TestHexToBin</name><argument_list>(<argument><expr><name>zHex</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>zBin</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>n</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"no data"</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zOut</name> = <name>p</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name><name>zOut</name><index>[<expr><name>i</name></expr>]</index></name> = <name><name>zBin</name><index>[<expr><name>i</name>%<name>n</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    memget  ADDRESS  SIZE
+**
+** Return memory as hexadecimal text.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memget</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>size</name>, <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zBin</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zHex</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"ADDRESS SIZE"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>textToPointer</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"bad pointer: "</expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>size</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>size</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"size must be positive"</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zBin</name> = <name>p</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>size</name>&gt;0</expr> )</condition><block>{
+    <if>if<condition>( <expr><name>size</name>&gt;(<call><name>sizeof</name><argument_list>(<argument><expr><name>zHex</name></expr></argument>)</argument_list></call>-1)/2</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>n</name> = (<call><name>sizeof</name><argument_list>(<argument><expr><name>zHex</name></expr></argument>)</argument_list></call>-1)/2</expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>n</name> = <name>size</name></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>zHex</name></expr></argument>, <argument><expr><name>zBin</name></expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zBin</name> += <name>n</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>size</name> -= <name>n</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3TestBinToHex</name><argument_list>(<argument><expr><name>zHex</name></expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zHex</name></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memory_used
+**
+** Raw test interface for sqlite3_memory_used().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memory_used</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewWideIntObj</name><argument_list>(<argument><expr><call><name>sqlite3_memory_used</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memory_highwater ?RESETFLAG?
+**
+** Raw test interface for sqlite3_memory_highwater().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memory_highwater</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>resetFlag</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=1 &amp;&amp; <name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"?RESET?"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>==2</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>resetFlag</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></then></if> 
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, 
+     <argument><expr><call><name>Tcl_NewWideIntObj</name><argument_list>(<argument><expr><call><name>sqlite3_memory_highwater</name><argument_list>(<argument><expr><name>resetFlag</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_backtrace DEPTH
+**
+** Set the depth of backtracing.  If SQLITE_MEMDEBUG is not defined
+** then this routine is a no-op.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_backtrace</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>depth</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"DEPT"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>depth</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+  <block>{
+    <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3MemdebugBacktrace</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+    <expr_stmt><expr><call><name>sqlite3MemdebugBacktrace</name><argument_list>(<argument><expr><name>depth</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_dump  FILENAME
+**
+** Write a summary of unfreed memory to FILENAME.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_dump</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"FILENAME"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_MEMDEBUG</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_MEMORY_SIZE</name></expr></argument>)</argument_list></call> \
+     || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_POW2_MEMORY_SIZE</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <block>{
+    <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3MemdebugDump</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+    <expr_stmt><expr><call><name>sqlite3MemdebugDump</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_malloc_count
+**
+** Return the total number of times malloc() has been called.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_malloc_count</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nMalloc</name> =<init> <expr>-1</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_MEMDEBUG</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <block>{
+    <function_decl><type><name>extern</name> <name>int</name></type> <name>sqlite3MemdebugMallocCount</name><parameter_list>()</parameter_list>;</function_decl>
+    <expr_stmt><expr><name>nMalloc</name> = <call><name>sqlite3MemdebugMallocCount</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>nMalloc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_fail  COUNTER  ?OPTIONS?
+**
+** where options are:
+**
+**     -repeat    &lt;count&gt;
+**     -benigncnt &lt;varname&gt;
+**
+** Arrange for a simulated malloc() failure after COUNTER successes.
+** If a repeat count is specified, the fault is repeated that many
+** times.
+**
+** Each call to this routine overrides the prior counter value.
+** This routine returns the number of simulated failures that have
+** happened since the previous call to this routine.
+**
+** To disable simulated failures, use a COUNTER of -1.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_fail</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iFail</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRepeat</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pBenignCnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nBenign</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nFail</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>&lt;2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"COUNTER ?OPTIONS?"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iFail</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+
+  <for>for(<init><expr><name>ii</name>=2</expr>;</init> <condition><expr><name>ii</name>&lt;<name>objc</name></expr>;</condition> <incr><expr><name>ii</name>+=2</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>nOption</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zOption</name> =<init> <expr><call><name>Tcl_GetStringFromObj</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr><name>ii</name></expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nOption</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zErr</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+    <if>if<condition>( <expr><name>nOption</name>&gt;1 &amp;&amp; <call><name>strncmp</name><argument_list>(<argument><expr><name>zOption</name></expr></argument>, <argument><expr>"-repeat"</expr></argument>, <argument><expr><name>nOption</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>ii</name>==(<name>objc</name>-1)</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>zErr</name> = "option requires an argument: "</expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr><name>ii</name>+1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nRepeat</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+          <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+        }</block></then></if>
+      }</block></else></if>
+    }</block></then><else>else <if>if<condition>( <expr><name>nOption</name>&gt;1 &amp;&amp; <call><name>strncmp</name><argument_list>(<argument><expr><name>zOption</name></expr></argument>, <argument><expr>"-benigncnt"</expr></argument>, <argument><expr><name>nOption</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>ii</name>==(<name>objc</name>-1)</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>zErr</name> = "option requires an argument: "</expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>pBenignCnt</name> = <name><name>objv</name><index>[<expr><name>ii</name>+1</expr>]</index></name></expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>zErr</name> = "unknown option: "</expr>;</expr_stmt>
+    }</block></else></if></else></if>
+
+    <if>if<condition>( <expr><name>zErr</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr><name>zOption</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  
+  <expr_stmt><expr><name>nBenign</name> = <call><name>faultsimBenignFailures</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nFail</name> = <call><name>faultsimFailures</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>faultsimConfig</name><argument_list>(<argument><expr><name>iFail</name></expr></argument>, <argument><expr><name>nRepeat</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>pBenignCnt</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_ObjSetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pBenignCnt</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>nBenign</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>nFail</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_pending
+**
+** Return the number of malloc() calls that will succeed before a 
+** simulated failure occurs. A negative return value indicates that
+** no malloc() failure is scheduled.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_pending</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nPending</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nPending</name> = <call><name>faultsimPending</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>nPending</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Usage:    sqlite3_memdebug_settitle TITLE
+**
+** Set a title string stored with each allocation.  The TITLE is
+** typically the name of the test that was running when the
+** allocation occurred.  The TITLE is stored with the allocation
+** and can be used to figure out which tests are leaking memory.
+**
+** Each title overwrite the previous.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_settitle</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zTitle</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"TITLE"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zTitle</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+  <block>{
+    <function_decl><type><name>extern</name> <name>int</name></type> <name>sqlite3MemdebugSettitle</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+    <expr_stmt><expr><call><name>sqlite3MemdebugSettitle</name><argument_list>(<argument><expr><name>zTitle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MALLOC_LOG_FRAMES</name> 10</cpp:define> 
+<decl_stmt><decl><type><name>static</name> <name>Tcl_HashTable</name></type> <name>aMallocLog</name></decl>;</decl_stmt>
+<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>mallocLogEnabled</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+<typedef>typedef <type><struct>struct <name>MallocLog</name> MallocLog;</struct></type></typedef>
+<struct>struct <name>MallocLog</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>int</name></type> <name>nCall</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+<function><type><name>static</name> <name>void</name></type> <name>test_memdebug_callback</name><parameter_list>(<param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>int</name></type> <name>nFrame</name></decl></param>, <param><decl><type><name>void</name> **</type><name>aFrame</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>mallocLogEnabled</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>MallocLog</name> *</type><name>pLog</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Tcl_HashEntry</name> *</type><name>pEntry</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>isNew</name></decl>;</decl_stmt>
+
+    <decl_stmt><decl><type><name>int</name></type> <name><name>aKey</name><index>[<expr><name>MALLOC_LOG_FRAMES</name></expr>]</index></name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>nKey</name> =<init> <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call>*<name>MALLOC_LOG_FRAMES</name></expr></init></decl>;</decl_stmt>
+
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>aKey</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>(<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call>*<name>nFrame</name>)&lt;<name>nKey</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>nKey</name> = <name>nFrame</name>*<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>aKey</name></expr></argument>, <argument><expr><name>aFrame</name></expr></argument>, <argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <expr_stmt><expr><name>pEntry</name> = <call><name>Tcl_CreateHashEntry</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr>(<name>const</name> <name>char</name> *)<name>aKey</name></expr></argument>, <argument><expr>&amp;<name>isNew</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>isNew</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pLog</name> = (<name>MallocLog</name> *)<call><name>Tcl_Alloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>MallocLog</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pLog</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>MallocLog</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_SetHashValue</name><argument_list>(<argument><expr><name>pEntry</name></expr></argument>, <argument><expr>(<name>ClientData</name>)<name>pLog</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>pLog</name> = (<name>MallocLog</name> *)<call><name>Tcl_GetHashValue</name><argument_list>(<argument><expr><name>pEntry</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+
+    <expr_stmt><expr><name>pLog</name>-&gt;<name>nCall</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pLog</name>-&gt;<name>nByte</name> += <name>nByte</name></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_MEMDEBUG */</comment>
+
+<function><type><name>static</name> <name>void</name></type> <name>test_memdebug_log_clear</name><parameter_list>()</parameter_list><block>{
+  <decl_stmt><decl><type><name>Tcl_HashSearch</name></type> <name>search</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_HashEntry</name> *</type><name>pEntry</name></decl>;</decl_stmt>
+  <for>for(
+    <init><expr><name>pEntry</name>=<call><name>Tcl_FirstHashEntry</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr>&amp;<name>search</name></expr></argument>)</argument_list></call></expr>;</init>
+    <condition><expr><name>pEntry</name></expr>;</condition>
+    <incr><expr><name>pEntry</name>=<call><name>Tcl_NextHashEntry</name><argument_list>(<argument><expr>&amp;<name>search</name></expr></argument>)</argument_list></call></expr></incr>
+  )<block>{
+    <decl_stmt><decl><type><name>MallocLog</name> *</type><name>pLog</name> =<init> <expr>(<name>MallocLog</name> *)<call><name>Tcl_GetHashValue</name><argument_list>(<argument><expr><name>pEntry</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_Free</name><argument_list>(<argument><expr>(<name>char</name> *)<name>pLog</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>Tcl_DeleteHashTable</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_InitHashTable</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr><name>MALLOC_LOG_FRAMES</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>test_memdebug_log</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>isInit</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iSub</name></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name> *</type><name><name>MB_strs</name><index>[]</index></name> =<init> <expr><block>{ <expr>"start"</expr>, <expr>"stop"</expr>, <expr>"dump"</expr>, <expr>"clear"</expr>, <expr>"sync"</expr> }</block></expr></init></decl>;</decl_stmt>
+  <enum>enum <name>MB_enum</name> <block>{ 
+      <expr><name>MB_LOG_START</name></expr>, <expr><name>MB_LOG_STOP</name></expr>, <expr><name>MB_LOG_DUMP</name></expr>, <expr><name>MB_LOG_CLEAR</name></expr>, <expr><name>MB_LOG_SYNC</name></expr> 
+  }</block>;</enum>
+
+  <if>if<condition>( <expr>!<name>isInit</name></expr> )</condition><then><block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+    <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3MemdebugBacktraceCallback</name><parameter_list>(
+        <param><function_decl><type><name>void</name></type> (*<name>xBacktrace</name>)<parameter_list>(<param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>void</name> **</type></decl></param>)</parameter_list></function_decl></param>)</parameter_list>;</function_decl>
+    <expr_stmt><expr><call><name>sqlite3MemdebugBacktraceCallback</name><argument_list>(<argument><expr><name>test_memdebug_callback</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <expr_stmt><expr><call><name>Tcl_InitHashTable</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr><name>MALLOC_LOG_FRAMES</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>isInit</name> = 1</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>objc</name>&lt;2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"SUB-COMMAND ..."</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIndexFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>MB_strs</name></expr></argument>, <argument><expr>"sub-command"</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>iSub</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <switch>switch<condition>( <expr>(enum <name>MB_enum</name>)<name>iSub</name></expr> )</condition><block>{
+    <case>case <expr><name>MB_LOG_START</name></expr>:
+      <expr_stmt><expr><name>mallocLogEnabled</name> = 1</expr>;</expr_stmt>
+      <break>break;</break>
+    </case><case>case <expr><name>MB_LOG_STOP</name></expr>:
+      <expr_stmt><expr><name>mallocLogEnabled</name> = 0</expr>;</expr_stmt>
+      <break>break;</break>
+    </case><case>case <expr><name>MB_LOG_DUMP</name></expr>: <block>{
+      <decl_stmt><decl><type><name>Tcl_HashSearch</name></type> <name>search</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Tcl_HashEntry</name> *</type><name>pEntry</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pRet</name> =<init> <expr><call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+
+      <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call>==<call><name>sizeof</name><argument_list>(<argument><expr><name>void</name>*</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <for>for(
+        <init><expr><name>pEntry</name>=<call><name>Tcl_FirstHashEntry</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr>&amp;<name>search</name></expr></argument>)</argument_list></call></expr>;</init>
+        <condition><expr><name>pEntry</name></expr>;</condition>
+        <incr><expr><name>pEntry</name>=<call><name>Tcl_NextHashEntry</name><argument_list>(<argument><expr>&amp;<name>search</name></expr></argument>)</argument_list></call></expr></incr>
+      )<block>{
+        <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name><name>apElem</name><index>[<expr><name>MALLOC_LOG_FRAMES</name>+2</expr>]</index></name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>MallocLog</name> *</type><name>pLog</name> =<init> <expr>(<name>MallocLog</name> *)<call><name>Tcl_GetHashValue</name><argument_list>(<argument><expr><name>pEntry</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name> *</type><name>aKey</name> =<init> <expr>(<name>int</name> *)<call><name>Tcl_GetHashKey</name><argument_list>(<argument><expr>&amp;<name>aMallocLog</name></expr></argument>, <argument><expr><name>pEntry</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+  
+        <expr_stmt><expr><name><name>apElem</name><index>[<expr>0</expr>]</index></name> = <call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>pLog</name>-&gt;<name>nCall</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name><name>apElem</name><index>[<expr>1</expr>]</index></name> = <call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>pLog</name>-&gt;<name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>ii</name>&lt;<name>MALLOC_LOG_FRAMES</name></expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+          <expr_stmt><expr><name><name>apElem</name><index>[<expr><name>ii</name>+2</expr>]</index></name> = <call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name><name>aKey</name><index>[<expr><name>ii</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></for>
+
+        <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>,
+            <argument><expr><call><name>Tcl_NewListObj</name><argument_list>(<argument><expr><name>MALLOC_LOG_FRAMES</name>+2</expr></argument>, <argument><expr><name>apElem</name></expr></argument>)</argument_list></call></expr></argument>
+        )</argument_list></call></expr>;</expr_stmt>
+      }</block></for>
+
+      <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr><name>MB_LOG_CLEAR</name></expr>: <block>{
+      <expr_stmt><expr><call><name>test_memdebug_log_clear</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+
+    </case><case>case <expr><name>MB_LOG_SYNC</name></expr>: <block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MEMDEBUG</name></cpp:ifdef>
+      <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3MemdebugSync</name><parameter_list>()</parameter_list>;</function_decl>
+      <expr_stmt><expr><call><name>test_memdebug_log_clear</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>mallocLogEnabled</name> = 1</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3MemdebugSync</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <break>break;</break>
+    }</block>
+  </case>}</block></switch>
+
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_config_scratch SIZE N
+**
+** Set the scratch memory buffer using SQLITE_CONFIG_SCRATCH.
+** The buffer is static and is of limited size.  N might be
+** adjusted downward as needed to accomodate the requested size.
+** The revised value of N is returned.
+**
+** A negative SIZE causes the buffer pointer to be NULL.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_scratch</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>sz</name>, <name>N</name>, <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pResult</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>char</name> *</type><name>buf</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"SIZE N"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sz</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>N</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>buf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>sz</name>&lt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>buf</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_SCRATCH</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>buf</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>sz</name>*<name>N</name> + 1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_SCRATCH</name></expr></argument>, <argument><expr><name>buf</name></expr></argument>, <argument><expr><name>sz</name></expr></argument>, <argument><expr><name>N</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pResult</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>N</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_config_pagecache SIZE N
+**
+** Set the page-cache memory buffer using SQLITE_CONFIG_PAGECACHE.
+** The buffer is static and is of limited size.  N might be
+** adjusted downward as needed to accomodate the requested size.
+** The revised value of N is returned.
+**
+** A negative SIZE causes the buffer pointer to be NULL.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_pagecache</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>sz</name>, <name>N</name>, <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pResult</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>char</name> *</type><name>buf</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"SIZE N"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sz</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>N</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>buf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>sz</name>&lt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>buf</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_PAGECACHE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>buf</name> = <call><name>malloc</name><argument_list>( <argument><expr><name>sz</name>*<name>N</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_PAGECACHE</name></expr></argument>, <argument><expr><name>buf</name></expr></argument>, <argument><expr><name>sz</name></expr></argument>, <argument><expr><name>N</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pResult</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>N</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_config_alt_pcache INSTALL_FLAG DISCARD_CHANCE PRNG_SEED
+**
+** Set up the alternative test page cache.  Install if INSTALL_FLAG is
+** true and uninstall (reverting to the default page cache) if INSTALL_FLAG
+** is false.  DISCARD_CHANGE is an integer between 0 and 100 inclusive
+** which determines the chance of discarding a page when unpinned.  100
+** is certainty.  0 is never.  PRNG_SEED is the pseudo-random number generator
+** seed.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_alt_pcache</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>installFlag</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>discardChance</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>prngSeed</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>highStress</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <function_decl><type><name>extern</name> <name>void</name></type> <name>installTestPCache</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>unsigned</name></type></decl></param>,<param><decl><type><name>unsigned</name></type></decl></param>,<param><decl><type><name>unsigned</name></type></decl></param>)</parameter_list>;</function_decl>
+  <if>if<condition>( <expr><name>objc</name>&lt;2 || <name>objc</name>&gt;5</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, 
+        <argument><expr>"INSTALLFLAG DISCARDCHANCE PRNGSEEED HIGHSTRESS"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>installFlag</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><name>objc</name>&gt;=3 &amp;&amp; <call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>discardChance</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+     <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>&gt;=4 &amp;&amp; <call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>prngSeed</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+     <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>&gt;=5 &amp;&amp; <call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>4</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>highStress</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>discardChance</name>&lt;0 || <name>discardChance</name>&gt;100</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"discard-chance should be between 0 and 100"</expr></argument>,
+                     <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>installTestPCache</name><argument_list>(<argument><expr><name>installFlag</name></expr></argument>, <argument><expr>(<name>unsigned</name>)<name>discardChance</name></expr></argument>, <argument><expr>(<name>unsigned</name>)<name>prngSeed</name></expr></argument>,
+                    <argument><expr>(<name>unsigned</name>)<name>highStress</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_config_memstatus BOOLEAN
+**
+** Enable or disable memory status reporting using SQLITE_CONFIG_MEMSTATUS.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_memstatus</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>enable</name>, <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"BOOLEAN"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>enable</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MEMSTATUS</name></expr></argument>, <argument><expr><name>enable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_config_lookaside  SIZE  COUNT
+**
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_lookaside</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>sz</name>, <name>cnt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pRet</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"SIZE COUNT"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sz</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>cnt</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>pRet</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(
+      <argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>sqlite3GlobalConfig</name>.<name>szLookaside</name></expr></argument>)</argument_list></call></expr></argument>
+  )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(
+      <argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>sqlite3GlobalConfig</name>.<name>nLookaside</name></expr></argument>)</argument_list></call></expr></argument>
+  )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_LOOKASIDE</name></expr></argument>, <argument><expr><name>sz</name></expr></argument>, <argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Usage:    sqlite3_db_config_lookaside  CONNECTION  BUFID  SIZE  COUNT
+**
+** There are two static buffers with BUFID 1 and 2.   Each static buffer
+** is 10KB in size.  A BUFID of 0 indicates that the buffer should be NULL
+** which will cause sqlite3_db_config() to allocate space on its own.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_db_config_lookaside</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>sz</name>, <name>cnt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>bufid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>char</name></type> <name><name>azBuf</name><index>[<expr>2</expr>]</index><index>[<expr>10000</expr>]</index></name></decl>;</decl_stmt>
+  <function_decl><type><name>int</name></type> <name>getDbPointer</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type><name>sqlite3</name>**</type></decl></param>)</parameter_list>;</function_decl>
+  <if>if<condition>( <expr><name>objc</name>!=5</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"BUFID SIZE COUNT"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>bufid</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sz</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>4</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>cnt</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><name>bufid</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_db_config</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_DBCONFIG_LOOKASIDE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>sz</name></expr></argument>, <argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>bufid</name>&gt;=1 &amp;&amp; <name>bufid</name>&lt;=2 &amp;&amp; <name>sz</name>*<name>cnt</name>&lt;=<call><name>sizeof</name><argument_list>(<argument><expr><name><name>azBuf</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_db_config</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_DBCONFIG_LOOKASIDE</name></expr></argument>, <argument><expr><name><name>azBuf</name><index>[<expr><name>bufid</name></expr>]</index></name></expr></argument>, <argument><expr><name>sz</name></expr></argument>,<argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"illegal arguments - see documentation"</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></else></if></else></if>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:
+**
+**   sqlite3_config_heap NBYTE NMINALLOC
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_heap</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>, 
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt> <comment type="block">/* Use this memory */</comment>
+  <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>szBuf</name></decl>;</decl_stmt>  <comment type="block">/* Bytes allocated for zBuf */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>         <comment type="block">/* Size of buffer to pass to sqlite3_config() */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nMinAlloc</name></decl>;</decl_stmt>     <comment type="block">/* Size of minimum allocation */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>            <comment type="block">/* Return code of sqlite3_config() */</comment>
+
+  <decl_stmt><decl><type><name>Tcl_Obj</name> * <name>CONST</name> *</type><name>aArg</name> =<init> <expr>&amp;<name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nArg</name> =<init> <expr><name>objc</name>-1</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>nArg</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"NBYTE NMINALLOC"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aArg</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nByte</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aArg</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nMinAlloc</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+
+  <if>if<condition>( <expr><name>nByte</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>( <argument><expr><name>zBuf</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zBuf</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>szBuf</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_HEAP</name></expr></argument>, <argument><expr>(<name>void</name>*)0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>zBuf</name> = <call><name>realloc</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>szBuf</name> = <name>nByte</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_HEAP</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>nMinAlloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** tclcmd:     sqlite3_config_error  [DB]
+**
+** Invoke sqlite3_config() or sqlite3_db_config() with invalid
+** opcodes and verify that they return errors.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config_error</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>, 
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <function_decl><type><name>int</name></type> <name>getDbPointer</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type><name>sqlite3</name>**</type></decl></param>)</parameter_list>;</function_decl>
+
+  <if>if<condition>( <expr><name>objc</name>!=2 &amp;&amp; <name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"[DB]"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>==2</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3_db_config</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>99999</expr></argument>)</argument_list></call>!=<name>SQLITE_ERROR</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, 
+            <argument><expr>"sqlite3_db_config(db, 99999) does not return SQLITE_ERROR"</expr></argument>,
+            <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <if>if<condition>( <expr><call><name>sqlite3_config</name><argument_list>(<argument><expr>99999</expr></argument>)</argument_list></call>!=<name>SQLITE_ERROR</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, 
+          <argument><expr>"sqlite3_config(99999) does not return SQLITE_ERROR"</expr></argument>,
+          <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+  }</block></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    
+**
+**   sqlite3_dump_memsys3  FILENAME
+**   sqlite3_dump_memsys5  FILENAME
+**
+** Write a summary of unfreed memsys3 allocations to FILENAME.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_dump_memsys3</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"FILENAME"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <switch>switch<condition>( <expr>(<name>int</name>)<name>clientData</name></expr> )</condition><block>{
+    <case>case <expr>3</expr>: <block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMSYS3</name></cpp:ifdef>
+      <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3Memsys3Dump</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+      <expr_stmt><expr><call><name>sqlite3Memsys3Dump</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    }</block>
+    </case><case>case <expr>5</expr>: <block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMSYS5</name></cpp:ifdef>
+      <function_decl><type><name>extern</name> <name>void</name></type> <name>sqlite3Memsys5Dump</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+      <expr_stmt><expr><call><name>sqlite3Memsys5Dump</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    }</block>
+  </case>}</block></switch>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_status  OPCODE  RESETFLAG
+**
+** Return a list of three elements which are the sqlite3_status() return
+** code, the current value, and the high-water mark value.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_status</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name>, <name>iValue</name>, <name>mxValue</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>op</name>, <name>resetFlag</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zOpName</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <struct>struct <block>{<public type="default"/>
+    <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>op</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aOp</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{ <expr>"SQLITE_STATUS_MEMORY_USED"</expr>,         <expr><name>SQLITE_STATUS_MEMORY_USED</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_MALLOC_SIZE"</expr>,         <expr><name>SQLITE_STATUS_MALLOC_SIZE</name></expr>         }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_PAGECACHE_USED"</expr>,      <expr><name>SQLITE_STATUS_PAGECACHE_USED</name></expr>      }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_PAGECACHE_OVERFLOW"</expr>,  <expr><name>SQLITE_STATUS_PAGECACHE_OVERFLOW</name></expr>  }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_PAGECACHE_SIZE"</expr>,      <expr><name>SQLITE_STATUS_PAGECACHE_SIZE</name></expr>      }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_SCRATCH_USED"</expr>,        <expr><name>SQLITE_STATUS_SCRATCH_USED</name></expr>        }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_SCRATCH_OVERFLOW"</expr>,    <expr><name>SQLITE_STATUS_SCRATCH_OVERFLOW</name></expr>    }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_SCRATCH_SIZE"</expr>,        <expr><name>SQLITE_STATUS_SCRATCH_SIZE</name></expr>        }</block></expr>,
+    <expr><block>{ <expr>"SQLITE_STATUS_PARSER_STACK"</expr>,        <expr><name>SQLITE_STATUS_PARSER_STACK</name></expr>        }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pResult</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"PARAMETER RESETFLAG"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zOpName</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>aOp</name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name><name>aOp</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zOpName</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>op</name> = <name><name>aOp</name><index>[<expr><name>i</name></expr>]</index></name>.<name>op</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+  }</block></for>
+  <if>if<condition>( <expr><name>i</name>&gt;=<call><name>ArraySize</name><argument_list>(<argument><expr><name>aOp</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>op</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>resetFlag</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>iValue</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mxValue</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_status</name><argument_list>(<argument><expr><name>op</name></expr></argument>, <argument><expr>&amp;<name>iValue</name></expr></argument>, <argument><expr>&amp;<name>mxValue</name></expr></argument>, <argument><expr><name>resetFlag</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pResult</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>iValue</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>mxValue</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:    sqlite3_db_status  DATABASE  OPCODE  RESETFLAG
+**
+** Return a list of three elements which are the sqlite3_db_status() return
+** code, the current value, and the high-water mark value.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_db_status</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name>, <name>iValue</name>, <name>mxValue</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>op</name>, <name>resetFlag</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zOpName</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <function_decl><type><name>int</name></type> <name>getDbPointer</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type><name>sqlite3</name>**</type></decl></param>)</parameter_list>;</function_decl>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <struct>struct <block>{<public type="default"/>
+    <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>op</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aOp</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{ <expr>"SQLITE_DBSTATUS_LOOKASIDE_USED"</expr>,    <expr><name>SQLITE_DBSTATUS_LOOKASIDE_USED</name></expr>   }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pResult</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=4</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"PARAMETER RESETFLAG"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>zOpName</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>aOp</name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name><name>aOp</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zOpName</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>op</name> = <name><name>aOp</name><index>[<expr><name>i</name></expr>]</index></name>.<name>op</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+  }</block></for>
+  <if>if<condition>( <expr><name>i</name>&gt;=<call><name>ArraySize</name><argument_list>(<argument><expr><name>aOp</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>op</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>resetFlag</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>iValue</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>mxValue</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_db_status</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr>&amp;<name>iValue</name></expr></argument>, <argument><expr>&amp;<name>mxValue</name></expr></argument>, <argument><expr><name>resetFlag</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pResult</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>iValue</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pResult</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>mxValue</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** install_malloc_faultsim BOOLEAN
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_install_malloc_faultsim</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>isInstall</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"BOOLEAN"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>TCL_OK</name>!=<call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>isInstall</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>faultsimInstall</name><argument_list>(<argument><expr><name>isInstall</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Register commands with the TCL interpreter.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetest_malloc_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+     <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+     <decl_stmt><decl><type><name>Tcl_ObjCmdProc</name> *</type><name>xProc</name></decl>;</decl_stmt>
+     <decl_stmt><decl><type><name>int</name></type> <name>clientData</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aObjCmd</name><index>[]</index></name> =<init> <expr><block>{
+     <expr><block>{ <expr>"sqlite3_malloc"</expr>,             <expr><name>test_malloc</name></expr>                   ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_realloc"</expr>,            <expr><name>test_realloc</name></expr>                  ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_free"</expr>,               <expr><name>test_free</name></expr>                     ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"memset"</expr>,                     <expr><name>test_memset</name></expr>                   ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"memget"</expr>,                     <expr><name>test_memget</name></expr>                   ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memory_used"</expr>,        <expr><name>test_memory_used</name></expr>              ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memory_highwater"</expr>,   <expr><name>test_memory_highwater</name></expr>         ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_backtrace"</expr>, <expr><name>test_memdebug_backtrace</name></expr>       ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_dump"</expr>,      <expr><name>test_memdebug_dump</name></expr>            ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_fail"</expr>,      <expr><name>test_memdebug_fail</name></expr>            ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_pending"</expr>,   <expr><name>test_memdebug_pending</name></expr>         ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_settitle"</expr>,  <expr><name>test_memdebug_settitle</name></expr>        ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_malloc_count"</expr>, <expr><name>test_memdebug_malloc_count</name></expr> ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_memdebug_log"</expr>,       <expr><name>test_memdebug_log</name></expr>             ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_scratch"</expr>,     <expr><name>test_config_scratch</name></expr>           ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_pagecache"</expr>,   <expr><name>test_config_pagecache</name></expr>         ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_alt_pcache"</expr>,  <expr><name>test_alt_pcache</name></expr>               ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_status"</expr>,             <expr><name>test_status</name></expr>                   ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_db_status"</expr>,          <expr><name>test_db_status</name></expr>                ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"install_malloc_faultsim"</expr>,    <expr><name>test_install_malloc_faultsim</name></expr>  ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_heap"</expr>,        <expr><name>test_config_heap</name></expr>              ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_memstatus"</expr>,   <expr><name>test_config_memstatus</name></expr>         ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_lookaside"</expr>,   <expr><name>test_config_lookaside</name></expr>         ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_config_error"</expr>,       <expr><name>test_config_error</name></expr>             ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_db_config_lookaside"</expr>,<expr><name>test_db_config_lookaside</name></expr>      ,<expr>0</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_dump_memsys3"</expr>,       <expr><name>test_dump_memsys3</name></expr>             ,<expr>3</expr> }</block></expr>,
+     <expr><block>{ <expr>"sqlite3_dump_memsys5"</expr>,       <expr><name>test_dump_memsys3</name></expr>             ,<expr>5</expr> }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aObjCmd</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aObjCmd</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>ClientData</name></type> <name>c</name> =<init> <expr>(<name>ClientData</name>)<name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>clientData</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>xProc</name></expr></argument>, <argument><expr><name>c</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

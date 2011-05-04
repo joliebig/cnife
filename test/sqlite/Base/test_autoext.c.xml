@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_autoext.c" filename=""><comment type="block">/*
+** 2006 August 23
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Test extension for testing the sqlite3_auto_extension() function.
+**
+** $Id: test_autoext.c,v 1.5 2008/07/08 02:12:37 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqlite3ext.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOAD_EXTENSION</name></cpp:ifndef>
+<function><type><name>static</name> <name>SQLITE_EXTENSION_INIT1</name>
+
+<comment type="block">/*
+** The sqr() SQL function returns the square of its input value.
+*/</comment>
+<name>static</name> <name>void</name></type> <name>sqrFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>double</name></type> <name>r</name> =<init> <expr><call><name>sqlite3_value_double</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_result_double</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>r</name>*<name>r</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** This is the entry point to register the extension for the sqr() function.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqr_init</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, 
+  <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>sqlite3_api_routines</name> *</type><name>pApi</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>SQLITE_EXTENSION_INIT2</name><argument_list>(<argument><expr><name>pApi</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_create_function</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"sqr"</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>SQLITE_ANY</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>sqrFunc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The cube() SQL function returns the cube of its input value.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>cubeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>double</name></type> <name>r</name> =<init> <expr><call><name>sqlite3_value_double</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_result_double</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>r</name>*<name>r</name>*<name>r</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** This is the entry point to register the extension for the cube() function.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>cube_init</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, 
+  <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>sqlite3_api_routines</name> *</type><name>pApi</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>SQLITE_EXTENSION_INIT2</name><argument_list>(<argument><expr><name>pApi</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_create_function</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"cube"</expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>SQLITE_ANY</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>cubeFunc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This is a broken extension entry point
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>broken_init</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, 
+  <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>sqlite3_api_routines</name> *</type><name>pApi</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zErr</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>SQLITE_EXTENSION_INIT2</name><argument_list>(<argument><expr><name>pApi</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zErr</name> = <call><name>sqlite3_mprintf</name><argument_list>(<argument><expr>"broken autoext!"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pzErrMsg</name> = <name>zErr</name></expr>;</expr_stmt>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** tclcmd:   sqlite3_auto_extension_sqr
+**
+** Register the "sqr" extension to be loaded automatically.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>autoExtSqrObjCmd</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>sqlite3_auto_extension</name><argument_list>(<argument><expr>(<name>void</name>*)<name>sqr_init</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** tclcmd:   sqlite3_auto_extension_cube
+**
+** Register the "cube" extension to be loaded automatically.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>autoExtCubeObjCmd</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>sqlite3_auto_extension</name><argument_list>(<argument><expr>(<name>void</name>*)<name>cube_init</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** tclcmd:   sqlite3_auto_extension_broken
+**
+** Register the broken extension to be loaded automatically.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>autoExtBrokenObjCmd</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><call><name>sqlite3_auto_extension</name><argument_list>(<argument><expr>(<name>void</name>*)<name>broken_init</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_LOAD_EXTENSION */</comment>
+
+
+<comment type="block">/*
+** tclcmd:   sqlite3_reset_auto_extension
+**
+** Reset all auto-extensions
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resetAutoExtObjCmd</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3_reset_auto_extension</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** This procedure registers the TCL procs defined in this file.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetest_autoext_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOAD_EXTENSION</name></cpp:ifndef>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite3_auto_extension_sqr"</expr></argument>,
+          <argument><expr><name>autoExtSqrObjCmd</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite3_auto_extension_cube"</expr></argument>,
+          <argument><expr><name>autoExtCubeObjCmd</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite3_auto_extension_broken"</expr></argument>,
+          <argument><expr><name>autoExtBrokenObjCmd</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite3_reset_auto_extension"</expr></argument>,
+          <argument><expr><name>resetAutoExtObjCmd</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

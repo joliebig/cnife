@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="vdbe.h"><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Header file for the Virtual DataBase Engine (VDBE)
+**
+** This header defines the interface to the virtual database engine
+** or VDBE.  The VDBE implements an abstract machine that runs a
+** simple program to access and modify the underlying database.
+**
+** $Id: vdbe.h,v 1.139 2008/10/31 10:53:23 danielk1977 Exp $
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_SQLITE_VDBE_H_</name></cpp:ifndef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>_SQLITE_VDBE_H_</name></cpp:define>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** A single VDBE is an opaque structure named "Vdbe".  Only routines
+** in the source file sqliteVdbe.c are allowed to see the insides
+** of this structure.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>Vdbe</name> Vdbe;</struct></type></typedef>
+
+<comment type="block">/*
+** The names of the following types declared in vdbeInt.h are required
+** for the VdbeOp definition.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>VdbeFunc</name> VdbeFunc;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>Mem</name> Mem;</struct></type></typedef>
+
+<comment type="block">/*
+** A single instruction of the virtual machine has an opcode
+** and as many as three operands.  The instruction is recorded
+** as an instance of the following structure:
+*/</comment>
+<struct>struct <name>VdbeOp</name> <block>{
+  <decl_stmt><decl><type><name>u8</name></type> <name>opcode</name></decl>;</decl_stmt>          <comment type="block">/* What operation to perform */</comment>
+  <decl_stmt><decl><type><name>signed</name> <name>char</name></type> <name>p4type</name></decl>;</decl_stmt> <comment type="block">/* One of the P4_xxx constants for p4 */</comment>
+  <decl_stmt><decl><type><name>u8</name></type> <name>opflags</name></decl>;</decl_stmt>         <comment type="block">/* Not currently used */</comment>
+  <decl_stmt><decl><type><name>u8</name></type> <name>p5</name></decl>;</decl_stmt>              <comment type="block">/* Fifth parameter is an unsigned character */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>p1</name></decl>;</decl_stmt>             <comment type="block">/* First operand */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>p2</name></decl>;</decl_stmt>             <comment type="block">/* Second parameter (often the jump destination) */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>p3</name></decl>;</decl_stmt>             <comment type="block">/* The third parameter */</comment>
+  union <block>{             <comment type="block">/* forth parameter */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>                 <comment type="block">/* Integer value if p4type==P4_INT32 */</comment>
+    <decl_stmt><decl><type><name>void</name> *</type><name>p</name></decl>;</decl_stmt>               <comment type="block">/* Generic pointer */</comment>
+    <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>               <comment type="block">/* Pointer to data for string (char array) types */</comment>
+    <decl_stmt><decl><type><name>i64</name> *</type><name>pI64</name></decl>;</decl_stmt>             <comment type="block">/* Used when p4type is P4_INT64 */</comment>
+    <decl_stmt><decl><type><name>double</name> *</type><name>pReal</name></decl>;</decl_stmt>         <comment type="block">/* Used when p4type is P4_REAL */</comment>
+    <decl_stmt><decl><type><name>FuncDef</name> *</type><name>pFunc</name></decl>;</decl_stmt>        <comment type="block">/* Used when p4type is P4_FUNCDEF */</comment>
+    <decl_stmt><decl><type><name>VdbeFunc</name> *</type><name>pVdbeFunc</name></decl>;</decl_stmt>   <comment type="block">/* Used when p4type is P4_VDBEFUNC */</comment>
+    <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl>;</decl_stmt>        <comment type="block">/* Used when p4type is P4_COLLSEQ */</comment>
+    <decl_stmt><decl><type><name>Mem</name> *</type><name>pMem</name></decl>;</decl_stmt>             <comment type="block">/* Used when p4type is P4_MEM */</comment>
+    <decl_stmt><decl><type><name>sqlite3_vtab</name> *</type><name>pVtab</name></decl>;</decl_stmt>   <comment type="block">/* Used when p4type is P4_VTAB */</comment>
+    <decl_stmt><decl><type><name>KeyInfo</name> *</type><name>pKeyInfo</name></decl>;</decl_stmt>     <comment type="block">/* Used when p4type is P4_KEYINFO */</comment>
+    <decl_stmt><decl><type><name>int</name> *</type><name>ai</name></decl>;</decl_stmt>               <comment type="block">/* Used when p4type is P4_INTARRAY */</comment>
+  }</block> <expr_stmt><expr><name>p4</name></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zComment</name></decl>;</decl_stmt>          <comment type="block">/* Comment to improve readability */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>VDBE_PROFILE</name></cpp:ifdef>
+  <decl_stmt><decl><type><name>int</name></type> <name>cnt</name></decl>;</decl_stmt>                 <comment type="block">/* Number of times this instruction was executed */</comment>
+  <decl_stmt><decl><type><name>u64</name></type> <name>cycles</name></decl>;</decl_stmt>              <comment type="block">/* Total time spent executing this instruction */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block>;</struct>
+<typedef>typedef <type><struct>struct <name>VdbeOp</name> VdbeOp;</struct></type></typedef>
+
+<comment type="block">/*
+** A smaller version of VdbeOp used for the VdbeAddOpList() function because
+** it takes up less space.
+*/</comment>
+<struct>struct <name>VdbeOpList</name> <block>{
+  <decl_stmt><decl><type><name>u8</name></type> <name>opcode</name></decl>;</decl_stmt>          <comment type="block">/* What operation to perform */</comment>
+  <decl_stmt><decl><type><name>signed</name> <name>char</name></type> <name>p1</name></decl>;</decl_stmt>     <comment type="block">/* First operand */</comment>
+  <decl_stmt><decl><type><name>signed</name> <name>char</name></type> <name>p2</name></decl>;</decl_stmt>     <comment type="block">/* Second parameter (often the jump destination) */</comment>
+  <decl_stmt><decl><type><name>signed</name> <name>char</name></type> <name>p3</name></decl>;</decl_stmt>     <comment type="block">/* Third parameter */</comment>
+}</block>;</struct>
+<typedef>typedef <type><struct>struct <name>VdbeOpList</name> VdbeOpList;</struct></type></typedef>
+
+<comment type="block">/*
+** Allowed values of VdbeOp.p3type
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_NOTUSED</name>    0</cpp:define>   <comment type="block">/* The P4 parameter is not used */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_DYNAMIC</name>  (-1)</cpp:define>  <comment type="block">/* Pointer to a string obtained from sqliteMalloc() */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_STATIC</name>   (-2)</cpp:define>  <comment type="block">/* Pointer to a static string */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_COLLSEQ</name>  (-4)</cpp:define>  <comment type="block">/* P4 is a pointer to a CollSeq structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_FUNCDEF</name>  (-5)</cpp:define>  <comment type="block">/* P4 is a pointer to a FuncDef structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_KEYINFO</name>  (-6)</cpp:define>  <comment type="block">/* P4 is a pointer to a KeyInfo structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_VDBEFUNC</name> (-7)</cpp:define>  <comment type="block">/* P4 is a pointer to a VdbeFunc structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_MEM</name>      (-8)</cpp:define>  <comment type="block">/* P4 is a pointer to a Mem*    structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_TRANSIENT</name> (-9)</cpp:define> <comment type="block">/* P4 is a pointer to a transient string */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_VTAB</name>     (-10)</cpp:define> <comment type="block">/* P4 is a pointer to an sqlite3_vtab structure */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_MPRINTF</name>  (-11)</cpp:define> <comment type="block">/* P4 is a string obtained from sqlite3_mprintf() */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_REAL</name>     (-12)</cpp:define> <comment type="block">/* P4 is a 64-bit floating point value */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_INT64</name>    (-13)</cpp:define> <comment type="block">/* P4 is a 64-bit signed integer */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_INT32</name>    (-14)</cpp:define> <comment type="block">/* P4 is a 32-bit signed integer */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_INTARRAY</name> (-15)</cpp:define> <comment type="block">/* P4 is a vector of 32-bit integers */</comment>
+
+<comment type="block">/* When adding a P4 argument using P4_KEYINFO, a copy of the KeyInfo structure
+** is made.  That copy is freed when the Vdbe is finalized.  But if the
+** argument is P4_KEYINFO_HANDOFF, the passed in pointer is used.  It still
+** gets freed when the Vdbe is finalized so it still should be obtained
+** from a single sqliteMalloc().  But no copy is made and the calling
+** function should *not* try to free the KeyInfo.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_KEYINFO_HANDOFF</name> (-16)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>P4_KEYINFO_STATIC</name>  (-17)</cpp:define>
+
+<comment type="block">/*
+** The Vdbe.aColName array contains 5n Mem structures, where n is the 
+** number of columns of data returned by the statement.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>COLNAME_NAME</name>     0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>COLNAME_DECLTYPE</name> 1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>COLNAME_DATABASE</name> 2</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>COLNAME_TABLE</name>    3</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>COLNAME_COLUMN</name>   4</cpp:define>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_COLUMN_METADATA</name></cpp:ifdef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>COLNAME_N</name>        5</cpp:define>      <comment type="block">/* Number of COLNAME_xxx symbols */</comment>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:ifdef># <cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DECLTYPE</name></cpp:ifdef>
+<cpp:define>#   <cpp:directive>define</cpp:directive> <name>COLNAME_N</name>      1</cpp:define>      <comment type="block">/* Store only the name */</comment>
+<cpp:else># <cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define>#   <cpp:directive>define</cpp:directive> <name>COLNAME_N</name>      2</cpp:define>      <comment type="block">/* Store the name and decltype */</comment>
+<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The following macro converts a relative address in the p2 field
+** of a VdbeOp structure into a negative number so that 
+** sqlite3VdbeAddOpList() knows that the address is relative.  Calling
+** the macro again restores the address.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ADDR</name>(X)  (-1-(X))</cpp:define>
+
+<comment type="block">/*
+** The makefile scans the vdbe.c source file and creates the "opcodes.h"
+** header file that defines a number for each opcode used by the VDBE.
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"opcodes.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Prototypes for the VDBE interface.  See comments on the implementation
+** for a description of what each of these routines does.
+*/</comment>
+<function_decl><type><name>Vdbe</name> *</type><name>sqlite3VdbeCreate</name><parameter_list>(<param><decl><type><name>sqlite3</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOp0</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOp1</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOp2</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOp3</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOp4</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>zP4</name></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeAddOpList</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>nOp</name></decl></param>, <param><decl><type><name>VdbeOpList</name> <name>const</name> *</type><name>aOp</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeP1</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>, <param><decl><type><name>int</name></type> <name>P1</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeP2</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>, <param><decl><type><name>int</name></type> <name>P2</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeP3</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>, <param><decl><type><name>int</name></type> <name>P3</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeP5</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>u8</name></type> <name>P5</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeJumpHere</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeToNoop</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeChangeP4</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>addr</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zP4</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeUsesBtree</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>VdbeOp</name> *</type><name>sqlite3VdbeGetOp</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeMakeLabel</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeDelete</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeMakeReady</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeFinalize</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeResolveLabel</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeCurrentAddr</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+  <function_decl><type><name>void</name></type> <name>sqlite3VdbeTrace</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>FILE</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeResetStepResult</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeReset</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeSetNumCols</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeSetColName</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type></decl></param>, <param><function_decl><type><name>void</name></type>(*)<parameter_list>(<param><decl><type><name>void</name>*</type></decl></param>)</parameter_list></function_decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeCountChanges</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>sqlite3</name> *</type><name>sqlite3VdbeDb</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeSetSql</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeSwap</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>,<param><decl><type><name>Vdbe</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMORY_MANAGEMENT</name></cpp:ifdef>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeReleaseMemory</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<function_decl><type><name>UnpackedRecord</name> *</type><name>sqlite3VdbeRecordUnpack</name><parameter_list>(<param><decl><type><name>KeyInfo</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>const</name> <name>void</name>*</type></decl></param>,
+                                        <param><decl><type><name>UnpackedRecord</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3VdbeDeleteUnpackedRecord</name><parameter_list>(<param><decl><type><name>UnpackedRecord</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3VdbeRecordCompare</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>const</name> <name>void</name>*</type></decl></param>,<param><decl><type><name>UnpackedRecord</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NDEBUG</name></cpp:ifndef>
+  <function_decl><type><name>void</name></type> <name>sqlite3VdbeComment</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type>...</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>VdbeComment</name>(X)  sqlite3VdbeComment X</cpp:define>
+  <function_decl><type><name>void</name></type> <name>sqlite3VdbeNoopComment</name><parameter_list>(<param><decl><type><name>Vdbe</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type>...</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>VdbeNoopComment</name>(X)  sqlite3VdbeNoopComment X</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>VdbeComment</name>(X)</cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>VdbeNoopComment</name>(X)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

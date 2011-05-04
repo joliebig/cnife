@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="memjournal.c" filename=""><comment type="block">/*
+** 2008 October 7
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains code use to implement an in-memory rollback journal.
+** The in-memory rollback journal is used to journal transactions for
+** ":memory:" databases and when the journal_mode=MEMORY pragma is used.
+**
+** @(#) $Id: memjournal.c,v 1.8 2008/12/20 02:14:40 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/* Forward references to internal structures */</comment>
+<typedef>typedef <type><struct>struct <name>MemJournal</name> MemJournal;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>FilePoint</name> FilePoint;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>FileChunk</name> FileChunk;</struct></type></typedef>
+
+<comment type="block">/* Space to hold the rollback journal is allocated in increments of
+** this many bytes.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>JOURNAL_CHUNKSIZE</name> 1024</cpp:define>
+
+<comment type="block">/* Macro to find the minimum of two numeric values.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>MIN</name></cpp:ifndef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>MIN</name>(x,y) ((x)&lt;(y)?(x):(y))</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The rollback journal is composed of a linked list of these structures.
+*/</comment>
+<struct>struct <name>FileChunk</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pNext</name></decl>;</decl_stmt>               <comment type="block">/* Next chunk in the journal */</comment>
+  <decl_stmt><decl><type><name>u8</name></type> <name><name>zChunk</name><index>[<expr><name>JOURNAL_CHUNKSIZE</name></expr>]</index></name></decl>;</decl_stmt>   <comment type="block">/* Content of this chunk */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** An instance of this object serves as a cursor into the rollback journal.
+** The cursor can be either for reading or writing.
+*/</comment>
+<struct>struct <name>FilePoint</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iOffset</name></decl>;</decl_stmt>          <comment type="block">/* Offset from the beginning of the file */</comment>
+  <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pChunk</name></decl>;</decl_stmt>              <comment type="block">/* Specific chunk into which cursor points */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** This subclass is a subclass of sqlite3_file.  Each open memory-journal
+** is an instance of this class.
+*/</comment>
+<struct>struct <name>MemJournal</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_io_methods</name> *</type><name>pMethod</name></decl>;</decl_stmt>    <comment type="block">/* Parent class. MUST BE FIRST */</comment>
+  <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pFirst</name></decl>;</decl_stmt>              <comment type="block">/* Head of in-memory chunk-list */</comment>
+  <decl_stmt><decl><type><name>FilePoint</name></type> <name>endpoint</name></decl>;</decl_stmt>             <comment type="block">/* Pointer to the end of the file */</comment>
+  <decl_stmt><decl><type><name>FilePoint</name></type> <name>readpoint</name></decl>;</decl_stmt>            <comment type="block">/* Pointer to the end of the last xRead() */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Read data from the file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlRead</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>,    <comment type="block">/* The journal file from which to read */</comment>
+  <param><decl><type><name>void</name> *</type><name>zBuf</name></decl></param>,            <comment type="block">/* Put the results here */</comment>
+  <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>,              <comment type="block">/* Number of bytes to read */</comment>
+  <param><decl><type><name>sqlite_int64</name></type> <name>iOfst</name></decl></param>     <comment type="block">/* Begin reading at this offset */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>MemJournal</name> *</type><name>p</name> =<init> <expr>(<name>MemJournal</name> *)<name>pJfd</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name> *</type><name>zOut</name> =<init> <expr><name>zBuf</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRead</name> =<init> <expr><name>iAmt</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iChunkOffset</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pChunk</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iOfst</name>+<name>iAmt</name>&lt;=<name>p</name>-&gt;<name>endpoint</name>.<name>iOffset</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>readpoint</name>.<name>iOffset</name>!=<name>iOfst</name> || <name>iOfst</name>==0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iOff</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <for>for(<init><expr><name>pChunk</name>=<name>p</name>-&gt;<name>pFirst</name></expr>;</init> 
+        <condition><expr><name>pChunk</name> &amp;&amp; (<name>iOff</name>+<name>JOURNAL_CHUNKSIZE</name>)&lt;=<name>iOfst</name></expr>;</condition>
+        <incr><expr><name>pChunk</name>=<name>pChunk</name>-&gt;<name>pNext</name></expr></incr>
+    )<block>{
+      <expr_stmt><expr><name>iOff</name> += <name>JOURNAL_CHUNKSIZE</name></expr>;</expr_stmt>
+    }</block></for>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pChunk</name> = <name>p</name>-&gt;<name>readpoint</name>.<name>pChunk</name></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><name>iChunkOffset</name> = (<name>int</name>)(<name>iOfst</name>%<name>JOURNAL_CHUNKSIZE</name>)</expr>;</expr_stmt>
+  <do>do <block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>iSpace</name> =<init> <expr><name>JOURNAL_CHUNKSIZE</name> - <name>iChunkOffset</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>nCopy</name> =<init> <expr><call><name>MIN</name><argument_list>(<argument><expr><name>nRead</name></expr></argument>, <argument><expr>(<name>JOURNAL_CHUNKSIZE</name> - <name>iChunkOffset</name>)</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>zOut</name></expr></argument>, <argument><expr>&amp;<name>pChunk</name>-&gt;<name><name>zChunk</name><index>[<expr><name>iChunkOffset</name></expr>]</index></name></expr></argument>, <argument><expr><name>nCopy</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zOut</name> += <name>nCopy</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nRead</name> -= <name>iSpace</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>iChunkOffset</name> = 0</expr>;</expr_stmt>
+  }</block> while<condition>( <expr><name>nRead</name>&gt;=0 &amp;&amp; (<name>pChunk</name>=<name>pChunk</name>-&gt;<name>pNext</name>)!=0 &amp;&amp; <name>nRead</name>&gt;0</expr> )</condition>;</do>
+  <expr_stmt><expr><name>p</name>-&gt;<name>readpoint</name>.<name>iOffset</name> = <name>iOfst</name>+<name>iAmt</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>readpoint</name>.<name>pChunk</name> = <name>pChunk</name></expr>;</expr_stmt>
+
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Write data to the file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlWrite</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>,    <comment type="block">/* The journal file into which to write */</comment>
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>zBuf</name></decl></param>,      <comment type="block">/* Take data to be written from here */</comment>
+  <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>,              <comment type="block">/* Number of bytes to write */</comment>
+  <param><decl><type><name>sqlite_int64</name></type> <name>iOfst</name></decl></param>     <comment type="block">/* Begin writing at this offset into the file */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>MemJournal</name> *</type><name>p</name> =<init> <expr>(<name>MemJournal</name> *)<name>pJfd</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nWrite</name> =<init> <expr><name>iAmt</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name> *</type><name>zWrite</name> =<init> <expr>(<name>u8</name> *)<name>zBuf</name></expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* An in-memory journal file should only ever be appended to. Random
+  ** access writes are not required by sqlite.
+  */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iOfst</name>==<name>p</name>-&gt;<name>endpoint</name>.<name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>iOfst</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <while>while<condition>( <expr><name>nWrite</name>&gt;0</expr> )</condition><block>{
+    <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pChunk</name> =<init> <expr><name>p</name>-&gt;<name>endpoint</name>.<name>pChunk</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>iChunkOffset</name> =<init> <expr>(<name>int</name>)(<name>p</name>-&gt;<name>endpoint</name>.<name>iOffset</name>%<name>JOURNAL_CHUNKSIZE</name>)</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>iSpace</name> =<init> <expr><call><name>MIN</name><argument_list>(<argument><expr><name>nWrite</name></expr></argument>, <argument><expr><name>JOURNAL_CHUNKSIZE</name> - <name>iChunkOffset</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+    <if>if<condition>( <expr><name>iChunkOffset</name>==0</expr> )</condition><then><block>{
+      <comment type="block">/* New chunk is required to extend the file. */</comment>
+      <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pNew</name> =<init> <expr><call><name>sqlite3_malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>FileChunk</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr>!<name>pNew</name></expr> )</condition><then><block>{
+        <return>return <expr><name>SQLITE_IOERR_NOMEM</name></expr>;</return>
+      }</block></then></if>
+      <expr_stmt><expr><name>pNew</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pChunk</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>pFirst</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pChunk</name>-&gt;<name>pNext</name> = <name>pNew</name></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>!<name>p</name>-&gt;<name>pFirst</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>pFirst</name> = <name>pNew</name></expr>;</expr_stmt>
+      }</block></else></if>
+      <expr_stmt><expr><name>p</name>-&gt;<name>endpoint</name>.<name>pChunk</name> = <name>pNew</name></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>endpoint</name>.<name>pChunk</name>-&gt;<name><name>zChunk</name><index>[<expr><name>iChunkOffset</name></expr>]</index></name></expr></argument>, <argument><expr><name>zWrite</name></expr></argument>, <argument><expr><name>iSpace</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zWrite</name> += <name>iSpace</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nWrite</name> -= <name>iSpace</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>endpoint</name>.<name>iOffset</name> += <name>iSpace</name></expr>;</expr_stmt>
+  }</block></while>
+
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Truncate the file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>, <param><decl><type><name>sqlite_int64</name></type> <name>size</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>MemJournal</name> *</type><name>p</name> =<init> <expr>(<name>MemJournal</name> *)<name>pJfd</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pChunk</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>size</name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER</name><argument_list>(<argument><expr><name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pChunk</name> = <name>p</name>-&gt;<name>pFirst</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>pChunk</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>FileChunk</name> *</type><name>pTmp</name> =<init> <expr><name>pChunk</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pChunk</name> = <name>pChunk</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pTmp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <expr_stmt><expr><call><name>sqlite3MemJournalOpen</name><argument_list>(<argument><expr><name>pJfd</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Close the file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>memjrnlTruncate</name><argument_list>(<argument><expr><name>pJfd</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Sync the file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>NotUsed</name></decl></param>, <param><decl><type><name>int</name></type> <name>NotUsed2</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>NotUsed2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Query the size of the file in bytes.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>memjrnlFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>, <param><decl><type><name>sqlite_int64</name> *</type><name>pSize</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>MemJournal</name> *</type><name>p</name> =<init> <expr>(<name>MemJournal</name> *)<name>pJfd</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr>*<name>pSize</name> = (<name>sqlite_int64</name>) <name>p</name>-&gt;<name>endpoint</name>.<name>iOffset</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Table of methods for MemJournal sqlite3_file object.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> struct <name>sqlite3_io_methods</name></type> <name>MemJournalMethods</name> =<init> <expr><block>{
+  <expr>1</expr>,                <comment type="block">/* iVersion */</comment>
+  <expr><name>memjrnlClose</name></expr>,     <comment type="block">/* xClose */</comment>
+  <expr><name>memjrnlRead</name></expr>,      <comment type="block">/* xRead */</comment>
+  <expr><name>memjrnlWrite</name></expr>,     <comment type="block">/* xWrite */</comment>
+  <expr><name>memjrnlTruncate</name></expr>,  <comment type="block">/* xTruncate */</comment>
+  <expr><name>memjrnlSync</name></expr>,      <comment type="block">/* xSync */</comment>
+  <expr><name>memjrnlFileSize</name></expr>,  <comment type="block">/* xFileSize */</comment>
+  <expr>0</expr>,                <comment type="block">/* xLock */</comment>
+  <expr>0</expr>,                <comment type="block">/* xUnlock */</comment>
+  <expr>0</expr>,                <comment type="block">/* xCheckReservedLock */</comment>
+  <expr>0</expr>,                <comment type="block">/* xFileControl */</comment>
+  <expr>0</expr>,                <comment type="block">/* xSectorSize */</comment>
+  <expr>0</expr>                 <comment type="block">/* xDeviceCharacteristics */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/* 
+** Open a journal file.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3MemJournalOpen</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>MemJournal</name> *</type><name>p</name> =<init> <expr>(<name>MemJournal</name> *)<name>pJfd</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sqlite3MemJournalSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pMethod</name> = &amp;<name>MemJournalMethods</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Return true if the file-handle passed as an argument is 
+** an in-memory journal 
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3IsMemJournal</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pJfd</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pJfd</name>-&gt;<name>pMethods</name>==&amp;<name>MemJournalMethods</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* 
+** Return the number of bytes required to store a MemJournal that uses vfs
+** pVfs to create the underlying on-disk files.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3MemJournalSize</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>MemJournal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+</unit>

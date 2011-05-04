@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="hash.c" filename=""><comment type="block">/*
+** 2001 September 22
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This is the implementation of generic hash-tables
+** used in SQLite.
+**
+** $Id: hash.c,v 1.33 2009/01/09 01:12:28 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/* Turn bulk memory into a hash table object by initializing the
+** fields of the Hash structure.
+**
+** "pNew" is a pointer to the hash table that is to be initialized.
+** "copyKey" is true if the hash table should make its own private
+** copy of keys and false if it should just use the supplied pointer.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3HashInit</name><parameter_list>(<param><decl><type><name>Hash</name> *</type><name>pNew</name></decl></param>, <param><decl><type><name>int</name></type> <name>copyKey</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNew</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name>-&gt;<name>copyKey</name> = <name>copyKey</name>!=0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name>-&gt;<name>first</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name>-&gt;<name>count</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name>-&gt;<name>htsize</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNew</name>-&gt;<name>ht</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/* Remove all entries from a hash table.  Reclaim all memory.
+** Call this routine to delete a hash table or to reset a hash table
+** to the empty state.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3HashClear</name><parameter_list>(<param><decl><type><name>Hash</name> *</type><name>pH</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name></decl>;</decl_stmt>         <comment type="block">/* For looping over all elements of the table */</comment>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pH</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>elem</name> = <name>pH</name>-&gt;<name>first</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>first</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pH</name>-&gt;<name>ht</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>ht</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>htsize</name> = 0</expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>elem</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>HashElem</name> *</type><name>next_elem</name> =<init> <expr><name>elem</name>-&gt;<name>next</name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pH</name>-&gt;<name>copyKey</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>elem</name>-&gt;<name>pKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>elem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>elem</name> = <name>next_elem</name></expr>;</expr_stmt>
+  }</block></while>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>count</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Hash and comparison functions when the mode is SQLITE_HASH_STRING
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>strHash</name><parameter_list>(<param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z</name> =<init> <expr>(<name>const</name> <name>char</name> *)<name>pKey</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>nKey</name>&lt;=0</expr> )</condition><then> <expr_stmt><expr><name>nKey</name> = <call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <while>while<condition>( <expr><name>nKey</name> &gt; 0</expr>  )</condition><block>{
+    <expr_stmt><expr><name>h</name> = (<name>h</name>&lt;&lt;3) ^ <name>h</name> ^ <name><name>sqlite3UpperToLower</name><index>[<expr>(<name>unsigned</name> <name>char</name>)*<name>z</name>++</expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nKey</name>--</expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>h</name> &amp; 0x7fffffff</expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>strCompare</name><parameter_list>(<param><decl><type><name>const</name> <name>void</name> *</type><name>pKey1</name></decl></param>, <param><decl><type><name>int</name></type> <name>n1</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey2</name></decl></param>, <param><decl><type><name>int</name></type> <name>n2</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>n1</name>!=<name>n2</name></expr> )</condition><then> <return>return <expr>1</expr>;</return></then></if>
+  <return>return <macro><name>sqlite3StrNICmp</name><argument_list>(<argument>(const char*)pKey1</argument>,<argument>(const char*)pKey2</argument>,<argument>n1</argument>)</argument_list></macro>;</return>
+}</block></function>
+
+
+<comment type="block">/* Link an element into the hash table
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>insertElement</name><parameter_list>(
+  <param><decl><type><name>Hash</name> *</type><name>pH</name></decl></param>,              <comment type="block">/* The complete hash table */</comment>
+  <param><decl><type>struct <name>_ht</name> *</type><name>pEntry</name></decl></param>,    <comment type="block">/* The entry into which pNew is inserted */</comment>
+  <param><decl><type><name>HashElem</name> *</type><name>pNew</name></decl></param>         <comment type="block">/* The element to be inserted */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>pHead</name></decl>;</decl_stmt>       <comment type="block">/* First element already in pEntry */</comment>
+  <expr_stmt><expr><name>pHead</name> = <name>pEntry</name>-&gt;<name>chain</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pHead</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pNew</name>-&gt;<name>next</name> = <name>pHead</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pNew</name>-&gt;<name>prev</name> = <name>pHead</name>-&gt;<name>prev</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pHead</name>-&gt;<name>prev</name></expr> )</condition><then><block>{ <expr_stmt><expr><name>pHead</name>-&gt;<name>prev</name>-&gt;<name>next</name> = <name>pNew</name></expr>;</expr_stmt> }</block></then>
+    <else>else             <block>{ <expr_stmt><expr><name>pH</name>-&gt;<name>first</name> = <name>pNew</name></expr>;</expr_stmt> }</block></else></if>
+    <expr_stmt><expr><name>pHead</name>-&gt;<name>prev</name> = <name>pNew</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pNew</name>-&gt;<name>next</name> = <name>pH</name>-&gt;<name>first</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pH</name>-&gt;<name>first</name></expr> )</condition><then><block>{ <expr_stmt><expr><name>pH</name>-&gt;<name>first</name>-&gt;<name>prev</name> = <name>pNew</name></expr>;</expr_stmt> }</block></then></if>
+    <expr_stmt><expr><name>pNew</name>-&gt;<name>prev</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pH</name>-&gt;<name>first</name> = <name>pNew</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pEntry</name>-&gt;<name>count</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pEntry</name>-&gt;<name>chain</name> = <name>pNew</name></expr>;</expr_stmt>
+}</block></function>
+
+
+<comment type="block">/* Resize the hash table so that it cantains "new_size" buckets.
+** "new_size" must be a power of 2.  The hash table might fail 
+** to resize if sqlite3_malloc() fails.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>rehash</name><parameter_list>(<param><decl><type><name>Hash</name> *</type><name>pH</name></decl></param>, <param><decl><type><name>int</name></type> <name>new_size</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>_ht</name> *</type><name>new_ht</name></decl>;</decl_stmt>            <comment type="block">/* The new hash table */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name>, *<name>next_elem</name></decl>;</decl_stmt>    <comment type="block">/* For looping over existing elements */</comment>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MALLOC_SOFT_LIMIT</name></cpp:ifdef>
+  <if>if<condition>( <expr><name>new_size</name>*<call><name>sizeof</name><argument_list>(<argument><expr>struct <name>_ht</name></expr></argument>)</argument_list></call>&gt;<name>SQLITE_MALLOC_SOFT_LIMIT</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>new_size</name> = <name>SQLITE_MALLOC_SOFT_LIMIT</name>/<call><name>sizeof</name><argument_list>(<argument><expr>struct <name>_ht</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>new_size</name>==<name>pH</name>-&gt;<name>htsize</name></expr> )</condition><then> <return>return;</return></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <comment type="block">/* There is a call to sqlite3_malloc() inside rehash(). If there is
+  ** already an allocation at pH-&gt;ht, then if this malloc() fails it
+  ** is benign (since failing to resize a hash table is a performance
+  ** hit only, not a fatal error).
+  */</comment>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>htsize</name>&gt;0</expr> )</condition><then> <expr_stmt><expr><call><name>sqlite3BeginBenignMalloc</name><argument_list>()</argument_list></call></expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><name>new_ht</name> = (struct <name>_ht</name> *)<call><name>sqlite3MallocZero</name><argument_list>( <argument><expr><name>new_size</name>*<call><name>sizeof</name><argument_list>(<argument><expr>struct <name>_ht</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>htsize</name>&gt;0</expr> )</condition><then> <expr_stmt><expr><call><name>sqlite3EndBenignMalloc</name><argument_list>()</argument_list></call></expr>;</expr_stmt></then></if>
+
+  <if>if<condition>( <expr><name>new_ht</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pH</name>-&gt;<name>ht</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>ht</name> = <name>new_ht</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>htsize</name> = <name>new_size</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>elem</name>=<name>pH</name>-&gt;<name>first</name></expr>, <expr><name>pH</name>-&gt;<name>first</name>=0</expr>;</init> <condition><expr><name>elem</name></expr>;</condition> <incr><expr><name>elem</name> = <name>next_elem</name></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>h</name> =<init> <expr><call><name>strHash</name><argument_list>(<argument><expr><name>elem</name>-&gt;<name>pKey</name></expr></argument>, <argument><expr><name>elem</name>-&gt;<name>nKey</name></expr></argument>)</argument_list></call> &amp; (<name>new_size</name>-1)</expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>next_elem</name> = <name>elem</name>-&gt;<name>next</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>insertElement</name><argument_list>(<argument><expr><name>pH</name></expr></argument>, <argument><expr>&amp;<name><name>new_ht</name><index>[<expr><name>h</name></expr>]</index></name></expr></argument>, <argument><expr><name>elem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+}</block></function>
+
+<comment type="block">/* This function (for internal use only) locates an element in an
+** hash table that matches the given key.  The hash for this key has
+** already been computed and is passed as the 4th parameter.
+*/</comment>
+<function><type><name>static</name> <name>HashElem</name> *</type><name>findElementGivenHash</name><parameter_list>(
+  <param><decl><type><name>const</name> <name>Hash</name> *</type><name>pH</name></decl></param>,     <comment type="block">/* The pH to be searched */</comment>
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>,   <comment type="block">/* The key we are searching for */</comment>
+  <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>h</name></decl></param>               <comment type="block">/* The hash for this key. */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name></decl>;</decl_stmt>                <comment type="block">/* Used to loop thru the element list */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>count</name></decl>;</decl_stmt>                     <comment type="block">/* Number of elements left to test */</comment>
+
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>ht</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type>struct <name>_ht</name> *</type><name>pEntry</name> =<init> <expr>&amp;<name>pH</name>-&gt;<name><name>ht</name><index>[<expr><name>h</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>elem</name> = <name>pEntry</name>-&gt;<name>chain</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>count</name> = <name>pEntry</name>-&gt;<name>count</name></expr>;</expr_stmt>
+    <while>while<condition>( <expr><name>count</name>-- &amp;&amp; <name>elem</name></expr> )</condition><block>{
+      <if>if<condition>( <expr><call><name>strCompare</name><argument_list>(<argument><expr><name>elem</name>-&gt;<name>pKey</name></expr></argument>,<argument><expr><name>elem</name>-&gt;<name>nKey</name></expr></argument>,<argument><expr><name>pKey</name></expr></argument>,<argument><expr><name>nKey</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{ 
+        <return>return <expr><name>elem</name></expr>;</return>
+      }</block></then></if>
+      <expr_stmt><expr><name>elem</name> = <name>elem</name>-&gt;<name>next</name></expr>;</expr_stmt>
+    }</block></while>
+  }</block></then></if>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/* Remove a single entry from the hash table given a pointer to that
+** element and a hash on the element's key.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>removeElementGivenHash</name><parameter_list>(
+  <param><decl><type><name>Hash</name> *</type><name>pH</name></decl></param>,         <comment type="block">/* The pH containing "elem" */</comment>
+  <param><decl><type><name>HashElem</name>*</type> <name>elem</name></decl></param>,   <comment type="block">/* The element to be removed from the pH */</comment>
+  <param><decl><type><name>int</name></type> <name>h</name></decl></param>             <comment type="block">/* Hash value for the element */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>_ht</name> *</type><name>pEntry</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>elem</name>-&gt;<name>prev</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>elem</name>-&gt;<name>prev</name>-&gt;<name>next</name> = <name>elem</name>-&gt;<name>next</name></expr>;</expr_stmt> 
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pH</name>-&gt;<name>first</name> = <name>elem</name>-&gt;<name>next</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>elem</name>-&gt;<name>next</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>elem</name>-&gt;<name>next</name>-&gt;<name>prev</name> = <name>elem</name>-&gt;<name>prev</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>pEntry</name> = &amp;<name>pH</name>-&gt;<name><name>ht</name><index>[<expr><name>h</name></expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pEntry</name>-&gt;<name>chain</name>==<name>elem</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pEntry</name>-&gt;<name>chain</name> = <name>elem</name>-&gt;<name>next</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>pEntry</name>-&gt;<name>count</name>--</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pEntry</name>-&gt;<name>count</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pEntry</name>-&gt;<name>chain</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>copyKey</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>elem</name>-&gt;<name>pKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>( <argument><expr><name>elem</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>count</name>--</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>count</name>&lt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pH</name>-&gt;<name>first</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pH</name>-&gt;<name>count</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3HashClear</name><argument_list>(<argument><expr><name>pH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/* Attempt to locate an element of the hash table pH with a key
+** that matches pKey,nKey.  Return a pointer to the corresponding 
+** HashElem structure for this element if it is found, or NULL
+** otherwise.
+*/</comment>
+<function><type><name>HashElem</name> *</type><name>sqlite3HashFindElem</name><parameter_list>(<param><decl><type><name>const</name> <name>Hash</name> *</type><name>pH</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name></decl>;</decl_stmt>             <comment type="block">/* A hash on key */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name></decl>;</decl_stmt>    <comment type="block">/* The element that matches key */</comment>
+
+  <if>if<condition>( <expr><name>pH</name>==0 || <name>pH</name>-&gt;<name>ht</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>h</name> = <call><name>strHash</name><argument_list>(<argument><expr><name>pKey</name></expr></argument>,<argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>elem</name> = <call><name>findElementGivenHash</name><argument_list>(<argument><expr><name>pH</name></expr></argument>,<argument><expr><name>pKey</name></expr></argument>,<argument><expr><name>nKey</name></expr></argument>, <argument><expr><name>h</name> % <name>pH</name>-&gt;<name>htsize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>elem</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* Attempt to locate an element of the hash table pH with a key
+** that matches pKey,nKey.  Return the data for this element if it is
+** found, or NULL if there is no match.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3HashFind</name><parameter_list>(<param><decl><type><name>const</name> <name>Hash</name> *</type><name>pH</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name></decl>;</decl_stmt>    <comment type="block">/* The element that matches key */</comment>
+  <expr_stmt><expr><name>elem</name> = <call><name>sqlite3HashFindElem</name><argument_list>(<argument><expr><name>pH</name></expr></argument>, <argument><expr><name>pKey</name></expr></argument>, <argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>elem</name> ? <name>elem</name>-&gt;<name>data</name> : 0</expr>;</return>
+}</block></function>
+
+<comment type="block">/* Insert an element into the hash table pH.  The key is pKey,nKey
+** and the data is "data".
+**
+** If no element exists with a matching key, then a new
+** element is created.  A copy of the key is made if the copyKey
+** flag is set.  NULL is returned.
+**
+** If another element already exists with the same key, then the
+** new data replaces the old data and the old data is returned.
+** The key is not copied in this instance.  If a malloc fails, then
+** the new data is returned and the hash table is unchanged.
+**
+** If the "data" parameter to this function is NULL, then the
+** element corresponding to "key" is removed from the hash table.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3HashInsert</name><parameter_list>(<param><decl><type><name>Hash</name> *</type><name>pH</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>, <param><decl><type><name>void</name> *</type><name>data</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>hraw</name></decl>;</decl_stmt>             <comment type="block">/* Raw hash value of the key */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name></decl>;</decl_stmt>                <comment type="block">/* the hash of the key modulo hash table size */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>elem</name></decl>;</decl_stmt>       <comment type="block">/* Used to loop thru the element list */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>new_elem</name></decl>;</decl_stmt>   <comment type="block">/* New element added to the pH */</comment>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pH</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>hraw</name> = <call><name>strHash</name><argument_list>(<argument><expr><name>pKey</name></expr></argument>, <argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>htsize</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>h</name> = <name>hraw</name> % <name>pH</name>-&gt;<name>htsize</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>elem</name> = <call><name>findElementGivenHash</name><argument_list>(<argument><expr><name>pH</name></expr></argument>,<argument><expr><name>pKey</name></expr></argument>,<argument><expr><name>nKey</name></expr></argument>,<argument><expr><name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>elem</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>void</name> *</type><name>old_data</name> =<init> <expr><name>elem</name>-&gt;<name>data</name></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>data</name>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>removeElementGivenHash</name><argument_list>(<argument><expr><name>pH</name></expr></argument>,<argument><expr><name>elem</name></expr></argument>,<argument><expr><name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>elem</name>-&gt;<name>data</name> = <name>data</name></expr>;</expr_stmt>
+        <if>if<condition>( <expr>!<name>pH</name>-&gt;<name>copyKey</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>elem</name>-&gt;<name>pKey</name> = (<name>void</name> *)<name>pKey</name></expr>;</expr_stmt>
+        }</block></then></if>
+        <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>nKey</name>==<name>elem</name>-&gt;<name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></else></if>
+      <return>return <expr><name>old_data</name></expr>;</return>
+    }</block></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>data</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>new_elem</name> = (<name>HashElem</name>*)<call><name>sqlite3Malloc</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>HashElem</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>new_elem</name>==0</expr> )</condition><then> <return>return <expr><name>data</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>copyKey</name> &amp;&amp; <name>pKey</name>!=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>new_elem</name>-&gt;<name>pKey</name> = <call><name>sqlite3Malloc</name><argument_list>( <argument><expr><name>nKey</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>new_elem</name>-&gt;<name>pKey</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>new_elem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>data</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>(<name>void</name>*)<name>new_elem</name>-&gt;<name>pKey</name></expr></argument>, <argument><expr><name>pKey</name></expr></argument>, <argument><expr><name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>new_elem</name>-&gt;<name>pKey</name> = (<name>void</name>*)<name>pKey</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>new_elem</name>-&gt;<name>nKey</name> = <name>nKey</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pH</name>-&gt;<name>count</name>++</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>htsize</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>rehash</name><argument_list>(<argument><expr><name>pH</name></expr></argument>, <argument><expr>128/<call><name>sizeof</name><argument_list>(<argument><expr><name>pH</name>-&gt;<name><name>ht</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pH</name>-&gt;<name>htsize</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pH</name>-&gt;<name>count</name> = 0</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pH</name>-&gt;<name>copyKey</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>new_elem</name>-&gt;<name>pKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>new_elem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>data</name></expr>;</return>
+    }</block></then></if>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pH</name>-&gt;<name>count</name> &gt; <name>pH</name>-&gt;<name>htsize</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>rehash</name><argument_list>(<argument><expr><name>pH</name></expr></argument>,<argument><expr><name>pH</name>-&gt;<name>htsize</name>*2</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pH</name>-&gt;<name>htsize</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>h</name> = <name>hraw</name> % <name>pH</name>-&gt;<name>htsize</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>insertElement</name><argument_list>(<argument><expr><name>pH</name></expr></argument>, <argument><expr>&amp;<name>pH</name>-&gt;<name><name>ht</name><index>[<expr><name>h</name></expr>]</index></name></expr></argument>, <argument><expr><name>new_elem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>new_elem</name>-&gt;<name>data</name> = <name>data</name></expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+</unit>

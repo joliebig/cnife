@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="tokenize.c" filename=""><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** An tokenizer for SQL
+**
+** This file contains C code that splits an SQL input string up into
+** individual tokens and sends those tokens one-by-one over to the
+** parser for analysis.
+**
+** $Id: tokenize.c,v 1.152 2008/09/01 15:52:11 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** The charMap() macro maps alphabetic characters into their
+** lower-case ASCII equivalent.  On ASCII machines, this is just
+** an upper-to-lower case map.  On EBCDIC machines we also need
+** to adjust the encoding.  Only alphabetic characters and underscores
+** need to be translated.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ASCII</name></cpp:ifdef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>charMap</name>(X) sqlite3UpperToLower[(unsigned char)X]</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_EBCDIC</name></cpp:ifdef>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>charMap</name>(X) ebcdicToAscii[(unsigned char)X]</cpp:define>
+<decl_stmt><decl><type><name>const</name> <name>unsigned</name> <name>char</name></type> <name><name>ebcdicToAscii</name><index>[]</index></name> =<init> <expr><block>{
+<comment type="block">/* 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 0x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 1x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 2x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 3x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 4x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 5x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>, <expr>95</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 6x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 7x */</comment>
+   <expr>0</expr>, <expr>97</expr>, <expr>98</expr>, <expr>99</expr>,<expr>100</expr>,<expr>101</expr>,<expr>102</expr>,<expr>103</expr>,<expr>104</expr>,<expr>105</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 8x */</comment>
+   <expr>0</expr>,<expr>106</expr>,<expr>107</expr>,<expr>108</expr>,<expr>109</expr>,<expr>110</expr>,<expr>111</expr>,<expr>112</expr>,<expr>113</expr>,<expr>114</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* 9x */</comment>
+   <expr>0</expr>,  <expr>0</expr>,<expr>115</expr>,<expr>116</expr>,<expr>117</expr>,<expr>118</expr>,<expr>119</expr>,<expr>120</expr>,<expr>121</expr>,<expr>122</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Ax */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Bx */</comment>
+   <expr>0</expr>, <expr>97</expr>, <expr>98</expr>, <expr>99</expr>,<expr>100</expr>,<expr>101</expr>,<expr>102</expr>,<expr>103</expr>,<expr>104</expr>,<expr>105</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Cx */</comment>
+   <expr>0</expr>,<expr>106</expr>,<expr>107</expr>,<expr>108</expr>,<expr>109</expr>,<expr>110</expr>,<expr>111</expr>,<expr>112</expr>,<expr>113</expr>,<expr>114</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Dx */</comment>
+   <expr>0</expr>,  <expr>0</expr>,<expr>115</expr>,<expr>116</expr>,<expr>117</expr>,<expr>118</expr>,<expr>119</expr>,<expr>120</expr>,<expr>121</expr>,<expr>122</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Ex */</comment>
+   <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <expr>0</expr>,  <comment type="block">/* Fx */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The sqlite3KeywordCode function looks up an identifier to determine if
+** it is a keyword.  If it is a keyword, the token code of that keyword is 
+** returned.  If the input is not a keyword, TK_ID is returned.
+**
+** The implementation of this routine was generated by a program,
+** mkkeywordhash.h, located in the tool subdirectory of the distribution.
+** The output of the mkkeywordhash.c program is written into a file
+** named keywordhash.h and then included into this source file by
+** the #include below.
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"keywordhash.h"</cpp:file></cpp:include>
+
+
+<comment type="block">/*
+** If X is a character that can be used in an identifier then
+** IdChar(X) will be true.  Otherwise it is false.
+**
+** For ASCII, any character with the high-order bit set is
+** allowed in an identifier.  For 7-bit characters, 
+** sqlite3IsIdChar[X] must be 1.
+**
+** For EBCDIC, the rules are more complex but have the same
+** end result.
+**
+** Ticket #1066.  the SQL standard does not allow '$' in the
+** middle of identfiers.  But many SQL implementations do. 
+** SQLite will allow '$' in identifiers for compatibility.
+** But the feature is undocumented.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ASCII</name></cpp:ifdef>
+<decl_stmt><decl><type><name>const</name> <name>char</name></type> <name><name>sqlite3IsAsciiIdChar</name><index>[]</index></name> =<init> <expr><block>{
+<comment type="block">/* x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF */</comment>
+    <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 2x */</comment>
+    <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 3x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>,  <comment type="block">/* 4x */</comment>
+    <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>,  <comment type="block">/* 5x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>,  <comment type="block">/* 6x */</comment>
+    <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 7x */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>IdChar</name>(C)  (((c=C)&amp;0x80)!=0 || (c&gt;0x1f &amp;&amp; sqlite3IsAsciiIdChar[c-0x20]))</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_EBCDIC</name></cpp:ifdef>
+<decl_stmt><decl><type><name>const</name> <name>char</name></type> <name><name>sqlite3IsEbcdicIdChar</name><index>[]</index></name> =<init> <expr><block>{
+<comment type="block">/* x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF */</comment>
+    <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 4x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 5x */</comment>
+    <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 6x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* 7x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>,  <comment type="block">/* 8x */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>0</expr>,  <comment type="block">/* 9x */</comment>
+    <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>,  <comment type="block">/* Ax */</comment>
+    <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr>,  <comment type="block">/* Bx */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>,  <comment type="block">/* Cx */</comment>
+    <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>,  <comment type="block">/* Dx */</comment>
+    <expr>0</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>,  <comment type="block">/* Ex */</comment>
+    <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>1</expr>, <expr>0</expr>,  <comment type="block">/* Fx */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>IdChar</name>(C)  (((c=C)&gt;=0x42 &amp;&amp; sqlite3IsEbcdicIdChar[c-0x40]))</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*
+** Return the length of the token that begins at z[0]. 
+** Store the token type in *tokenType before returning.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3GetToken</name><parameter_list>(<param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name> *</type><name>tokenType</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>c</name></decl>;</decl_stmt>
+  <switch>switch<condition>( <expr>*<name>z</name></expr> )</condition><block>{
+    <case>case <expr>' '</expr>: </case><case>case <expr>'\t'</expr>: </case><case>case <expr>'\n'</expr>: </case><case>case <expr>'\f'</expr>: </case><case>case <expr>'\r'</expr>: <block>{
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><call><name>isspace</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_SPACE</name></expr>;</expr_stmt>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+    </case><case>case <expr>'-'</expr>: <block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr>1</expr>]</index></name>=='-'</expr> )</condition><then><block>{
+        <for>for(<init><expr><name>i</name>=2</expr>;</init> <condition><expr>(<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0 &amp;&amp; <name>c</name>!='\n'</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_SPACE</name></expr>;</expr_stmt>
+        <return>return <expr><name>i</name></expr>;</return>
+      }</block></then></if>
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_MINUS</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'('</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_LP</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>')'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_RP</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>';'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_SEMI</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'+'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_PLUS</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'*'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_STAR</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'/'</expr>: <block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr>1</expr>]</index></name>!='*' || <name><name>z</name><index>[<expr>2</expr>]</index></name>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_SLASH</name></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></then></if>
+      <for>for(<init><expr><name>i</name>=3</expr>, <expr><name>c</name>=<name><name>z</name><index>[<expr>2</expr>]</index></name></expr>;</init> <condition><expr>(<name>c</name>!='*' || <name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>!='/') &amp;&amp; (<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <if>if<condition>( <expr><name>c</name></expr> )</condition><then> <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt></then></if>
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_SPACE</name></expr>;</expr_stmt>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+    </case><case>case <expr>'%'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_REM</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'='</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_EQ</name></expr>;</expr_stmt>
+      <return>return <expr>1 + (<name><name>z</name><index>[<expr>1</expr>]</index></name>=='=')</expr>;</return>
+    }</block>
+    </case><case>case <expr>'&lt;'</expr>: <block>{
+      <if>if<condition>( <expr>(<name>c</name>=<name><name>z</name><index>[<expr>1</expr>]</index></name>)=='='</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_LE</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='&gt;'</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_NE</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='&lt;'</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_LSHIFT</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_LT</name></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></else></if></else></if></else></if>
+    }</block>
+    </case><case>case <expr>'&gt;'</expr>: <block>{
+      <if>if<condition>( <expr>(<name>c</name>=<name><name>z</name><index>[<expr>1</expr>]</index></name>)=='='</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_GE</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='&gt;'</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_RSHIFT</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_GT</name></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></else></if></else></if>
+    }</block>
+    </case><case>case <expr>'!'</expr>: <block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr>1</expr>]</index></name>!='='</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_NE</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></else></if>
+    }</block>
+    </case><case>case <expr>'|'</expr>: <block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr>1</expr>]</index></name>!='|'</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_BITOR</name></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_CONCAT</name></expr>;</expr_stmt>
+        <return>return <expr>2</expr>;</return>
+      }</block></else></if>
+    }</block>
+    </case><case>case <expr>','</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_COMMA</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'&amp;'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_BITAND</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'~'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_BITNOT</name></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block>
+    </case><case>case <expr>'`'</expr>:
+    </case><case>case <expr>'\''</expr>:
+    </case><case>case <expr>'"'</expr>: <block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>delim</name> =<init> <expr><name><name>z</name><index>[<expr>0</expr>]</index></name></expr></init></decl>;</decl_stmt>
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr>(<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+        <if>if<condition>( <expr><name>c</name>==<name>delim</name></expr> )</condition><then><block>{
+          <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name>==<name>delim</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+          }</block></then><else>else<block>{
+            <break>break;</break>
+          }</block></else></if>
+        }</block></then></if>
+      }</block></for>
+      <if>if<condition>( <expr><name>c</name>=='\''</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_STRING</name></expr>;</expr_stmt>
+        <return>return <expr><name>i</name>+1</expr>;</return>
+      }</block></then><else>else <if>if<condition>( <expr><name>c</name>!=0</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ID</name></expr>;</expr_stmt>
+        <return>return <expr><name>i</name>+1</expr>;</return>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+        <return>return <expr><name>i</name></expr>;</return>
+      }</block></else></if></else></if>
+    }</block>
+    </case><case>case <expr>'.'</expr>: <block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_FLOATING_POINT</name></cpp:ifndef>
+      <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_DOT</name></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></then></if>
+      <comment type="block">/* If the next character is a digit, this is a floating point
+      ** number that begins with ".".  Fall thru into the next case */</comment>
+    }</block>
+    </case><case>case <expr>'0'</expr>: </case><case>case <expr>'1'</expr>: </case><case>case <expr>'2'</expr>: </case><case>case <expr>'3'</expr>: </case><case>case <expr>'4'</expr>:
+    </case><case>case <expr>'5'</expr>: </case><case>case <expr>'6'</expr>: </case><case>case <expr>'7'</expr>: </case><case>case <expr>'8'</expr>: </case><case>case <expr>'9'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_INTEGER</name></expr>;</expr_stmt>
+      <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_FLOATING_POINT</name></cpp:ifndef>
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>=='.'</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+        <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt> }</block></while>
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_FLOAT</name></expr>;</expr_stmt>
+      }</block></then></if>
+      <if>if<condition>( <expr>(<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>=='e' || <name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>=='E') &amp;&amp;
+           ( <call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name></expr></argument>)</argument_list></call> 
+            || ((<name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name>=='+' || <name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name>=='-') &amp;&amp; <call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name>+2</expr>]</index></name></expr></argument>)</argument_list></call>)
+           )</expr>
+      )</condition><then><block>{
+        <expr_stmt><expr><name>i</name> += 2</expr>;</expr_stmt>
+        <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt> }</block></while>
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_FLOAT</name></expr>;</expr_stmt>
+      }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <while>while<condition>( <expr><call><name>IdChar</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+      }</block></while>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+    </case><case>case <expr>'['</expr>: <block>{
+      <for>for(<init><expr><name>i</name>=1</expr>, <expr><name>c</name>=<name><name>z</name><index>[<expr>0</expr>]</index></name></expr>;</init> <condition><expr><name>c</name>!=']' &amp;&amp; (<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <expr_stmt><expr>*<name>tokenType</name> = <name>c</name>==']' ? <name>TK_ID</name> : <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+    </case><case>case <expr>'?'</expr>: <block>{
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_VARIABLE</name></expr>;</expr_stmt>
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+    </case><case>case <expr>'#'</expr>: <block>{
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><call><name>isdigit</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <if>if<condition>( <expr><name>i</name>&gt;1</expr> )</condition><then><block>{
+        <comment type="block">/* Parameters of the form #NNN (where NNN is a number) are used
+        ** internally by sqlite3NestedParse.  */</comment>
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_REGISTER</name></expr>;</expr_stmt>
+        <return>return <expr><name>i</name></expr>;</return>
+      }</block></then></if>
+      <comment type="block">/* Fall through into the next case if the '#' is not followed by
+      ** a digit. Try to match #AAAA where AAAA is a parameter name. */</comment>
+    }</block>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TCL_VARIABLE</name></cpp:ifndef>
+    </case><case>case <expr>'$'</expr>:
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    </case><case>case <expr>'@'</expr>:  <comment type="block">/* For compatibility with MS SQL Server */</comment>
+    </case><case>case <expr>':'</expr>: <block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr>*<name>tokenType</name> = <name>TK_VARIABLE</name></expr>;</expr_stmt>
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr>(<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+        <if>if<condition>( <expr><call><name>IdChar</name><argument_list>(<argument><expr><name>c</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>n</name>++</expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TCL_VARIABLE</name></cpp:ifndef>
+        }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='(' &amp;&amp; <name>n</name>&gt;0</expr> )</condition><then><block>{
+          <do>do<block>{
+            <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+          }</block>while<condition>( <expr>(<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0 &amp;&amp; !<call><name>isspace</name><argument_list>(<argument><expr><name>c</name></expr></argument>)</argument_list></call> &amp;&amp; <name>c</name>!=')'</expr> )</condition>;</do>
+          <if>if<condition>( <expr><name>c</name>==')'</expr> )</condition><then><block>{
+            <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+          }</block></then><else>else<block>{
+            <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+          }</block></else></if>
+          <break>break;</break>
+        }</block></then><else>else <if>if<condition>( <expr><name>c</name>==':' &amp;&amp; <name><name>z</name><index>[<expr><name>i</name>+1</expr>]</index></name>==':'</expr> )</condition><then><block>{
+          <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+        }</block></then><else>else<block>{
+          <break>break;</break>
+        }</block></else></if></else></if></else></if>
+      }</block></for>
+      <if>if<condition>( <expr><name>n</name>==0</expr> )</condition><then> <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt></then></if>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_BLOB_LITERAL</name></cpp:ifndef>
+    </case><case>case <expr>'x'</expr>: </case><case>case <expr>'X'</expr>: <block>{
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr>1</expr>]</index></name>=='\''</expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>tokenType</name> = <name>TK_BLOB</name></expr>;</expr_stmt>
+        <for>for(<init><expr><name>i</name>=2</expr>;</init> <condition><expr>(<name>c</name>=<name><name>z</name><index>[<expr><name>i</name></expr>]</index></name>)!=0 &amp;&amp; <name>c</name>!='\''</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+          <if>if<condition>( <expr>!<call><name>isxdigit</name><argument_list>(<argument><expr><name>c</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+            <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+          }</block></then></if>
+        }</block></for>
+        <if>if<condition>( <expr><name>i</name>%2 || !<name>c</name></expr> )</condition><then> <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt></then></if>
+        <if>if<condition>( <expr><name>c</name></expr> )</condition><then> <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt></then></if>
+        <return>return <expr><name>i</name></expr>;</return>
+      }</block></then></if>
+      <comment type="block">/* Otherwise fall through to the next case */</comment>
+    }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    </case><default>default: <block>{
+      <if>if<condition>( <expr>!<call><name>IdChar</name><argument_list>(<argument><expr>*<name>z</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <break>break;</break>
+      }</block></then></if>
+      <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><call><name>IdChar</name><argument_list>(<argument><expr><name><name>z</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{}</block></for>
+      <expr_stmt><expr>*<name>tokenType</name> = <call><name>keywordCode</name><argument_list>(<argument><expr>(<name>char</name>*)<name>z</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>i</name></expr>;</return>
+    }</block>
+  </default>}</block></switch>
+  <expr_stmt><expr>*<name>tokenType</name> = <name>TK_ILLEGAL</name></expr>;</expr_stmt>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Run the parser on the given SQL string.  The parser structure is
+** passed in.  An SQLITE_ status code is returned.  If an error occurs
+** then an and attempt is made to write an error message into 
+** memory obtained from sqlite3_malloc() and to make *pzErrMsg point to that
+** error message.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3RunParser</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl></param>, <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nErr</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pEngine</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>tokenType</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>lastTokenParsed</name> =<init> <expr>-1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>mxSqlLen</name> =<init> <expr><name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_SQL_LENGTH</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>activeVdbeCnt</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>u1</name>.<name>isInterrupted</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name>-&gt;<name>zTail</name> = <name>pParse</name>-&gt;<name>zSql</name> = <name>zSql</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>i</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pzErrMsg</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pEngine</name> = <call><name>sqlite3ParserAlloc</name><argument_list>(<argument><expr>(<name>void</name>*(*)(<name>size_t</name>))<name>sqlite3Malloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pEngine</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>sLastToken</name>.<name>dyn</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>pNewTable</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>pNewTrigger</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>nVar</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>nVarExpr</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>nVarExprAlloc</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>apVarExpr</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr>!<name>db</name>-&gt;<name>mallocFailed</name> &amp;&amp; <name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name>!=0</expr> )</condition><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>sLastToken</name>.<name>z</name> = (<name>u8</name>*)&amp;<name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>-&gt;<name>sLastToken</name>.<name>dyn</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>sLastToken</name>.<name>n</name> = <call><name>sqlite3GetToken</name><argument_list>(<argument><expr>(<name>unsigned</name> <name>char</name>*)&amp;<name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>,<argument><expr>&amp;<name>tokenType</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>i</name> += <name>pParse</name>-&gt;<name>sLastToken</name>.<name>n</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>i</name>&gt;<name>mxSqlLen</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_TOOBIG</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+    <switch>switch<condition>( <expr><name>tokenType</name></expr> )</condition><block>{
+      <case>case <expr><name>TK_SPACE</name></expr>: <block>{
+        <if>if<condition>( <expr><name>db</name>-&gt;<name>u1</name>.<name>isInterrupted</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_INTERRUPT</name></expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pzErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"interrupt"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <goto>goto <name>abort_parse</name>;</goto>
+        }</block></then></if>
+        <break>break;</break>
+      }</block>
+      </case><case>case <expr><name>TK_ILLEGAL</name></expr>: <block>{
+        <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>*<name>pzErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr>*<name>pzErrMsg</name> = <call><name>sqlite3MPrintf</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"unrecognized token: \"%T\""</expr></argument>,
+                        <argument><expr>&amp;<name>pParse</name>-&gt;<name>sLastToken</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>nErr</name>++</expr>;</expr_stmt>
+        <goto>goto <name>abort_parse</name>;</goto>
+      }</block>
+      </case><case>case <expr><name>TK_SEMI</name></expr>: <block>{
+        <expr_stmt><expr><name>pParse</name>-&gt;<name>zTail</name> = &amp;<name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+        <comment type="block">/* Fall thru into the default case */</comment>
+      }</block>
+      </case><default>default: <block>{
+        <expr_stmt><expr><call><name>sqlite3Parser</name><argument_list>(<argument><expr><name>pEngine</name></expr></argument>, <argument><expr><name>tokenType</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>sLastToken</name></expr></argument>, <argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>lastTokenParsed</name> = <name>tokenType</name></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pParse</name>-&gt;<name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+          <goto>goto <name>abort_parse</name>;</goto>
+        }</block></then></if>
+        <break>break;</break>
+      }</block>
+    </default>}</block></switch>
+  }</block></while>
+<label><name>abort_parse</name>:</label>
+  <if>if<condition>( <expr><name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name>==0 &amp;&amp; <name>nErr</name>==0 &amp;&amp; <name>pParse</name>-&gt;<name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>lastTokenParsed</name>!=<name>TK_SEMI</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3Parser</name><argument_list>(<argument><expr><name>pEngine</name></expr></argument>, <argument><expr><name>TK_SEMI</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>sLastToken</name></expr></argument>, <argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pParse</name>-&gt;<name>zTail</name> = &amp;<name><name>zSql</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3Parser</name><argument_list>(<argument><expr><name>pEngine</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>sLastToken</name></expr></argument>, <argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>YYTRACKMAXSTACKDEPTH</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>sqlite3StatusSet</name><argument_list>(<argument><expr><name>SQLITE_STATUS_PARSER_STACK</name></expr></argument>,
+      <argument><expr><call><name>sqlite3ParserStackPeak</name><argument_list>(<argument><expr><name>pEngine</name></expr></argument>)</argument_list></call></expr></argument>
+  )</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* YYDEBUG */</comment>
+  <expr_stmt><expr><call><name>sqlite3ParserFree</name><argument_list>(<argument><expr><name>pEngine</name></expr></argument>, <argument><expr><name>sqlite3_free</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pParse</name>-&gt;<name>rc</name>!=<name>SQLITE_OK</name> &amp;&amp; <name>pParse</name>-&gt;<name>rc</name>!=<name>SQLITE_DONE</name> &amp;&amp; <name>pParse</name>-&gt;<name>zErrMsg</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr>&amp;<name>pParse</name>-&gt;<name>zErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><call><name>sqlite3ErrStr</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pParse</name>-&gt;<name>zErrMsg</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr>*<name>pzErrMsg</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr>*<name>pzErrMsg</name> = <name>pParse</name>-&gt;<name>zErrMsg</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>zErrMsg</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>nErr</name>++</expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pParse</name>-&gt;<name>pVdbe</name> &amp;&amp; <name>pParse</name>-&gt;<name>nErr</name>&gt;0 &amp;&amp; <name>pParse</name>-&gt;<name>nested</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeDelete</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>pVdbe</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>pVdbe</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_SHARED_CACHE</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>pParse</name>-&gt;<name>nested</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>aTableLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>aTableLock</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>nTableLock</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_VIRTUALTABLE</name></cpp:ifndef>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>apVtabLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <if>if<condition>( <expr>!<name>IN_DECLARE_VTAB</name></expr> )</condition><then><block>{
+    <comment type="block">/* If the pParse-&gt;declareVtab flag is set, do not delete any table 
+    ** structure built up in pParse-&gt;pNewTable. The calling code (see vtab.c)
+    ** will take responsibility for freeing the Table structure.
+    */</comment>
+    <expr_stmt><expr><call><name>sqlite3DeleteTable</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>pNewTable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>sqlite3DeleteTrigger</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>pNewTrigger</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>apVarExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>aAlias</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>pParse</name>-&gt;<name>pZombieTab</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>Table</name> *</type><name>p</name> =<init> <expr><name>pParse</name>-&gt;<name>pZombieTab</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>pZombieTab</name> = <name>p</name>-&gt;<name>pNextZombie</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3DeleteTable</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <if>if<condition>( <expr><name>nErr</name>&gt;0 &amp;&amp; (<name>pParse</name>-&gt;<name>rc</name>==<name>SQLITE_OK</name> || <name>pParse</name>-&gt;<name>rc</name>==<name>SQLITE_DONE</name>)</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>nErr</name></expr>;</return>
+}</block></function>
+</unit>

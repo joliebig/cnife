@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="mutex_os2.c" filename=""><comment type="block">/*
+** 2007 August 28
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains the C functions that implement mutexes for OS/2
+**
+** $Id: mutex_os2.c,v 1.11 2008/11/22 19:50:54 pweilbacher Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** The code in this file is only used if SQLITE_MUTEX_OS2 is defined.
+** See the mutex.h file for details.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MUTEX_OS2</name></cpp:ifdef>
+
+<comment type="block">/********************** OS/2 Mutex Implementation **********************
+**
+** This implementation of mutexes is built using the OS/2 API.
+*/</comment>
+
+<comment type="block">/*
+** The mutex object
+** Each recursive mutex is an instance of the following structure.
+*/</comment>
+<struct>struct <name>sqlite3_mutex</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>HMTX</name></type> <name>mutex</name></decl>;</decl_stmt>       <comment type="block">/* Mutex controlling the lock */</comment>
+  <decl_stmt><decl><type><name>int</name></type>  <name>id</name></decl>;</decl_stmt>          <comment type="block">/* Mutex type */</comment>
+  <decl_stmt><decl><type><name>int</name></type>  <name>nRef</name></decl>;</decl_stmt>        <comment type="block">/* Number of references */</comment>
+  <decl_stmt><decl><type><name>TID</name></type>  <name>owner</name></decl>;</decl_stmt>       <comment type="block">/* Thread holding this mutex */</comment>
+</public>}</block>;</struct>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>OS2_MUTEX_INITIALIZER</name>   0,0,0,0</cpp:define>
+
+<comment type="block">/*
+** Initialize and deinitialize the mutex subsystem.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>os2MutexInit</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ <return>return <expr><name>SQLITE_OK</name></expr>;</return> }</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>os2MutexEnd</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ <return>return <expr><name>SQLITE_OK</name></expr>;</return> }</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_alloc() routine allocates a new
+** mutex and returns a pointer to it.  If it returns NULL
+** that means that a mutex could not be allocated. 
+** SQLite will unwind its stack and return an error.  The argument
+** to sqlite3_mutex_alloc() is one of these integer constants:
+**
+** &lt;ul&gt;
+** &lt;li&gt;  SQLITE_MUTEX_FAST               0
+** &lt;li&gt;  SQLITE_MUTEX_RECURSIVE          1
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_MASTER      2
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_MEM         3
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_PRNG        4
+** &lt;/ul&gt;
+**
+** The first two constants cause sqlite3_mutex_alloc() to create
+** a new mutex.  The new mutex is recursive when SQLITE_MUTEX_RECURSIVE
+** is used but not necessarily so when SQLITE_MUTEX_FAST is used.
+** The mutex implementation does not need to make a distinction
+** between SQLITE_MUTEX_RECURSIVE and SQLITE_MUTEX_FAST if it does
+** not want to.  But SQLite will only request a recursive mutex in
+** cases where it really needs one.  If a faster non-recursive mutex
+** implementation is available on the host platform, the mutex subsystem
+** might return such a mutex in response to SQLITE_MUTEX_FAST.
+**
+** The other allowed parameters to sqlite3_mutex_alloc() each return
+** a pointer to a static preexisting mutex.  Three static mutexes are
+** used by the current version of SQLite.  Future versions of SQLite
+** may add additional static mutexes.  Static mutexes are for internal
+** use by SQLite only.  Applications that use SQLite mutexes should
+** use only the dynamic mutexes returned by SQLITE_MUTEX_FAST or
+** SQLITE_MUTEX_RECURSIVE.
+**
+** Note that if one of the dynamic mutex parameters (SQLITE_MUTEX_FAST
+** or SQLITE_MUTEX_RECURSIVE) is used then sqlite3_mutex_alloc()
+** returns a different mutex on every call.  But for the static
+** mutex types, the same mutex is returned on every call that has
+** the same type number.
+*/</comment>
+<function><type><name>static</name> <name>sqlite3_mutex</name> *</type><name>os2MutexAlloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>iType</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>p</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+  <switch>switch<condition>( <expr><name>iType</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_MUTEX_FAST</name></expr>:
+    </case><case>case <expr><name>SQLITE_MUTEX_RECURSIVE</name></expr>: <block>{
+      <expr_stmt><expr><name>p</name> = <call><name>sqlite3MallocZero</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>id</name> = <name>iType</name></expr>;</expr_stmt>
+        <if>if<condition>( <expr><call><name>DosCreateMutexSem</name><argument_list>( <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>FALSE</name></expr></argument> )</argument_list></call> != <name>NO_ERROR</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>( <argument><expr><name>p</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>p</name> = <name>NULL</name></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+    </case><default>default: <block>{
+      <decl_stmt><decl><type><name>static</name> <name>volatile</name> <name>int</name></type> <name>isInit</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>static</name> <name>sqlite3_mutex</name></type> <name><name>staticMutexes</name><index>[]</index></name> =<init> <expr><block>{
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+        <expr><block>{ <expr><name>OS2_MUTEX_INITIALIZER</name></expr>, }</block></expr>,
+      }</block></expr></init></decl>;</decl_stmt>
+      <if>if <condition>( <expr>!<name>isInit</name></expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>APIRET</name></type> <name>rc</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>PTIB</name></type> <name>ptib</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>PPIB</name></type> <name>ppib</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>HMTX</name></type> <name>mutex</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>char</name></type> <name><name>name</name><index>[<expr>32</expr>]</index></name></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>DosGetInfoBlocks</name><argument_list>( <argument><expr>&amp;<name>ptib</name></expr></argument>, <argument><expr>&amp;<name>ppib</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr>"\\SEM32\\SQLITE%04x"</expr></argument>,
+                          <argument><expr><name>ppib</name>-&gt;<name>pib_ulpid</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <while>while<condition>( <expr>!<name>isInit</name></expr> )</condition><block>{
+          <expr_stmt><expr><name>mutex</name> = 0</expr>;</expr_stmt>
+          <expr_stmt><expr><name>rc</name> = <call><name>DosCreateMutexSem</name><argument_list>( <argument><expr><name>name</name></expr></argument>, <argument><expr>&amp;<name>mutex</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>FALSE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <if>if<condition>( <expr><name>rc</name> == <name>NO_ERROR</name></expr> )</condition><then><block>{
+            <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>i</name></decl>;</decl_stmt>
+            <if>if<condition>( <expr>!<name>isInit</name></expr> )</condition><then><block>{
+              <for>for( <init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <call><name>sizeof</name><argument_list>(<argument><expr><name>staticMutexes</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>staticMutexes</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr> )<block>{
+                <expr_stmt><expr><call><name>DosCreateMutexSem</name><argument_list>( <argument><expr>0</expr></argument>, <argument><expr>&amp;<name><name>staticMutexes</name><index>[<expr><name>i</name></expr>]</index></name>.<name>mutex</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>FALSE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+              }</block></for>
+              <expr_stmt><expr><name>isInit</name> = 1</expr>;</expr_stmt>
+            }</block></then></if>
+            <expr_stmt><expr><call><name>DosCloseMutexSem</name><argument_list>( <argument><expr><name>mutex</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          }</block></then><else>else <if>if<condition>( <expr><name>rc</name> == <name>ERROR_DUPLICATE_NAME</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>DosSleep</name><argument_list>( <argument><expr>1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          }</block></then><else>else<block>{
+            <return>return <expr><name>p</name></expr>;</return>
+          }</block></else></if></else></if>
+        }</block></while>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iType</name>-2 &gt;= 0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iType</name>-2 &lt; <call><name>sizeof</name><argument_list>(<argument><expr><name>staticMutexes</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>staticMutexes</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name> = &amp;<name><name>staticMutexes</name><index>[<expr><name>iType</name>-2</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>id</name> = <name>iType</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+  </default>}</block></switch>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** This routine deallocates a previously allocated mutex.
+** SQLite is careful to deallocate every mutex that it allocates.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>os2MutexFree</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_FAST</name> || <name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DosCloseMutexSem</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>( <argument><expr><name>p</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_enter() and sqlite3_mutex_try() routines attempt
+** to enter a mutex.  If another thread is already within the mutex,
+** sqlite3_mutex_enter() will block and sqlite3_mutex_try() will return
+** SQLITE_BUSY.  The sqlite3_mutex_try() interface returns SQLITE_OK
+** upon successful entry.  Mutexes created using SQLITE_MUTEX_RECURSIVE can
+** be entered multiple times by the same thread.  In such cases the,
+** mutex must be exited an equal number of times before another thread
+** can enter.  If the same thread tries to enter any other kind of mutex
+** more than once, the behavior is undefined.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>os2MutexEnter</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>TID</name></type> <name>tid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PID</name></type> <name>holder1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ULONG</name></type> <name>holder2</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name> || <call><name>os2MutexNotheld</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DosRequestMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr><name>SEM_INDEFINITE_WAIT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DosQueryMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>&amp;<name>holder1</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>, <argument><expr>&amp;<name>holder2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>owner</name> = <name>tid</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nRef</name>++</expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>os2MutexTry</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>TID</name></type> <name>tid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PID</name></type> <name>holder1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ULONG</name></type> <name>holder2</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return <expr><name>SQLITE_OK</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name> || <call><name>os2MutexNotheld</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>DosRequestMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr><name>SEM_IMMEDIATE_RETURN</name></expr></argument>)</argument_list></call> == <name>NO_ERROR</name></expr>)</condition><then> <block>{
+    <expr_stmt><expr><call><name>DosQueryMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>&amp;<name>holder1</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>, <argument><expr>&amp;<name>holder2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>owner</name> = <name>tid</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>nRef</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then> <else>else <block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_BUSY</name></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_leave() routine exits a mutex that was
+** previously entered by the same thread.  The behavior
+** is undefined if the mutex is not currently entered or
+** is not currently allocated.  SQLite will never do either.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>os2MutexLeave</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>TID</name></type> <name>tid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PID</name></type> <name>holder1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ULONG</name></type> <name>holder2</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DosQueryMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>&amp;<name>holder1</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>, <argument><expr>&amp;<name>holder2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>owner</name>==<name>tid</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nRef</name>--</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>==0 || <name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DosReleaseMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+<comment type="block">/*
+** The sqlite3_mutex_held() and sqlite3_mutex_notheld() routine are
+** intended for use inside assert() statements.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>os2MutexHeld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>TID</name></type> <name>tid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PID</name></type> <name>pid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ULONG</name></type> <name>ulCount</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PTIB</name></type> <name>ptib</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>!=0</expr> )</condition><then> <block>{
+    <expr_stmt><expr><call><name>DosQueryMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>&amp;<name>pid</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>, <argument><expr>&amp;<name>ulCount</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then> <else>else <block>{
+    <expr_stmt><expr><call><name>DosGetInfoBlocks</name><argument_list>(<argument><expr>&amp;<name>ptib</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>tid</name> = <name>ptib</name>-&gt;<name>tib_ptib2</name>-&gt;<name>tib2_ultid</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>p</name>==0 || (<name>p</name>-&gt;<name>nRef</name>!=0 &amp;&amp; <name>p</name>-&gt;<name>owner</name>==<name>tid</name>)</expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>os2MutexNotheld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>TID</name></type> <name>tid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PID</name></type> <name>pid</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ULONG</name></type> <name>ulCount</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>PTIB</name></type> <name>ptib</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>!= 0</expr> )</condition><then> <block>{
+    <expr_stmt><expr><call><name>DosQueryMutexSem</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>mutex</name></expr></argument>, <argument><expr>&amp;<name>pid</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>, <argument><expr>&amp;<name>ulCount</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then> <else>else <block>{
+    <expr_stmt><expr><call><name>DosGetInfoBlocks</name><argument_list>(<argument><expr>&amp;<name>ptib</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>tid</name> = <name>ptib</name>-&gt;<name>tib_ptib2</name>-&gt;<name>tib2_ultid</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>p</name>==0 || <name>p</name>-&gt;<name>nRef</name>==0 || <name>p</name>-&gt;<name>owner</name>!=<name>tid</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<function><type><name>sqlite3_mutex_methods</name> *</type><name>sqlite3DefaultMutex</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>sqlite3_mutex_methods</name></type> <name>sMutex</name> =<init> <expr><block>{
+    <expr><name>os2MutexInit</name></expr>,
+    <expr><name>os2MutexEnd</name></expr>,
+    <expr><name>os2MutexAlloc</name></expr>,
+    <expr><name>os2MutexFree</name></expr>,
+    <expr><name>os2MutexEnter</name></expr>,
+    <expr><name>os2MutexTry</name></expr>,
+    <expr><name>os2MutexLeave</name></expr>,
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+    <expr><name>os2MutexHeld</name></expr>,
+    <expr><name>os2MutexNotheld</name></expr>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <return>return <expr>&amp;<name>sMutex</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_MUTEX_OS2 */</comment>
+</unit>

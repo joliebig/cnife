@@ -1,0 +1,1171 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="resolve.c" filename=""><comment type="block">/*
+** 2008 August 18
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains routines used for walking the parser tree and
+** resolve all identifiers by associating them with a particular
+** table and column.
+**
+** $Id: resolve.c,v 1.15 2008/12/10 19:26:24 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Turn the pExpr expression into an alias for the iCol-th column of the
+** result set in pEList.
+**
+** If the result set column is a simple column reference, then this routine
+** makes an exact copy.  But for any other kind of expression, this
+** routine make a copy of the result set column as the argument to the
+** TK_AS operator.  The TK_AS operator causes the expression to be
+** evaluated just once and then reused for each alias.
+**
+** The reason for suppressing the TK_AS term when the expression is a simple
+** column reference is so that the column reference will be recognized as
+** usable by indices within the WHERE clause processing logic. 
+**
+** Hack:  The TK_AS operator is inhibited if zType[0]=='G'.  This means
+** that in a GROUP BY clause, the expression is evaluated twice.  Hence:
+**
+**     SELECT random()%5 AS x, count(*) FROM tab GROUP BY x
+**
+** Is equivalent to:
+**
+**     SELECT random()%5 AS x, count(*) FROM tab GROUP BY random()%5
+**
+** The result of random()%5 in the GROUP BY clause is probably different
+** from the result in the result-set.  We might fix this someday.  Or
+** then again, we might not...
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>resolveAlias</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,         <comment type="block">/* Parsing context */</comment>
+  <param><decl><type><name>ExprList</name> *</type><name>pEList</name></decl></param>,      <comment type="block">/* A result set */</comment>
+  <param><decl><type><name>int</name></type> <name>iCol</name></decl></param>,              <comment type="block">/* A column in the result set.  0..pEList-&gt;nExpr-1 */</comment>
+  <param><decl><type><name>Expr</name> *</type><name>pExpr</name></decl></param>,           <comment type="block">/* Transform this into an alias to the result set */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zType</name></decl></param>      <comment type="block">/* "GROUP" or "ORDER" or "" */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Expr</name> *</type><name>pOrig</name></decl>;</decl_stmt>           <comment type="block">/* The iCol-th column of the result set */</comment>
+  <decl_stmt><decl><type><name>Expr</name> *</type><name>pDup</name></decl>;</decl_stmt>            <comment type="block">/* Copy of pOrig */</comment>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>           <comment type="block">/* The database connection */</comment>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iCol</name>&gt;=0 &amp;&amp; <name>iCol</name>&lt;<name>pEList</name>-&gt;<name>nExpr</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pOrig</name> = <name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>iCol</name></expr>]</index></name>.<name>pExpr</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pOrig</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pOrig</name>-&gt;<name>flags</name> &amp; <name>EP_Resolved</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>db</name> = <name>pParse</name>-&gt;<name>db</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pDup</name> = <call><name>sqlite3ExprDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pOrig</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pDup</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <if>if<condition>( <expr><name>pDup</name>-&gt;<name>op</name>!=<name>TK_COLUMN</name> &amp;&amp; <name><name>zType</name><index>[<expr>0</expr>]</index></name>!='G'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pDup</name> = <call><name>sqlite3PExpr</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>TK_AS</name></expr></argument>, <argument><expr><name>pDup</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pDup</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+    <if>if<condition>( <expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>iCol</name></expr>]</index></name>.<name>iAlias</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>iCol</name></expr>]</index></name>.<name>iAlias</name> = (<name>u16</name>)(++<name>pParse</name>-&gt;<name>nAlias</name>)</expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>pDup</name>-&gt;<name>iTable</name> = <name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>iCol</name></expr>]</index></name>.<name>iAlias</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pExpr</name>-&gt;<name>flags</name> &amp; <name>EP_ExpCollate</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pDup</name>-&gt;<name>pColl</name> = <name>pExpr</name>-&gt;<name>pColl</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pDup</name>-&gt;<name>flags</name> |= <name>EP_ExpCollate</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3ExprClear</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>pDup</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>pExpr</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pDup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Given the name of a column of the form X.Y.Z or Y.Z or just Z, look up
+** that name in the set of source tables in pSrcList and make the pExpr 
+** expression node refer back to that source column.  The following changes
+** are made to pExpr:
+**
+**    pExpr-&gt;iDb           Set the index in db-&gt;aDb[] of the database X
+**                         (even if X is implied).
+**    pExpr-&gt;iTable        Set to the cursor number for the table obtained
+**                         from pSrcList.
+**    pExpr-&gt;pTab          Points to the Table structure of X.Y (even if
+**                         X and/or Y are implied.)
+**    pExpr-&gt;iColumn       Set to the column number within the table.
+**    pExpr-&gt;op            Set to TK_COLUMN.
+**    pExpr-&gt;pLeft         Any expression this points to is deleted
+**    pExpr-&gt;pRight        Any expression this points to is deleted.
+**
+** The pDbToken is the name of the database (the "X").  This value may be
+** NULL meaning that name is of the form Y.Z or Z.  Any available database
+** can be used.  The pTableToken is the name of the table (the "Y").  This
+** value can be NULL if pDbToken is also NULL.  If pTableToken is NULL it
+** means that the form of the name is Z and that columns from any table
+** can be used.
+**
+** If the name cannot be resolved unambiguously, leave an error message
+** in pParse and return non-zero.  Return zero on success.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>lookupName</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,       <comment type="block">/* The parsing context */</comment>
+  <param><decl><type><name>Token</name> *</type><name>pDbToken</name></decl></param>,     <comment type="block">/* Name of the database containing table, or NULL */</comment>
+  <param><decl><type><name>Token</name> *</type><name>pTableToken</name></decl></param>,  <comment type="block">/* Name of table containing column, or NULL */</comment>
+  <param><decl><type><name>Token</name> *</type><name>pColumnToken</name></decl></param>, <comment type="block">/* Name of the column. */</comment>
+  <param><decl><type><name>NameContext</name> *</type><name>pNC</name></decl></param>,    <comment type="block">/* The name context used to resolve the name */</comment>
+  <param><decl><type><name>Expr</name> *</type><name>pExpr</name></decl></param>          <comment type="block">/* Make this EXPR node point to the selected column */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zDb</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>       <comment type="block">/* Name of the database.  The "X" in X.Y.Z */</comment>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zTab</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>      <comment type="block">/* Name of the table.  The "Y" in X.Y.Z or Y.Z */</comment>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zCol</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>      <comment type="block">/* Name of the column.  The "Z" */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>j</name></decl>;</decl_stmt>            <comment type="block">/* Loop counters */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>                      <comment type="block">/* Number of matching column names */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>cntTab</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>                   <comment type="block">/* Number of matching table names */</comment>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>         <comment type="block">/* The database connection */</comment>
+  <decl_stmt><decl><type>struct <name>SrcList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>       <comment type="block">/* Use for looping over pSrcList items */</comment>
+  <decl_stmt><decl><type>struct <name>SrcList_item</name> *</type><name>pMatch</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>  <comment type="block">/* The matching pSrcList item */</comment>
+  <decl_stmt><decl><type><name>NameContext</name> *</type><name>pTopNC</name> =<init> <expr><name>pNC</name></expr></init></decl>;</decl_stmt>        <comment type="block">/* First namecontext in the list */</comment>
+  <decl_stmt><decl><type><name>Schema</name> *</type><name>pSchema</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>              <comment type="block">/* Schema of the expression */</comment>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pColumnToken</name> &amp;&amp; <name>pColumnToken</name>-&gt;<name>z</name></expr></argument> )</argument_list></call></expr>;</expr_stmt> <comment type="block">/* The Z in X.Y.Z cannot be NULL */</comment>
+
+  <comment type="block">/* Dequote and zero-terminate the names */</comment>
+  <expr_stmt><expr><name>zDb</name> = <call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pDbToken</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zTab</name> = <call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pTableToken</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zCol</name> = <call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pColumnToken</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <goto>goto <name>lookupname_end</name>;</goto>
+  }</block></then></if>
+
+  <comment type="block">/* Initialize the node to no-match */</comment>
+  <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = -1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = 0</expr>;</expr_stmt>
+
+  <comment type="block">/* Start at the inner-most context and move outward until a match is found */</comment>
+  <while>while<condition>( <expr><name>pNC</name> &amp;&amp; <name>cnt</name>==0</expr> )</condition><block>{
+    <decl_stmt><decl><type><name>ExprList</name> *</type><name>pEList</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>SrcList</name> *</type><name>pSrcList</name> =<init> <expr><name>pNC</name>-&gt;<name>pSrcList</name></expr></init></decl>;</decl_stmt>
+
+    <if>if<condition>( <expr><name>pSrcList</name></expr> )</condition><then><block>{
+      <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>pItem</name>=<name>pSrcList</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&lt;<name>pSrcList</name>-&gt;<name>nSrc</name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+        <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>iDb</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>Column</name> *</type><name>pCol</name></decl>;</decl_stmt>
+  
+        <expr_stmt><expr><name>pTab</name> = <name>pItem</name>-&gt;<name>pTab</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTab</name>!=0 &amp;&amp; <name>pTab</name>-&gt;<name>zName</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>iDb</name> = <call><name>sqlite3SchemaToIndex</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>pSchema</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTab</name>-&gt;<name>nCol</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>zTab</name></expr> )</condition><then><block>{
+          <if>if<condition>( <expr><name>pItem</name>-&gt;<name>zAlias</name></expr> )</condition><then><block>{
+            <decl_stmt><decl><type><name>char</name> *</type><name>zTabName</name> =<init> <expr><name>pItem</name>-&gt;<name>zAlias</name></expr></init></decl>;</decl_stmt>
+            <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>zTabName</name></expr></argument>, <argument><expr><name>zTab</name></expr></argument>)</argument_list></call>!=0</expr> )</condition><then> <continue>continue;</continue></then></if>
+          }</block></then><else>else<block>{
+            <decl_stmt><decl><type><name>char</name> *</type><name>zTabName</name> =<init> <expr><name>pTab</name>-&gt;<name>zName</name></expr></init></decl>;</decl_stmt>
+            <if>if<condition>( <expr><name>zTabName</name>==0 || <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>zTabName</name></expr></argument>, <argument><expr><name>zTab</name></expr></argument>)</argument_list></call>!=0</expr> )</condition><then> <continue>continue;</continue></then></if>
+            <if>if<condition>( <expr><name>zDb</name>!=0 &amp;&amp; <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zDb</name></expr></argument>)</argument_list></call>!=0</expr> )</condition><then><block>{
+              <continue>continue;</continue>
+            }</block></then></if>
+          }</block></else></if>
+        }</block></then></if>
+        <if>if<condition>( <expr>0==(<name>cntTab</name>++)</expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = <name>pItem</name>-&gt;<name>iCursor</name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = <name>pTab</name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pSchema</name> = <name>pTab</name>-&gt;<name>pSchema</name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pMatch</name> = <name>pItem</name></expr>;</expr_stmt>
+        }</block></then></if>
+        <for>for(<init><expr><name>j</name>=0</expr>, <expr><name>pCol</name>=<name>pTab</name>-&gt;<name>aCol</name></expr>;</init> <condition><expr><name>j</name>&lt;<name>pTab</name>-&gt;<name>nCol</name></expr>;</condition> <incr><expr><name>j</name>++</expr>, <expr><name>pCol</name>++</expr></incr>)<block>{
+          <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>pCol</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+            <decl_stmt><decl><type><name>IdList</name> *</type><name>pUsing</name></decl>;</decl_stmt>
+            <expr_stmt><expr><name>cnt</name>++</expr>;</expr_stmt>
+            <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = <name>pItem</name>-&gt;<name>iCursor</name></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = <name>pTab</name></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pMatch</name> = <name>pItem</name></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pSchema</name> = <name>pTab</name>-&gt;<name>pSchema</name></expr>;</expr_stmt>
+            <comment type="block">/* Substitute the rowid (column -1) for the INTEGER PRIMARY KEY */</comment>
+            <expr_stmt><expr><name>pExpr</name>-&gt;<name>iColumn</name> = <name>j</name>==<name>pTab</name>-&gt;<name>iPKey</name> ? -1 : <name>j</name></expr>;</expr_stmt>
+            <if>if<condition>( <expr><name>i</name>&lt;<name>pSrcList</name>-&gt;<name>nSrc</name>-1</expr> )</condition><then><block>{
+              <if>if<condition>( <expr><name><name>pItem</name><index>[<expr>1</expr>]</index></name>.<name>jointype</name> &amp; <name>JT_NATURAL</name></expr> )</condition><then><block>{
+                <comment type="block">/* If this match occurred in the left table of a natural join,
+                ** then skip the right table to avoid a duplicate match */</comment>
+                <expr_stmt><expr><name>pItem</name>++</expr>;</expr_stmt>
+                <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+              }</block></then><else>else <if>if<condition>( <expr>(<name>pUsing</name> = <name><name>pItem</name><index>[<expr>1</expr>]</index></name>.<name>pUsing</name>)!=0</expr> )</condition><then><block>{
+                <comment type="block">/* If this match occurs on a column that is in the USING clause
+                ** of a join, skip the search of the right table of the join
+                ** to avoid a duplicate match there. */</comment>
+                <decl_stmt><decl><type><name>int</name></type> <name>k</name></decl>;</decl_stmt>
+                <for>for(<init><expr><name>k</name>=0</expr>;</init> <condition><expr><name>k</name>&lt;<name>pUsing</name>-&gt;<name>nId</name></expr>;</condition> <incr><expr><name>k</name>++</expr></incr>)<block>{
+                  <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>pUsing</name>-&gt;<name><name>a</name><index>[<expr><name>k</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+                    <expr_stmt><expr><name>pItem</name>++</expr>;</expr_stmt>
+                    <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+                    <break>break;</break>
+                  }</block></then></if>
+                }</block></for>
+              }</block></then></if></else></if>
+            }</block></then></if>
+            <break>break;</break>
+          }</block></then></if>
+        }</block></for>
+      }</block></for>
+    }</block></then></if>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TRIGGER</name></cpp:ifndef>
+    <comment type="block">/* If we have not already resolved the name, then maybe 
+    ** it is a new.* or old.* trigger argument reference
+    */</comment>
+    <if>if<condition>( <expr><name>zDb</name>==0 &amp;&amp; <name>zTab</name>!=0 &amp;&amp; <name>cnt</name>==0 &amp;&amp; <name>pParse</name>-&gt;<name>trigStack</name>!=0</expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>TriggerStack</name> *</type><name>pTriggerStack</name> =<init> <expr><name>pParse</name>-&gt;<name>trigStack</name></expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>u32</name> *</type><name>piColMask</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>pTriggerStack</name>-&gt;<name>newIdx</name> != -1 &amp;&amp; <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr>"new"</expr></argument>, <argument><expr><name>zTab</name></expr></argument>)</argument_list></call> == 0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = <name>pTriggerStack</name>-&gt;<name>newIdx</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTriggerStack</name>-&gt;<name>pTab</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pTab</name> = <name>pTriggerStack</name>-&gt;<name>pTab</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>piColMask</name> = &amp;(<name>pTriggerStack</name>-&gt;<name>newColMask</name>)</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>pTriggerStack</name>-&gt;<name>oldIdx</name> != -1 &amp;&amp; <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr>"old"</expr></argument>, <argument><expr><name>zTab</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = <name>pTriggerStack</name>-&gt;<name>oldIdx</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTriggerStack</name>-&gt;<name>pTab</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pTab</name> = <name>pTriggerStack</name>-&gt;<name>pTab</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>piColMask</name> = &amp;(<name>pTriggerStack</name>-&gt;<name>oldColMask</name>)</expr>;</expr_stmt>
+      }</block></then></if></else></if>
+
+      <if>if<condition>( <expr><name>pTab</name></expr> )</condition><then><block>{ 
+        <decl_stmt><decl><type><name>int</name></type> <name>iCol</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>Column</name> *</type><name>pCol</name> =<init> <expr><name>pTab</name>-&gt;<name>aCol</name></expr></init></decl>;</decl_stmt>
+
+        <expr_stmt><expr><name>pSchema</name> = <name>pTab</name>-&gt;<name>pSchema</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>cntTab</name>++</expr>;</expr_stmt>
+        <for>for(<init><expr><name>iCol</name>=0</expr>;</init> <condition><expr><name>iCol</name> &lt; <name>pTab</name>-&gt;<name>nCol</name></expr>;</condition> <incr><expr><name>iCol</name>++</expr>, <expr><name>pCol</name>++</expr></incr>) <block>{
+          <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>pCol</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+            <expr_stmt><expr><name>cnt</name>++</expr>;</expr_stmt>
+            <expr_stmt><expr><name>pExpr</name>-&gt;<name>iColumn</name> = <name>iCol</name>==<name>pTab</name>-&gt;<name>iPKey</name> ? -1 : <name>iCol</name></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = <name>pTab</name></expr>;</expr_stmt>
+            <if>if<condition>( <expr><name>iCol</name>&gt;=0</expr> )</condition><then><block>{
+              <expr_stmt><expr><call><name>testcase</name><argument_list>( <argument><expr><name>iCol</name>==31</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+              <expr_stmt><expr><call><name>testcase</name><argument_list>( <argument><expr><name>iCol</name>==32</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+              <expr_stmt><expr>*<name>piColMask</name> |= ((<name>u32</name>)1&lt;&lt;<name>iCol</name>) | (<name>iCol</name>&gt;=32?0xffffffff:0)</expr>;</expr_stmt>
+            }</block></then></if>
+            <break>break;</break>
+          }</block></then></if>
+        }</block></for>
+      }</block></then></if>
+    }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* !defined(SQLITE_OMIT_TRIGGER) */</comment>
+
+    <comment type="block">/*
+    ** Perhaps the name is a reference to the ROWID
+    */</comment>
+    <if>if<condition>( <expr><name>cnt</name>==0 &amp;&amp; <name>cntTab</name>==1 &amp;&amp; <call><name>sqlite3IsRowid</name><argument_list>(<argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>cnt</name> = 1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>iColumn</name> = -1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>affinity</name> = <name>SQLITE_AFF_INTEGER</name></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <comment type="block">/*
+    ** If the input is of the form Z (not Y.Z or X.Y.Z) then the name Z
+    ** might refer to an result-set alias.  This happens, for example, when
+    ** we are resolving names in the WHERE clause of the following command:
+    **
+    **     SELECT a+b AS x FROM table WHERE x&lt;10;
+    **
+    ** In cases like this, replace pExpr with a copy of the expression that
+    ** forms the result set entry ("a+b" in the example) and return immediately.
+    ** Note that the expression in the result set should have already been
+    ** resolved by the time the WHERE clause is resolved.
+    */</comment>
+    <if>if<condition>( <expr><name>cnt</name>==0 &amp;&amp; (<name>pEList</name> = <name>pNC</name>-&gt;<name>pEList</name>)!=0 &amp;&amp; <name>zTab</name>==0</expr> )</condition><then><block>{
+      <for>for(<init><expr><name>j</name>=0</expr>;</init> <condition><expr><name>j</name>&lt;<name>pEList</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>)<block>{
+        <decl_stmt><decl><type><name>char</name> *</type><name>zAs</name> =<init> <expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>j</name></expr>]</index></name>.<name>zName</name></expr></init></decl>;</decl_stmt>
+        <if>if<condition>( <expr><name>zAs</name>!=0 &amp;&amp; <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>zAs</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+          <decl_stmt><decl><type><name>Expr</name> *</type><name>pOrig</name></decl>;</decl_stmt>
+          <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pExpr</name>-&gt;<name>pLeft</name>==0 &amp;&amp; <name>pExpr</name>-&gt;<name>pRight</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pExpr</name>-&gt;<name>pList</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pExpr</name>-&gt;<name>pSelect</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pOrig</name> = <name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>j</name></expr>]</index></name>.<name>pExpr</name></expr>;</expr_stmt>
+          <if>if<condition>( <expr>!<name>pNC</name>-&gt;<name>allowAgg</name> &amp;&amp; <call><name>ExprHasProperty</name><argument_list>(<argument><expr><name>pOrig</name></expr></argument>, <argument><expr><name>EP_Agg</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"misuse of aliased aggregate %s"</expr></argument>, <argument><expr><name>zAs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <return>return <expr>2</expr>;</return>
+          }</block></then></if>
+          <expr_stmt><expr><call><name>resolveAlias</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pEList</name></expr></argument>, <argument><expr><name>j</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>cnt</name> = 1</expr>;</expr_stmt>
+          <expr_stmt><expr><name>pMatch</name> = 0</expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>zTab</name>==0 &amp;&amp; <name>zDb</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+          <goto>goto <name>lookupname_end_2</name>;</goto>
+        }</block></then></if>
+      }</block></for> 
+    }</block></then></if>
+
+    <comment type="block">/* Advance to the next name context.  The loop will exit when either
+    ** we have a match (cnt&gt;0) or when we run out of name contexts.
+    */</comment>
+    <if>if<condition>( <expr><name>cnt</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pNC</name> = <name>pNC</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></while>
+
+  <comment type="block">/*
+  ** If X and Y are NULL (in other words if only the column name Z is
+  ** supplied) and the value of Z is enclosed in double-quotes, then
+  ** Z is a string literal if it doesn't match any column names.  In that
+  ** case, we need to return right away and not make any changes to
+  ** pExpr.
+  **
+  ** Because no reference was made to outer contexts, the pNC-&gt;nRef
+  ** fields are not changed in any context.
+  */</comment>
+  <if>if<condition>( <expr><name>cnt</name>==0 &amp;&amp; <name>zTab</name>==0 &amp;&amp; <name>pColumnToken</name>-&gt;<name><name>z</name><index>[<expr>0</expr>]</index></name>=='"'</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pExpr</name>-&gt;<name>op</name> = <name>TK_STRING</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = 0</expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/*
+  ** cnt==0 means there was not match.  cnt&gt;1 means there were two or
+  ** more matches.  Either way, we have an error.
+  */</comment>
+  <if>if<condition>( <expr><name>cnt</name>!=1</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zErr</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>zErr</name> = <name>cnt</name>==0 ? "no such column" : "ambiguous column name"</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zDb</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"%s: %s.%s.%s"</expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr><name>zDb</name></expr></argument>, <argument><expr><name>zTab</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else <if>if<condition>( <expr><name>zTab</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"%s: %s.%s"</expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr><name>zTab</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"%s: %s"</expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if></else></if>
+    <expr_stmt><expr><name>pTopNC</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* If a column from a table in pSrcList is referenced, then record
+  ** this fact in the pSrcList.a[].colUsed bitmask.  Column 0 causes
+  ** bit 0 to be set.  Column 1 sets bit 1.  And so forth.  If the
+  ** column number is greater than the number of bits in the bitmask
+  ** then set the high-order bit of the bitmask.
+  */</comment>
+  <if>if<condition>( <expr><name>pExpr</name>-&gt;<name>iColumn</name>&gt;=0 &amp;&amp; <name>pMatch</name>!=0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr><name>pExpr</name>-&gt;<name>iColumn</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>testcase</name><argument_list>( <argument><expr><name>n</name>==<name>BMS</name>-1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>n</name>&gt;=<name>BMS</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>n</name> = <name>BMS</name>-1</expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMatch</name>-&gt;<name>iCursor</name>==<name>pExpr</name>-&gt;<name>iTable</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pMatch</name>-&gt;<name>colUsed</name> |= ((<name>Bitmask</name>)1)&lt;&lt;<name>n</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+<label><name>lookupname_end</name>:</label>
+  <comment type="block">/* Clean up and return
+  */</comment>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zTab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3ExprDelete</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pLeft</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pExpr</name>-&gt;<name>pLeft</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3ExprDelete</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pRight</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pExpr</name>-&gt;<name>pRight</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pExpr</name>-&gt;<name>op</name> = <name>TK_COLUMN</name></expr>;</expr_stmt>
+<label><name>lookupname_end_2</name>:</label>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>cnt</name>==1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNC</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3AuthRead</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>pSchema</name></expr></argument>, <argument><expr><name>pNC</name>-&gt;<name>pSrcList</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <comment type="block">/* Increment the nRef value on all name contexts from TopNC up to
+    ** the point where the name matched. */</comment>
+    <for>for(<init>;</init><condition>;</condition><incr/>)<block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTopNC</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pTopNC</name>-&gt;<name>nRef</name>++</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pTopNC</name>==<name>pNC</name></expr> )</condition><then> <break>break;</break></then></if>
+      <expr_stmt><expr><name>pTopNC</name> = <name>pTopNC</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    }</block></for>
+    <return>return <expr>0</expr>;</return>
+  }</block></then> <else>else <block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** This routine is callback for sqlite3WalkExpr().
+**
+** Resolve symbolic names into TK_COLUMN operators for the current
+** node in the expression tree.  Return 0 to continue the search down
+** the tree or 2 to abort the tree walk.
+**
+** This routine also does error checking and name resolution for
+** function names.  The operator for aggregate functions is changed
+** to TK_AGG_FUNCTION.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveExprStep</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Expr</name> *</type><name>pExpr</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>NameContext</name> *</type><name>pNC</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Parse</name> *</type><name>pParse</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>pNC</name> = <name>pWalker</name>-&gt;<name>u</name>.<name>pNC</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNC</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name> = <name>pNC</name>-&gt;<name>pParse</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pParse</name>==<name>pWalker</name>-&gt;<name>pParse</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><call><name>ExprHasAnyProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_Resolved</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Prune</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>ExprSetProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_Resolved</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NDEBUG</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>pNC</name>-&gt;<name>pSrcList</name> &amp;&amp; <name>pNC</name>-&gt;<name>pSrcList</name>-&gt;<name>nAlloc</name>&gt;0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>SrcList</name> *</type><name>pSrcList</name> =<init> <expr><name>pNC</name>-&gt;<name>pSrcList</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pNC</name>-&gt;<name>pSrcList</name>-&gt;<name>nSrc</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pSrcList</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>iCursor</name>&gt;=0 &amp;&amp; <name>pSrcList</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>iCursor</name>&lt;<name>pParse</name>-&gt;<name>nTab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <switch>switch<condition>( <expr><name>pExpr</name>-&gt;<name>op</name></expr> )</condition><block>{
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_ENABLE_UPDATE_DELETE_LIMIT</name></expr></argument>)</argument_list></call> &amp;&amp; !<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_SUBQUERY</name></expr></argument>)</argument_list></call></expr></cpp:if>
+    <comment type="block">/* The special operator TK_ROW means use the rowid for the first
+    ** column in the FROM clause.  This is used by the LIMIT and ORDER BY
+    ** clause processing on UPDATE and DELETE statements.
+    */</comment>
+    <case>case <expr><name>TK_ROW</name></expr>: <block>{
+      <decl_stmt><decl><type><name>SrcList</name> *</type><name>pSrcList</name> =<init> <expr><name>pNC</name>-&gt;<name>pSrcList</name></expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type>struct <name>SrcList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pSrcList</name> &amp;&amp; <name>pSrcList</name>-&gt;<name>nSrc</name>==1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pItem</name> = <name>pSrcList</name>-&gt;<name>a</name></expr>;</expr_stmt> 
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>op</name> = <name>TK_COLUMN</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>pTab</name> = <name>pItem</name>-&gt;<name>pTab</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>iTable</name> = <name>pItem</name>-&gt;<name>iCursor</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>iColumn</name> = -1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pExpr</name>-&gt;<name>affinity</name> = <name>SQLITE_AFF_INTEGER</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* defined(SQLITE_ENABLE_UPDATE_DELETE_LIMIT) &amp;&amp; !defined(SQLITE_OMIT_SUBQUERY) */</comment>
+
+    <comment type="block">/* A lone identifier is the name of a column.
+    */</comment>
+    </case><case>case <expr><name>TK_ID</name></expr>: <block>{
+      <expr_stmt><expr><call><name>lookupName</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pExpr</name>-&gt;<name>token</name></expr></argument>, <argument><expr><name>pNC</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>WRC_Prune</name></expr>;</return>
+    }</block>
+  
+    <comment type="block">/* A table name and column name:     ID.ID
+    ** Or a database, table and column:  ID.ID.ID
+    */</comment>
+    </case><case>case <expr><name>TK_DOT</name></expr>: <block>{
+      <decl_stmt><decl><type><name>Token</name> *</type><name>pColumn</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Token</name> *</type><name>pTable</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Token</name> *</type><name>pDb</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Expr</name> *</type><name>pRight</name></decl>;</decl_stmt>
+
+      <comment type="block">/* if( pSrcList==0 ) break; */</comment>
+      <expr_stmt><expr><name>pRight</name> = <name>pExpr</name>-&gt;<name>pRight</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pRight</name>-&gt;<name>op</name>==<name>TK_ID</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pDb</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>pTable</name> = &amp;<name>pExpr</name>-&gt;<name>pLeft</name>-&gt;<name>token</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pColumn</name> = &amp;<name>pRight</name>-&gt;<name>token</name></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pRight</name>-&gt;<name>op</name>==<name>TK_DOT</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pDb</name> = &amp;<name>pExpr</name>-&gt;<name>pLeft</name>-&gt;<name>token</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pTable</name> = &amp;<name>pRight</name>-&gt;<name>pLeft</name>-&gt;<name>token</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pColumn</name> = &amp;<name>pRight</name>-&gt;<name>pRight</name>-&gt;<name>token</name></expr>;</expr_stmt>
+      }</block></else></if>
+      <expr_stmt><expr><call><name>lookupName</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pDb</name></expr></argument>, <argument><expr><name>pTable</name></expr></argument>, <argument><expr><name>pColumn</name></expr></argument>, <argument><expr><name>pNC</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>WRC_Prune</name></expr>;</return>
+    }</block>
+
+    <comment type="block">/* Resolve function names
+    */</comment>
+    </case><case>case <expr><name>TK_CONST_FUNC</name></expr>:
+    </case><case>case <expr><name>TK_FUNCTION</name></expr>: <block>{
+      <decl_stmt><decl><type><name>ExprList</name> *</type><name>pList</name> =<init> <expr><name>pExpr</name>-&gt;<name>pList</name></expr></init></decl>;</decl_stmt>    <comment type="block">/* The argument list */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr><name>pList</name> ? <name>pList</name>-&gt;<name>nExpr</name> : 0</expr></init></decl>;</decl_stmt>  <comment type="block">/* Number of arguments */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>no_such_func</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>       <comment type="block">/* True if no such function exists */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>wrong_num_args</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>     <comment type="block">/* True if wrong number of arguments */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>is_agg</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>             <comment type="block">/* True if is an aggregate function */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>auth</name></decl>;</decl_stmt>                   <comment type="block">/* Authorization to use the function */</comment>
+      <decl_stmt><decl><type><name>int</name></type> <name>nId</name></decl>;</decl_stmt>                    <comment type="block">/* Number of characters in function name */</comment>
+      <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zId</name></decl>;</decl_stmt>            <comment type="block">/* The function name. */</comment>
+      <decl_stmt><decl><type><name>FuncDef</name> *</type><name>pDef</name></decl>;</decl_stmt>              <comment type="block">/* Information about the function */</comment>
+      <decl_stmt><decl><type><name>u8</name></type> <name>enc</name> =<init> <expr><call><name>ENC</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>   <comment type="block">/* The database encoding */</comment>
+
+      <expr_stmt><expr><name>zId</name> = (<name>char</name>*)<name>pExpr</name>-&gt;<name>token</name>.<name>z</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>nId</name> = <name>pExpr</name>-&gt;<name>token</name>.<name>n</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pDef</name> = <call><name>sqlite3FindFunction</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>zId</name></expr></argument>, <argument><expr><name>nId</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>enc</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pDef</name>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pDef</name> = <call><name>sqlite3FindFunction</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>zId</name></expr></argument>, <argument><expr><name>nId</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>enc</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pDef</name>==0</expr> )</condition><then><block>{
+          <expr_stmt><expr><name>no_such_func</name> = 1</expr>;</expr_stmt>
+        }</block></then><else>else<block>{
+          <expr_stmt><expr><name>wrong_num_args</name> = 1</expr>;</expr_stmt>
+        }</block></else></if>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>is_agg</name> = <name>pDef</name>-&gt;<name>xFunc</name>==0</expr>;</expr_stmt>
+      }</block></else></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTHORIZATION</name></cpp:ifndef>
+      <if>if<condition>( <expr><name>pDef</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>auth</name> = <call><name>sqlite3AuthCheck</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>SQLITE_FUNCTION</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pDef</name>-&gt;<name>zName</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>auth</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+          <if>if<condition>( <expr><name>auth</name>==<name>SQLITE_DENY</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"not authorized to use function: %s"</expr></argument>,
+                                    <argument><expr><name>pDef</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pNC</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+          }</block></then></if>
+          <expr_stmt><expr><name>pExpr</name>-&gt;<name>op</name> = <name>TK_NULL</name></expr>;</expr_stmt>
+          <return>return <expr><name>WRC_Prune</name></expr>;</return>
+        }</block></then></if>
+      }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <if>if<condition>( <expr><name>is_agg</name> &amp;&amp; !<name>pNC</name>-&gt;<name>allowAgg</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"misuse of aggregate function %.*s()"</expr></argument>, <argument><expr><name>nId</name></expr></argument>,<argument><expr><name>zId</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pNC</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+        <expr_stmt><expr><name>is_agg</name> = 0</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>no_such_func</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"no such function: %.*s"</expr></argument>, <argument><expr><name>nId</name></expr></argument>, <argument><expr><name>zId</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pNC</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>wrong_num_args</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>,<argument><expr>"wrong number of arguments to function %.*s()"</expr></argument>,
+             <argument><expr><name>nId</name></expr></argument>, <argument><expr><name>zId</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pNC</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+      }</block></then></if></else></if></else></if>
+      <if>if<condition>( <expr><name>is_agg</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pExpr</name>-&gt;<name>op</name> = <name>TK_AGG_FUNCTION</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pNC</name>-&gt;<name>hasAgg</name> = 1</expr>;</expr_stmt>
+      }</block></then></if>
+      <if>if<condition>( <expr><name>is_agg</name></expr> )</condition><then> <expr_stmt><expr><name>pNC</name>-&gt;<name>allowAgg</name> = 0</expr>;</expr_stmt></then></if>
+      <expr_stmt><expr><call><name>sqlite3WalkExprList</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pList</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>is_agg</name></expr> )</condition><then> <expr_stmt><expr><name>pNC</name>-&gt;<name>allowAgg</name> = 1</expr>;</expr_stmt></then></if>
+      <comment type="block">/* FIX ME:  Compute pExpr-&gt;affinity based on the expected return
+      ** type of the function 
+      */</comment>
+      <return>return <expr><name>WRC_Prune</name></expr>;</return>
+    }</block>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_SUBQUERY</name></cpp:ifndef>
+    </case><case>case <expr><name>TK_SELECT</name></expr>:
+    </case><case>case <expr><name>TK_EXISTS</name></expr>:
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    </case><case>case <expr><name>TK_IN</name></expr>: <block>{
+      <if>if<condition>( <expr><name>pExpr</name>-&gt;<name>pSelect</name></expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>int</name></type> <name>nRef</name> =<init> <expr><name>pNC</name>-&gt;<name>nRef</name></expr></init></decl>;</decl_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_CHECK</name></cpp:ifndef>
+        <if>if<condition>( <expr><name>pNC</name>-&gt;<name>isCheck</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>,<argument><expr>"subqueries prohibited in CHECK constraints"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+        <expr_stmt><expr><call><name>sqlite3WalkSelect</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pSelect</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNC</name>-&gt;<name>nRef</name>&gt;=<name>nRef</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>nRef</name>!=<name>pNC</name>-&gt;<name>nRef</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>ExprSetProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_VarSelect</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_CHECK</name></cpp:ifndef>
+    </case><case>case <expr><name>TK_VARIABLE</name></expr>: <block>{
+      <if>if<condition>( <expr><name>pNC</name>-&gt;<name>isCheck</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>,<argument><expr>"parameters prohibited in CHECK constraints"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  </case>}</block></switch>
+  <return>return <expr>(<name>pParse</name>-&gt;<name>nErr</name> || <name>pParse</name>-&gt;<name>db</name>-&gt;<name>mallocFailed</name>) ? <name>WRC_Abort</name> : <name>WRC_Continue</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** pEList is a list of expressions which are really the result set of the
+** a SELECT statement.  pE is a term in an ORDER BY or GROUP BY clause.
+** This routine checks to see if pE is a simple identifier which corresponds
+** to the AS-name of one of the terms of the expression list.  If it is,
+** this routine return an integer between 1 and N where N is the number of
+** elements in pEList, corresponding to the matching entry.  If there is
+** no match, or if pE is not a simple identifier, then this routine
+** return 0.
+**
+** pEList has been resolved.  pE has not.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveAsName</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,     <comment type="block">/* Parsing context for error messages */</comment>
+  <param><decl><type><name>ExprList</name> *</type><name>pEList</name></decl></param>,  <comment type="block">/* List of expressions to scan */</comment>
+  <param><decl><type><name>Expr</name> *</type><name>pE</name></decl></param>           <comment type="block">/* Expression we are trying to match */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>             <comment type="block">/* Loop counter */</comment>
+
+  <if>if<condition>( <expr><name>pE</name>-&gt;<name>op</name>==<name>TK_ID</name> || (<name>pE</name>-&gt;<name>op</name>==<name>TK_STRING</name> &amp;&amp; <name>pE</name>-&gt;<name>token</name>.<name><name>z</name><index>[<expr>0</expr>]</index></name>!='\'')</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zCol</name> =<init> <expr><call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>&amp;<name>pE</name>-&gt;<name>token</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>zCol</name>==0</expr> )</condition><then><block>{
+      <return>return <expr>-1</expr>;</return>
+    }</block></then></if>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pEList</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type><name>char</name> *</type><name>zAs</name> =<init> <expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>zAs</name>!=0 &amp;&amp; <call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>zAs</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr><name>i</name>+1</expr>;</return>
+      }</block></then></if>
+    }</block></for>
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** pE is a pointer to an expression which is a single term in the
+** ORDER BY of a compound SELECT.  The expression has not been
+** name resolved.
+**
+** At the point this routine is called, we already know that the
+** ORDER BY term is not an integer index into the result set.  That
+** case is handled by the calling routine.
+**
+** Attempt to match pE against result set columns in the left-most
+** SELECT statement.  Return the index i of the matching column,
+** as an indication to the caller that it should sort by the i-th column.
+** The left-most column is 1.  In other words, the value returned is the
+** same integer value that would be used in the SQL statement to indicate
+** the column.
+**
+** If there is no match, return 0.  Return -1 if an error occurs.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveOrderByTermToExprList</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,     <comment type="block">/* Parsing context for error messages */</comment>
+  <param><decl><type><name>Select</name> *</type><name>pSelect</name></decl></param>,   <comment type="block">/* The SELECT statement with the ORDER BY clause */</comment>
+  <param><decl><type><name>Expr</name> *</type><name>pE</name></decl></param>           <comment type="block">/* The specific ORDER BY term */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>             <comment type="block">/* Loop counter */</comment>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pEList</name></decl>;</decl_stmt>  <comment type="block">/* The columns of the result set */</comment>
+  <decl_stmt><decl><type><name>NameContext</name></type> <name>nc</name></decl>;</decl_stmt>    <comment type="block">/* Name context for resolving pE */</comment>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3ExprIsInteger</name><argument_list>(<argument><expr><name>pE</name></expr></argument>, <argument><expr>&amp;<name>i</name></expr></argument>)</argument_list></call>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pEList</name> = <name>pSelect</name>-&gt;<name>pEList</name></expr>;</expr_stmt>
+
+  <comment type="block">/* Resolve all names in the ORDER BY term expression
+  */</comment>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>nc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>nc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nc</name>.<name>pParse</name> = <name>pParse</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nc</name>.<name>pSrcList</name> = <name>pSelect</name>-&gt;<name>pSrc</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nc</name>.<name>pEList</name> = <name>pEList</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nc</name>.<name>allowAgg</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>nc</name>.<name>nErr</name> = 0</expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>nc</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3ErrorClear</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* Try to match the ORDER BY expression against an expression
+  ** in the result set.  Return an 1-based index of the matching
+  ** result-set entry.
+  */</comment>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pEList</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>sqlite3ExprCompare</name><argument_list>(<argument><expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>pExpr</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>i</name>+1</expr>;</return>
+    }</block></then></if>
+  }</block></for>
+
+  <comment type="block">/* If no match, return 0. */</comment>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Generate an ORDER BY or GROUP BY term out-of-range error.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>resolveOutOfRangeError</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,         <comment type="block">/* The error context into which to write the error */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zType</name></decl></param>,     <comment type="block">/* "ORDER" or "GROUP" */</comment>
+  <param><decl><type><name>int</name></type> <name>i</name></decl></param>,                 <comment type="block">/* The index (1-based) of the term out of range */</comment>
+  <param><decl><type><name>int</name></type> <name>mx</name></decl></param>                 <comment type="block">/* Largest permissible value of i */</comment>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, 
+    <argument><expr>"%r %s BY term out of range - should be "
+    "between 1 and %d"</expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>zType</name></expr></argument>, <argument><expr><name>mx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Analyze the ORDER BY clause in a compound SELECT statement.   Modify
+** each term of the ORDER BY clause is a constant integer between 1
+** and N where N is the number of columns in the compound SELECT.
+**
+** ORDER BY terms that are already an integer between 1 and N are
+** unmodified.  ORDER BY terms that are integers outside the range of
+** 1 through N generate an error.  ORDER BY terms that are expressions
+** are matched against result set expressions of compound SELECT
+** beginning with the left-most SELECT and working toward the right.
+** At the first match, the ORDER BY expression is transformed into
+** the integer column number.
+**
+** Return the number of errors seen.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveCompoundOrderBy</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,        <comment type="block">/* Parsing context.  Leave error messages here */</comment>
+  <param><decl><type><name>Select</name> *</type><name>pSelect</name></decl></param>       <comment type="block">/* The SELECT statement containing the ORDER BY */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pOrderBy</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pEList</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>moreToDo</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>pOrderBy</name> = <name>pSelect</name>-&gt;<name>pOrderBy</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pOrderBy</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>db</name> = <name>pParse</name>-&gt;<name>db</name></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_MAX_COLUMN</name></expr></cpp:if>
+  <if>if<condition>( <expr><name>pOrderBy</name>-&gt;<name>nExpr</name>&gt;<name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_COLUMN</name></expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"too many terms in ORDER BY clause"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pOrderBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>pOrderBy</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>done</name> = 0</expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><name>pSelect</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>pSelect</name>-&gt;<name>pPrior</name></expr> )</condition><block>{
+    <expr_stmt><expr><name>pSelect</name>-&gt;<name>pPrior</name>-&gt;<name>pNext</name> = <name>pSelect</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pSelect</name> = <name>pSelect</name>-&gt;<name>pPrior</name></expr>;</expr_stmt>
+  }</block></while>
+  <while>while<condition>( <expr><name>pSelect</name> &amp;&amp; <name>moreToDo</name></expr> )</condition><block>{
+    <decl_stmt><decl><type>struct <name>ExprList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>moreToDo</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pEList</name> = <name>pSelect</name>-&gt;<name>pEList</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pEList</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>pItem</name>=<name>pOrderBy</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&lt;<name>pOrderBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>iCol</name> =<init> <expr>-1</expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>Expr</name> *</type><name>pE</name>, *<name>pDup</name></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>pItem</name>-&gt;<name>done</name></expr> )</condition><then> <continue>continue;</continue></then></if>
+      <expr_stmt><expr><name>pE</name> = <name>pItem</name>-&gt;<name>pExpr</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><call><name>sqlite3ExprIsInteger</name><argument_list>(<argument><expr><name>pE</name></expr></argument>, <argument><expr>&amp;<name>iCol</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <if>if<condition>( <expr><name>iCol</name>&lt;0 || <name>iCol</name>&gt;<name>pEList</name>-&gt;<name>nExpr</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>resolveOutOfRangeError</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"ORDER"</expr></argument>, <argument><expr><name>i</name>+1</expr></argument>, <argument><expr><name>pEList</name>-&gt;<name>nExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <return>return <expr>1</expr>;</return>
+        }</block></then></if>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>iCol</name> = <call><name>resolveAsName</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pEList</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>iCol</name>==0</expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pDup</name> = <call><name>sqlite3ExprDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <if>if<condition>( <expr>!<name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pDup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>iCol</name> = <call><name>resolveOrderByTermToExprList</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pSelect</name></expr></argument>, <argument><expr><name>pDup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          }</block></then></if>
+          <expr_stmt><expr><call><name>sqlite3ExprDelete</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pDup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+        <if>if<condition>( <expr><name>iCol</name>&lt;0</expr> )</condition><then><block>{
+          <return>return <expr>1</expr>;</return>
+        }</block></then></if>
+      }</block></else></if>
+      <if>if<condition>( <expr><name>iCol</name>&gt;0</expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pColl</name> =<init> <expr><name>pE</name>-&gt;<name>pColl</name></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>flags</name> =<init> <expr><name>pE</name>-&gt;<name>flags</name> &amp; <name>EP_ExpCollate</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>sqlite3ExprDelete</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pItem</name>-&gt;<name>pExpr</name> = <name>pE</name> = <call><name>sqlite3Expr</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>TK_INTEGER</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pE</name>==0</expr> )</condition><then> <return>return <expr>1</expr>;</return></then></if>
+        <expr_stmt><expr><name>pE</name>-&gt;<name>pColl</name> = <name>pColl</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pE</name>-&gt;<name>flags</name> |= <name>EP_IntValue</name> | <name>flags</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pE</name>-&gt;<name>iTable</name> = <name>iCol</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pItem</name>-&gt;<name>iCol</name> = (<name>u16</name>)<name>iCol</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pItem</name>-&gt;<name>done</name> = 1</expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>moreToDo</name> = 1</expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></for>
+    <expr_stmt><expr><name>pSelect</name> = <name>pSelect</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></while>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pOrderBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pOrderBy</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>done</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"%r ORDER BY term does not match any "
+            "column in the result set"</expr></argument>, <argument><expr><name>i</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Check every term in the ORDER BY or GROUP BY clause pOrderBy of
+** the SELECT statement pSelect.  If any term is reference to a
+** result set expression (as determined by the ExprList.a.iCol field)
+** then convert that term into a copy of the corresponding result set
+** column.
+**
+** If any errors are detected, add an error message to pParse and
+** return non-zero.  Return zero if no errors are seen.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3ResolveOrderGroupBy</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,        <comment type="block">/* Parsing context.  Leave error messages here */</comment>
+  <param><decl><type><name>Select</name> *</type><name>pSelect</name></decl></param>,      <comment type="block">/* The SELECT statement containing the clause */</comment>
+  <param><decl><type><name>ExprList</name> *</type><name>pOrderBy</name></decl></param>,   <comment type="block">/* The ORDER BY or GROUP BY clause to be processed */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zType</name></decl></param>     <comment type="block">/* "ORDER" or "GROUP" */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pEList</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>ExprList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pOrderBy</name>==0 || <name>pParse</name>-&gt;<name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_MAX_COLUMN</name></expr></cpp:if>
+  <if>if<condition>( <expr><name>pOrderBy</name>-&gt;<name>nExpr</name>&gt;<name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_COLUMN</name></expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"too many terms in %s BY clause"</expr></argument>, <argument><expr><name>zType</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><name>pEList</name> = <name>pSelect</name>-&gt;<name>pEList</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pEList</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* sqlite3SelectNew() guarantees this */</comment>
+  <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>pItem</name>=<name>pOrderBy</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&lt;<name>pOrderBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pItem</name>-&gt;<name>iCol</name></expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>pItem</name>-&gt;<name>iCol</name>&gt;<name>pEList</name>-&gt;<name>nExpr</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>resolveOutOfRangeError</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>zType</name></expr></argument>, <argument><expr><name>i</name>+1</expr></argument>, <argument><expr><name>pEList</name>-&gt;<name>nExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>resolveAlias</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pEList</name></expr></argument>, <argument><expr><name>pItem</name>-&gt;<name>iCol</name>-1</expr></argument>, <argument><expr><name>pItem</name>-&gt;<name>pExpr</name></expr></argument>, <argument><expr><name>zType</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** pOrderBy is an ORDER BY or GROUP BY clause in SELECT statement pSelect.
+** The Name context of the SELECT statement is pNC.  zType is either
+** "ORDER" or "GROUP" depending on which type of clause pOrderBy is.
+**
+** This routine resolves each term of the clause into an expression.
+** If the order-by term is an integer I between 1 and N (where N is the
+** number of columns in the result set of the SELECT) then the expression
+** in the resolution is a copy of the I-th result-set expression.  If
+** the order-by term is an identify that corresponds to the AS-name of
+** a result-set expression, then the term resolves to a copy of the
+** result-set expression.  Otherwise, the expression is resolved in
+** the usual way - using sqlite3ResolveExprNames().
+**
+** This routine returns the number of errors.  If errors occur, then
+** an appropriate error message might be left in pParse.  (OOM errors
+** excepted.)
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveOrderGroupBy</name><parameter_list>(
+  <param><decl><type><name>NameContext</name> *</type><name>pNC</name></decl></param>,     <comment type="block">/* The name context of the SELECT statement */</comment>
+  <param><decl><type><name>Select</name> *</type><name>pSelect</name></decl></param>,      <comment type="block">/* The SELECT statement holding pOrderBy */</comment>
+  <param><decl><type><name>ExprList</name> *</type><name>pOrderBy</name></decl></param>,   <comment type="block">/* An ORDER BY or GROUP BY clause to resolve */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zType</name></decl></param>     <comment type="block">/* Either "ORDER" or "GROUP", as appropriate */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>                         <comment type="block">/* Loop counter */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>iCol</name></decl>;</decl_stmt>                      <comment type="block">/* Column number */</comment>
+  <decl_stmt><decl><type>struct <name>ExprList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>   <comment type="block">/* A term of the ORDER BY clause */</comment>
+  <decl_stmt><decl><type><name>Parse</name> *</type><name>pParse</name></decl>;</decl_stmt>                 <comment type="block">/* Parsing context */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nResult</name></decl>;</decl_stmt>                   <comment type="block">/* Number of terms in the result set */</comment>
+
+  <if>if<condition>( <expr><name>pOrderBy</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>nResult</name> = <name>pSelect</name>-&gt;<name>pEList</name>-&gt;<name>nExpr</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name> = <name>pNC</name>-&gt;<name>pParse</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>pItem</name>=<name>pOrderBy</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&lt;<name>pOrderBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>Expr</name> *</type><name>pE</name> =<init> <expr><name>pItem</name>-&gt;<name>pExpr</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>iCol</name> = <call><name>resolveAsName</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pSelect</name>-&gt;<name>pEList</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>iCol</name>&lt;0</expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>  <comment type="block">/* OOM error */</comment>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>iCol</name>&gt;0</expr> )</condition><then><block>{
+      <comment type="block">/* If an AS-name match is found, mark this ORDER BY column as being
+      ** a copy of the iCol-th result-set column.  The subsequent call to
+      ** sqlite3ResolveOrderGroupBy() will convert the expression to a
+      ** copy of the iCol-th result-set expression. */</comment>
+      <expr_stmt><expr><name>pItem</name>-&gt;<name>iCol</name> = (<name>u16</name>)<name>iCol</name></expr>;</expr_stmt>
+      <continue>continue;</continue>
+    }</block></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3ExprIsInteger</name><argument_list>(<argument><expr><name>pE</name></expr></argument>, <argument><expr>&amp;<name>iCol</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <comment type="block">/* The ORDER BY term is an integer constant.  Again, set the column
+      ** number so that sqlite3ResolveOrderGroupBy() will convert the
+      ** order-by term to a copy of the result-set expression */</comment>
+      <if>if<condition>( <expr><name>iCol</name>&lt;1</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>resolveOutOfRangeError</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>zType</name></expr></argument>, <argument><expr><name>i</name>+1</expr></argument>, <argument><expr><name>nResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr>1</expr>;</return>
+      }</block></then></if>
+      <expr_stmt><expr><name>pItem</name>-&gt;<name>iCol</name> = (<name>u16</name>)<name>iCol</name></expr>;</expr_stmt>
+      <continue>continue;</continue>
+    }</block></then></if>
+
+    <comment type="block">/* Otherwise, treat the ORDER BY term as an ordinary expression */</comment>
+    <expr_stmt><expr><name>pItem</name>-&gt;<name>iCol</name> = 0</expr>;</expr_stmt>
+    <if>if<condition>( <expr><call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr><name>pNC</name></expr></argument>, <argument><expr><name>pE</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr><call><name>sqlite3ResolveOrderGroupBy</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pSelect</name></expr></argument>, <argument><expr><name>pOrderBy</name></expr></argument>, <argument><expr><name>zType</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Resolve names in the SELECT statement p and all of its descendents.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>resolveSelectStep</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Select</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>NameContext</name> *</type><name>pOuterNC</name></decl>;</decl_stmt>  <comment type="block">/* Context that contains this SELECT */</comment>
+  <decl_stmt><decl><type><name>NameContext</name></type> <name>sNC</name></decl>;</decl_stmt>        <comment type="block">/* Name context of this SELECT */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>isCompound</name></decl>;</decl_stmt>         <comment type="block">/* True if p is a compound select */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nCompound</name></decl>;</decl_stmt>          <comment type="block">/* Number of compound terms processed so far */</comment>
+  <decl_stmt><decl><type><name>Parse</name> *</type><name>pParse</name></decl>;</decl_stmt>          <comment type="block">/* Parsing context */</comment>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pEList</name></decl>;</decl_stmt>       <comment type="block">/* Result set expression list */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>                  <comment type="block">/* Loop counter */</comment>
+  <decl_stmt><decl><type><name>ExprList</name> *</type><name>pGroupBy</name></decl>;</decl_stmt>     <comment type="block">/* The GROUP BY clause */</comment>
+  <decl_stmt><decl><type><name>Select</name> *</type><name>pLeftmost</name></decl>;</decl_stmt>      <comment type="block">/* Left-most of SELECT of a compound */</comment>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>            <comment type="block">/* Database connection */</comment>
+  
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>selFlags</name> &amp; <name>SF_Resolved</name></expr> )</condition><then><block>{
+    <return>return <expr><name>WRC_Prune</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pOuterNC</name> = <name>pWalker</name>-&gt;<name>u</name>.<name>pNC</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pParse</name> = <name>pWalker</name>-&gt;<name>pParse</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>db</name> = <name>pParse</name>-&gt;<name>db</name></expr>;</expr_stmt>
+
+  <comment type="block">/* Normally sqlite3SelectExpand() will be called first and will have
+  ** already expanded this SELECT.  However, if this is a subquery within
+  ** an expression, sqlite3ResolveExprNames() will be called without a
+  ** prior call to sqlite3SelectExpand().  When that happens, let
+  ** sqlite3SelectPrep() do all of the processing for this SELECT.
+  ** sqlite3SelectPrep() will invoke both sqlite3SelectExpand() and
+  ** this routine in the correct order.
+  */</comment>
+  <if>if<condition>( <expr>(<name>p</name>-&gt;<name>selFlags</name> &amp; <name>SF_Expanded</name>)==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3SelectPrep</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>pOuterNC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>(<name>pParse</name>-&gt;<name>nErr</name> || <name>db</name>-&gt;<name>mallocFailed</name>) ? <name>WRC_Abort</name> : <name>WRC_Prune</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>isCompound</name> = <name>p</name>-&gt;<name>pPrior</name>!=0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>nCompound</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pLeftmost</name> = <name>p</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>p</name></expr> )</condition><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>p</name>-&gt;<name>selFlags</name> &amp; <name>SF_Expanded</name>)!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>p</name>-&gt;<name>selFlags</name> &amp; <name>SF_Resolved</name>)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>selFlags</name> |= <name>SF_Resolved</name></expr>;</expr_stmt>
+
+    <comment type="block">/* Resolve the expressions in the LIMIT and OFFSET clauses. These
+    ** are not allowed to refer to any names, so pass an empty NameContext.
+    */</comment>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>sNC</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>sNC</name>.<name>pParse</name> = <name>pParse</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pLimit</name></expr></argument>)</argument_list></call> ||
+        <call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pOffset</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+  
+    <comment type="block">/* Set up the local name-context to pass to sqlite3ResolveExprNames() to
+    ** resolve the result-set expression list.
+    */</comment>
+    <expr_stmt><expr><name>sNC</name>.<name>allowAgg</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>sNC</name>.<name>pSrcList</name> = <name>p</name>-&gt;<name>pSrc</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>sNC</name>.<name>pNext</name> = <name>pOuterNC</name></expr>;</expr_stmt>
+  
+    <comment type="block">/* Resolve names in the result set. */</comment>
+    <expr_stmt><expr><name>pEList</name> = <name>p</name>-&gt;<name>pEList</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pEList</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>pEList</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type><name>Expr</name> *</type><name>pX</name> =<init> <expr><name>pEList</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name>.<name>pExpr</name></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>pX</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <return>return <expr><name>WRC_Abort</name></expr>;</return>
+      }</block></then></if>
+    }</block></for>
+  
+    <comment type="block">/* Recursively resolve names in all subqueries
+    */</comment>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>p</name>-&gt;<name>pSrc</name>-&gt;<name>nSrc</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type>struct <name>SrcList_item</name> *</type><name>pItem</name> =<init> <expr>&amp;<name>p</name>-&gt;<name>pSrc</name>-&gt;<name><name>a</name><index>[<expr><name>i</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>pItem</name>-&gt;<name>pSelect</name></expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zSavedContext</name> =<init> <expr><name>pParse</name>-&gt;<name>zAuthContext</name></expr></init></decl>;</decl_stmt>
+        <if>if<condition>( <expr><name>pItem</name>-&gt;<name>zName</name></expr> )</condition><then> <expr_stmt><expr><name>pParse</name>-&gt;<name>zAuthContext</name> = <name>pItem</name>-&gt;<name>zName</name></expr>;</expr_stmt></then></if>
+        <expr_stmt><expr><call><name>sqlite3ResolveSelectNames</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pItem</name>-&gt;<name>pSelect</name></expr></argument>, <argument><expr><name>pOuterNC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pParse</name>-&gt;<name>zAuthContext</name> = <name>zSavedContext</name></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pParse</name>-&gt;<name>nErr</name> || <name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+      }</block></then></if>
+    }</block></for>
+  
+    <comment type="block">/* If there are no aggregate functions in the result-set, and no GROUP BY 
+    ** expression, do not allow aggregates in any of the other expressions.
+    */</comment>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>p</name>-&gt;<name>selFlags</name> &amp; <name>SF_Aggregate</name>)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pGroupBy</name> = <name>p</name>-&gt;<name>pGroupBy</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pGroupBy</name> || <name>sNC</name>.<name>hasAgg</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>selFlags</name> |= <name>SF_Aggregate</name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>sNC</name>.<name>allowAgg</name> = 0</expr>;</expr_stmt>
+    }</block></else></if>
+  
+    <comment type="block">/* If a HAVING clause is present, then there must be a GROUP BY clause.
+    */</comment>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>pHaving</name> &amp;&amp; !<name>pGroupBy</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"a GROUP BY clause is required before HAVING"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+  
+    <comment type="block">/* Add the expression list to the name-context before parsing the
+    ** other expressions in the SELECT statement. This is so that
+    ** expressions in the WHERE clause (etc.) can refer to expressions by
+    ** aliases in the result set.
+    **
+    ** Minor point: If this is the case, then the expression will be
+    ** re-evaluated for each reference to it.
+    */</comment>
+    <expr_stmt><expr><name>sNC</name>.<name>pEList</name> = <name>p</name>-&gt;<name>pEList</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pWhere</name></expr></argument>)</argument_list></call> ||
+       <call><name>sqlite3ResolveExprNames</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pHaving</name></expr></argument>)</argument_list></call></expr>
+    )</condition><then><block>{
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+
+    <comment type="block">/* The ORDER BY and GROUP BY clauses may not refer to terms in
+    ** outer queries 
+    */</comment>
+    <expr_stmt><expr><name>sNC</name>.<name>pNext</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>sNC</name>.<name>allowAgg</name> = 1</expr>;</expr_stmt>
+
+    <comment type="block">/* Process the ORDER BY clause for singleton SELECT statements.
+    ** The ORDER BY clause for compounds SELECT statements is handled
+    ** below, after all of the result-sets for all of the elements of
+    ** the compound have been resolved.
+    */</comment>
+    <if>if<condition>( <expr>!<name>isCompound</name> &amp;&amp; <call><name>resolveOrderGroupBy</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pOrderBy</name></expr></argument>, <argument><expr>"ORDER"</expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+  
+    <comment type="block">/* Resolve the GROUP BY clause.  At the same time, make sure 
+    ** the GROUP BY clause does not contain aggregate functions.
+    */</comment>
+    <if>if<condition>( <expr><name>pGroupBy</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type>struct <name>ExprList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+    
+      <if>if<condition>( <expr><call><name>resolveOrderGroupBy</name><argument_list>(<argument><expr>&amp;<name>sNC</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>pGroupBy</name></expr></argument>, <argument><expr>"GROUP"</expr></argument>)</argument_list></call> || <name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+        <return>return <expr><name>WRC_Abort</name></expr>;</return>
+      }</block></then></if>
+      <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>pItem</name>=<name>pGroupBy</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&lt;<name>pGroupBy</name>-&gt;<name>nExpr</name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+        <if>if<condition>( <expr><call><name>ExprHasProperty</name><argument_list>(<argument><expr><name>pItem</name>-&gt;<name>pExpr</name></expr></argument>, <argument><expr><name>EP_Agg</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"aggregate functions are not allowed in "
+              "the GROUP BY clause"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <return>return <expr><name>WRC_Abort</name></expr>;</return>
+        }</block></then></if>
+      }</block></for>
+    }</block></then></if>
+
+    <comment type="block">/* Advance to the next term of the compound
+    */</comment>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pPrior</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nCompound</name>++</expr>;</expr_stmt>
+  }</block></while>
+
+  <comment type="block">/* Resolve the ORDER BY on a compound SELECT after all terms of
+  ** the compound have been resolved.
+  */</comment>
+  <if>if<condition>( <expr><name>isCompound</name> &amp;&amp; <call><name>resolveCompoundOrderBy</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pLeftmost</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>WRC_Abort</name></expr>;</return>
+  }</block></then></if>
+
+  <return>return <expr><name>WRC_Prune</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This routine walks an expression tree and resolves references to
+** table columns and result-set columns.  At the same time, do error
+** checking on function usage and set a flag if any aggregate functions
+** are seen.
+**
+** To resolve table columns references we look for nodes (or subtrees) of the 
+** form X.Y.Z or Y.Z or just Z where
+**
+**      X:   The name of a database.  Ex:  "main" or "temp" or
+**           the symbolic name assigned to an ATTACH-ed database.
+**
+**      Y:   The name of a table in a FROM clause.  Or in a trigger
+**           one of the special names "old" or "new".
+**
+**      Z:   The name of a column in table Y.
+**
+** The node at the root of the subtree is modified as follows:
+**
+**    Expr.op        Changed to TK_COLUMN
+**    Expr.pTab      Points to the Table object for X.Y
+**    Expr.iColumn   The column index in X.Y.  -1 for the rowid.
+**    Expr.iTable    The VDBE cursor number for X.Y
+**
+**
+** To resolve result-set references, look for expression nodes of the
+** form Z (with no X and Y prefix) where the Z matches the right-hand
+** size of an AS clause in the result-set of a SELECT.  The Z expression
+** is replaced by a copy of the left-hand side of the result-set expression.
+** Table-name and function resolution occurs on the substituted expression
+** tree.  For example, in:
+**
+**      SELECT a+b AS x, c+d AS y FROM t1 ORDER BY x;
+**
+** The "x" term of the order by is replaced by "a+b" to render:
+**
+**      SELECT a+b AS x, c+d AS y FROM t1 ORDER BY a+b;
+**
+** Function calls are checked to make sure that the function is 
+** defined and that the correct number of arguments are specified.
+** If the function is an aggregate function, then the pNC-&gt;hasAgg is
+** set and the opcode is changed from TK_FUNCTION to TK_AGG_FUNCTION.
+** If an expression contains aggregate functions then the EP_Agg
+** property on the expression is set.
+**
+** An error message is left in pParse if anything is amiss.  The number
+** if errors is returned.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3ResolveExprNames</name><parameter_list>( 
+  <param><decl><type><name>NameContext</name> *</type><name>pNC</name></decl></param>,       <comment type="block">/* Namespace to resolve expressions in. */</comment>
+  <param><decl><type><name>Expr</name> *</type><name>pExpr</name></decl></param>             <comment type="block">/* The expression to be analyzed. */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>savedHasAgg</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Walker</name></type> <name>w</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pExpr</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_MAX_EXPR_DEPTH</name>&gt;0</expr></cpp:if>
+  <block>{
+    <decl_stmt><decl><type><name>Parse</name> *</type><name>pParse</name> =<init> <expr><name>pNC</name>-&gt;<name>pParse</name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><call><name>sqlite3ExprCheckHeight</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>nHeight</name>+<name>pNC</name>-&gt;<name>pParse</name>-&gt;<name>nHeight</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>nHeight</name> += <name>pExpr</name>-&gt;<name>nHeight</name></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><name>savedHasAgg</name> = <name>pNC</name>-&gt;<name>hasAgg</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pNC</name>-&gt;<name>hasAgg</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>xExprCallback</name> = <name>resolveExprStep</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>xSelectCallback</name> = <name>resolveSelectStep</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>pParse</name> = <name>pNC</name>-&gt;<name>pParse</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>u</name>.<name>pNC</name> = <name>pNC</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr>&amp;<name>w</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_MAX_EXPR_DEPTH</name>&gt;0</expr></cpp:if>
+  <expr_stmt><expr><name>pNC</name>-&gt;<name>pParse</name>-&gt;<name>nHeight</name> -= <name>pExpr</name>-&gt;<name>nHeight</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <if>if<condition>( <expr><name>pNC</name>-&gt;<name>nErr</name>&gt;0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>ExprSetProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_Error</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pNC</name>-&gt;<name>hasAgg</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>ExprSetProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_Agg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>savedHasAgg</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pNC</name>-&gt;<name>hasAgg</name> = 1</expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <return>return <expr><call><name>ExprHasProperty</name><argument_list>(<argument><expr><name>pExpr</name></expr></argument>, <argument><expr><name>EP_Error</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Resolve all names in all expressions of a SELECT and in all
+** decendents of the SELECT, including compounds off of p-&gt;pPrior,
+** subqueries in expressions, and subqueries used as FROM clause
+** terms.
+**
+** See sqlite3ResolveExprNames() for a description of the kinds of
+** transformations that occur.
+**
+** All SELECT statements should have been expanded using
+** sqlite3SelectExpand() prior to invoking this routine.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3ResolveSelectNames</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,         <comment type="block">/* The parser context */</comment>
+  <param><decl><type><name>Select</name> *</type><name>p</name></decl></param>,             <comment type="block">/* The SELECT statement being coded. */</comment>
+  <param><decl><type><name>NameContext</name> *</type><name>pOuterNC</name></decl></param>  <comment type="block">/* Name context for parent SELECT statement */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Walker</name></type> <name>w</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>xExprCallback</name> = <name>resolveExprStep</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>xSelectCallback</name> = <name>resolveSelectStep</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>pParse</name> = <name>pParse</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>w</name>.<name>u</name>.<name>pNC</name> = <name>pOuterNC</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3WalkSelect</name><argument_list>(<argument><expr>&amp;<name>w</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+</unit>

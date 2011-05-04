@@ -1,0 +1,813 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="prepare.c" filename=""><comment type="block">/*
+** 2005 May 25
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains the implementation of the sqlite3_prepare()
+** interface, and routines that contribute to loading the database schema
+** from disk.
+**
+** $Id: prepare.c,v 1.104 2009/01/09 02:49:32 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Fill the InitData structure with an error message that indicates
+** that the database is corrupt.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>corruptSchema</name><parameter_list>(
+  <param><decl><type><name>InitData</name> *</type><name>pData</name></decl></param>,     <comment type="block">/* Initialization context */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zObj</name></decl></param>,    <comment type="block">/* Object being parsed at the point of error */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zExtra</name></decl></param>   <comment type="block">/* Error information */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pData</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr>!<name>db</name>-&gt;<name>mallocFailed</name> &amp;&amp; (<name>db</name>-&gt;<name>flags</name> &amp; <name>SQLITE_RecoveryMode</name>)==0</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>zObj</name>==0</expr> )</condition><then> <expr_stmt><expr><name>zObj</name> = "?"</expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pzErrMsg</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>db</name></expr></argument>,
+       <argument><expr>"malformed database schema (%s)"</expr></argument>, <argument><expr><name>zObj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zExtra</name> &amp;&amp; <name><name>zExtra</name><index>[<expr>0</expr>]</index></name></expr> )</condition><then><block>{
+      <expr_stmt><expr>*<name>pData</name>-&gt;<name>pzErrMsg</name> = <call><name>sqlite3MAppendf</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>db</name></expr></argument>, <argument><expr>*<name>pData</name>-&gt;<name>pzErrMsg</name></expr></argument>, <argument><expr>"%s - %s"</expr></argument>,
+                                  <argument><expr>*<name>pData</name>-&gt;<name>pzErrMsg</name></expr></argument>, <argument><expr><name>zExtra</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  <expr_stmt><expr><name>pData</name>-&gt;<name>rc</name> = <name>SQLITE_CORRUPT</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** This is the callback routine for the code that initializes the
+** database.  See sqlite3Init() below for additional information.
+** This routine is also called from the OP_ParseSchema opcode of the VDBE.
+**
+** Each callback contains the following information:
+**
+**     argv[0] = name of thing being created
+**     argv[1] = root page number for table or index. 0 for trigger or view.
+**     argv[2] = SQL text for the CREATE statement.
+**
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3InitCallback</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pInit</name></decl></param>, <param><decl><type><name>int</name></type> <name>argc</name></decl></param>, <param><decl><type><name>char</name> **</type><name>argv</name></decl></param>, <param><decl><type><name>char</name> **</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>InitData</name> *</type><name>pData</name> =<init> <expr>(<name>InitData</name>*)<name>pInit</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pData</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name> =<init> <expr><name>pData</name>-&gt;<name>iDb</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>argc</name>==3</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DbClearProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>DB_Empty</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>corruptSchema</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>&gt;=0 &amp;&amp; <name>iDb</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>argv</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>   <comment type="block">/* Might happen if EMPTY_RESULT_CALLBACKS are on */</comment>
+  <if>if<condition>( <expr><name><name>argv</name><index>[<expr>1</expr>]</index></name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>corruptSchema</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name><name>argv</name><index>[<expr>2</expr>]</index></name> &amp;&amp; <name><name>argv</name><index>[<expr>2</expr>]</index><index>[<expr>0</expr>]</index></name></expr> )</condition><then><block>{
+    <comment type="block">/* Call the parser to process a CREATE TABLE, INDEX or VIEW.
+    ** But because db-&gt;init.busy is set to 1, no VDBE code is generated
+    ** or executed.  All the parser does is build the internal data
+    ** structures that describe the table, index, or view.
+    */</comment>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zErr</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u8</name></type> <name>lookasideEnabled</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name>-&gt;<name>init</name>.<name>busy</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>init</name>.<name>iDb</name> = <name>iDb</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>init</name>.<name>newTnum</name> = <call><name>atoi</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>lookasideEnabled</name> = <name>db</name>-&gt;<name>lookaside</name>.<name>bEnabled</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>lookaside</name>.<name>bEnabled</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_exec</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>zErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>init</name>.<name>iDb</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>lookaside</name>.<name>bEnabled</name> = <name>lookasideEnabled</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>!=<name>SQLITE_OK</name> || <name>zErr</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>SQLITE_OK</name>!=<name>rc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pData</name>-&gt;<name>rc</name> = <name>rc</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_NOMEM</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_INTERRUPT</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>corruptSchema</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if></else></if>
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then><else>else <if>if<condition>( <expr><name><name>argv</name><index>[<expr>0</expr>]</index></name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>corruptSchema</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <comment type="block">/* If the SQL column is blank it means this is an index that
+    ** was created to be the PRIMARY KEY or to fulfill a UNIQUE
+    ** constraint for a CREATE TABLE.  The index should have already
+    ** been created when we processed the CREATE TABLE.  All we have
+    ** to do here is record the root page number for that index.
+    */</comment>
+    <decl_stmt><decl><type><name>Index</name> *</type><name>pIndex</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pIndex</name> = <call><name>sqlite3FindIndex</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pIndex</name>==0 || <name>pIndex</name>-&gt;<name>tnum</name>!=0</expr> )</condition><then><block>{
+      <comment type="block">/* This can occur if there exists an index on a TEMP table which
+      ** has the same name as another index on a permanent index.  Since
+      ** the permanent table is hidden by the TEMP table, we can also
+      ** safely ignore the index on the permanent table.
+      */</comment>
+      <comment type="block">/* Do Nothing */</comment><empty_stmt>;</empty_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>pIndex</name>-&gt;<name>tnum</name> = <call><name>atoi</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></else></if></else></if></else></if>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Attempt to read the database schema and initialize internal
+** data structures for a single database file.  The index of the
+** database file is given by iDb.  iDb==0 is used for the main
+** database.  iDb==1 should never be used.  iDb&gt;=2 is used for
+** auxiliary databases.  Return one of the SQLITE_ error codes to
+** indicate success or failure.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3InitOne</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>int</name></type> <name>iDb</name></decl></param>, <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>curMain</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>size</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Db</name> *</type><name>pDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> <name>const</name> *</type><name><name>azArg</name><index>[<expr>4</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>meta</name><index>[<expr>10</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>InitData</name></type> <name>initData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> <name>const</name> *</type><name>zMasterSchema</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> <name>const</name> *</type><name>zMasterName</name> =<init> <expr><call><name>SCHEMA_TABLE</name><argument_list>(<argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/*
+  ** The master database table has a structure like this
+  */</comment>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name></type> <name><name>master_schema</name><index>[]</index></name> =<init> 
+     <expr>"CREATE TABLE sqlite_master(\n"
+     "  type text,\n"
+     "  name text,\n"
+     "  tbl_name text,\n"
+     "  rootpage integer,\n"
+     "  sql text\n"
+     ")"</expr></init></decl>
+  ;</decl_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TEMPDB</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name></type> <name><name>temp_master_schema</name><index>[]</index></name> =<init> 
+     <expr>"CREATE TEMP TABLE sqlite_temp_master(\n"
+     "  type text,\n"
+     "  name text,\n"
+     "  tbl_name text,\n"
+     "  rootpage integer,\n"
+     "  sql text\n"
+     ")"</expr></init></decl>
+  ;</decl_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>temp_master_schema</name> 0</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>&gt;=0 &amp;&amp; <name>iDb</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pSchema</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>==1 || <call><name>sqlite3BtreeHoldsMutex</name><argument_list>(<argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pBt</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* zMasterSchema and zInitScript are set to point at the master schema
+  ** and initialisation script appropriate for the database being
+  ** initialised. zMasterName is the name of the master table.
+  */</comment>
+  <if>if<condition>( <expr>!<name>OMIT_TEMPDB</name> &amp;&amp; <name>iDb</name>==1</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zMasterSchema</name> = <name>temp_master_schema</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>zMasterSchema</name> = <name>master_schema</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>zMasterName</name> = <call><name>SCHEMA_TABLE</name><argument_list>(<argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Construct the schema tables.  */</comment>
+  <expr_stmt><expr><name><name>azArg</name><index>[<expr>0</expr>]</index></name> = <name>zMasterName</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>azArg</name><index>[<expr>1</expr>]</index></name> = "1"</expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>azArg</name><index>[<expr>2</expr>]</index></name> = <name>zMasterSchema</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>azArg</name><index>[<expr>3</expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>initData</name>.<name>db</name> = <name>db</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>initData</name>.<name>iDb</name> = <name>iDb</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>initData</name>.<name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>initData</name>.<name>pzErrMsg</name> = <name>pzErrMsg</name></expr>;</expr_stmt>
+  <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3InitCallback</name><argument_list>(<argument><expr>&amp;<name>initData</name></expr></argument>, <argument><expr>3</expr></argument>, <argument><expr>(<name>char</name> **)<name>azArg</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>initData</name>.<name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>initData</name>.<name>rc</name></expr>;</expr_stmt>
+    <goto>goto <name>error_out</name>;</goto>
+  }</block></then></if>
+  <expr_stmt><expr><name>pTab</name> = <call><name>sqlite3FindTable</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zMasterName</name></expr></argument>, <argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pTab</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pTab</name>-&gt;<name>tabFlags</name> |= <name>TF_Readonly</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Create a cursor to hold the database open
+  */</comment>
+  <expr_stmt><expr><name>pDb</name> = &amp;<name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pDb</name>-&gt;<name>pBt</name>==0</expr> )</condition><then><block>{
+    <if>if<condition>( <expr>!<name>OMIT_TEMPDB</name> &amp;&amp; <name>iDb</name>==1</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>DbSetProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>DB_SchemaLoaded</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>curMain</name> = <call><name>sqlite3MallocZero</name><argument_list>(<argument><expr><call><name>sqlite3BtreeCursorSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>curMain</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+    <goto>goto <name>error_out</name>;</goto>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pDb</name>-&gt;<name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCursor</name><argument_list>(<argument><expr><name>pDb</name>-&gt;<name>pBt</name></expr></argument>, <argument><expr><name>MASTER_ROOT</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>curMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> &amp;&amp; <name>rc</name>!=<name>SQLITE_EMPTY</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pzErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><call><name>sqlite3ErrStr</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <goto>goto <name>initone_error_out</name>;</goto>
+  }</block></then></if>
+
+  <comment type="block">/* Get the database meta information.
+  **
+  ** Meta values are as follows:
+  **    meta[0]   Schema cookie.  Changes with each schema change.
+  **    meta[1]   File format of schema layer.
+  **    meta[2]   Size of the page cache.
+  **    meta[3]   Use freelist if 0.  Autovacuum if greater than zero.
+  **    meta[4]   Db text encoding. 1:UTF-8 2:UTF-16LE 3:UTF-16BE
+  **    meta[5]   The user cookie. Used by the application.
+  **    meta[6]   Incremental-vacuum flag.
+  **    meta[7]
+  **    meta[8]
+  **    meta[9]
+  **
+  ** Note: The #defined SQLITE_UTF* symbols in sqliteInt.h correspond to
+  ** the possible values of meta[4].
+  */</comment>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>meta</name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeGetMeta</name><argument_list>(<argument><expr><name>pDb</name>-&gt;<name>pBt</name></expr></argument>, <argument><expr><name>i</name>+1</expr></argument>, <argument><expr>(<name>u32</name> *)&amp;<name><name>meta</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pzErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><call><name>sqlite3ErrStr</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <goto>goto <name>initone_error_out</name>;</goto>
+      }</block></then></if>
+    }</block></for>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>meta</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>meta</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>schema_cookie</name> = <name><name>meta</name><index>[<expr>0</expr>]</index></name></expr>;</expr_stmt>
+
+  <comment type="block">/* If opening a non-empty database, check the text encoding. For the
+  ** main database, set sqlite3.enc to the encoding of the main database.
+  ** For an attached db, it is an error if the encoding is not the same
+  ** as sqlite3.enc.
+  */</comment>
+  <if>if<condition>( <expr><name><name>meta</name><index>[<expr>4</expr>]</index></name></expr> )</condition><then><block>{  <comment type="block">/* text encoding */</comment>
+    <if>if<condition>( <expr><name>iDb</name>==0</expr> )</condition><then><block>{
+      <comment type="block">/* If opening the main database, set ENC(db). */</comment>
+      <expr_stmt><expr><call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call> = (<name>u8</name>)<name><name>meta</name><index>[<expr>4</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>db</name>-&gt;<name>pDfltColl</name> = <call><name>sqlite3FindCollSeq</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr>"BINARY"</expr></argument>, <argument><expr>6</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <comment type="block">/* If opening an attached database, the encoding much match ENC(db) */</comment>
+      <if>if<condition>( <expr><name><name>meta</name><index>[<expr>4</expr>]</index></name>!=<call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pzErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"attached databases must use the same"
+            " text encoding as main database"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+        <goto>goto <name>initone_error_out</name>;</goto>
+      }</block></then></if>
+    }</block></else></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>DbSetProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>DB_Empty</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>enc</name> = <call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>cache_size</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>size</name> = <name><name>meta</name><index>[<expr>2</expr>]</index></name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>size</name>==0</expr> )</condition><then><block>{ <expr_stmt><expr><name>size</name> = <name>SQLITE_DEFAULT_CACHE_SIZE</name></expr>;</expr_stmt> }</block></then></if>
+    <if>if<condition>( <expr><name>size</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>size</name> = -<name>size</name></expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>cache_size</name> = <name>size</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeSetCacheSize</name><argument_list>(<argument><expr><name>pDb</name>-&gt;<name>pBt</name></expr></argument>, <argument><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>cache_size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/*
+  ** file_format==1    Version 3.0.0.
+  ** file_format==2    Version 3.1.3.  // ALTER TABLE ADD COLUMN
+  ** file_format==3    Version 3.1.4.  // ditto but with non-NULL defaults
+  ** file_format==4    Version 3.3.0.  // DESC indices.  Boolean constants
+  */</comment>
+  <expr_stmt><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>file_format</name> = (<name>u8</name>)<name><name>meta</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>file_format</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>file_format</name> = 1</expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pDb</name>-&gt;<name>pSchema</name>-&gt;<name>file_format</name>&gt;<name>SQLITE_MAX_FILE_FORMAT</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3SetString</name><argument_list>(<argument><expr><name>pzErrMsg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>"unsupported file format"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+    <goto>goto <name>initone_error_out</name>;</goto>
+  }</block></then></if>
+
+  <comment type="block">/* Ticket #2804:  When we open a database in the newer file format,
+  ** clear the legacy_file_format pragma flag so that a VACUUM will
+  ** not downgrade the database and thus invalidate any descending
+  ** indices that the user might have created.
+  */</comment>
+  <if>if<condition>( <expr><name>iDb</name>==0 &amp;&amp; <name><name>meta</name><index>[<expr>1</expr>]</index></name>&gt;=4</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>flags</name> &amp;= ~<name>SQLITE_LegacyFileFmt</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Read the schema information out of the schema tables
+  */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name>-&gt;<name>init</name>.<name>busy</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_EMPTY</name></expr> )</condition><then><block>{
+    <comment type="block">/* For an empty database, there is nothing to read */</comment>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zSql</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>zSql</name> = <call><name>sqlite3MPrintf</name><argument_list>(<argument><expr><name>db</name></expr></argument>, 
+        <argument><expr>"SELECT name, rootpage, sql FROM '%q'.%s"</expr></argument>,
+        <argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zMasterName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTHORIZATION</name></cpp:ifndef>
+    <block>{
+      <function_decl><type><name>int</name></type> (*<name>xAuth</name>)<parameter_list>(<param><decl><type><name>void</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>,<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>,<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>,<param><decl><type><name>const</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+      <expr_stmt><expr><name>xAuth</name> = <name>db</name>-&gt;<name>xAuth</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>db</name>-&gt;<name>xAuth</name> = 0</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_exec</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>sqlite3InitCallback</name></expr></argument>, <argument><expr>&amp;<name>initData</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTHORIZATION</name></cpp:ifndef>
+      <expr_stmt><expr><name>db</name>-&gt;<name>xAuth</name> = <name>xAuth</name></expr>;</expr_stmt>
+    }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then> <expr_stmt><expr><name>rc</name> = <name>initData</name>.<name>rc</name></expr>;</expr_stmt></then></if>
+    <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_ANALYZE</name></cpp:ifndef>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3AnalysisLoad</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3ResetInternalSchema</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> || (<name>db</name>-&gt;<name>flags</name>&amp;<name>SQLITE_RecoveryMode</name>)</expr>)</condition><then><block>{
+    <comment type="block">/* Black magic: If the SQLITE_RecoveryMode flag is set, then consider
+    ** the schema loaded, even if errors occured. In this situation the 
+    ** current sqlite3_prepare() operation will fail, but the following one
+    ** will attempt to compile the supplied statement against whatever subset
+    ** of the schema was loaded before the error occured. The primary
+    ** purpose of this is to allow access to the sqlite_master table
+    ** even when its contents have been corrupted.
+    */</comment>
+    <expr_stmt><expr><call><name>DbSetProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>DB_SchemaLoaded</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Jump here for an error that occurs after successfully allocating
+  ** curMain and calling sqlite3BtreeEnter(). For an error that occurs
+  ** before that point, jump to error_out.
+  */</comment>
+<label><name>initone_error_out</name>:</label>
+  <expr_stmt><expr><call><name>sqlite3BtreeCloseCursor</name><argument_list>(<argument><expr><name>curMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>curMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pDb</name>-&gt;<name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+<label><name>error_out</name>:</label>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_NOMEM</name> || <name>rc</name>==<name>SQLITE_IOERR_NOMEM</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Initialize all database files - the main database file, the file
+** used to store temporary tables, and any additional database files
+** created using ATTACH statements.  Return a success code.  If an
+** error occurs, write an error message into *pzErrMsg.
+**
+** After a database is initialized, the DB_SchemaLoaded bit is set
+** bit is set in the flags field of the Db structure. If the database
+** file was of zero-length, then the DB_Empty flag is also set.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Init</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>char</name> **</type><name>pzErrMsg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>commit_internal</name> =<init> <expr>!(<name>db</name>-&gt;<name>flags</name>&amp;<name>SQLITE_InternChanges</name>)</expr></init></decl>;</decl_stmt>
+  
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>init</name>.<name>busy</name></expr> )</condition><then> <return>return <expr><name>SQLITE_OK</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>db</name>-&gt;<name>init</name>.<name>busy</name> = 1</expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>i</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>DbHasProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>DB_SchemaLoaded</name></expr></argument>)</argument_list></call> || <name>i</name>==1</expr> )</condition><then> <continue>continue;</continue></then></if>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3InitOne</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>pzErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ResetInternalSchema</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+
+  <comment type="block">/* Once all the other databases have been initialised, load the schema
+  ** for the TEMP database. This is loaded last, as the TEMP database
+  ** schema may contain references to objects in other databases.
+  */</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TEMPDB</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>db</name>-&gt;<name>nDb</name>&gt;1 &amp;&amp; !<call><name>DbHasProperty</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>DB_SchemaLoaded</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3InitOne</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>pzErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3ResetInternalSchema</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><name>db</name>-&gt;<name>init</name>.<name>busy</name> = 0</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>commit_internal</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3CommitInternalChanges</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <return>return <expr><name>rc</name></expr>;</return> 
+}</block></function>
+
+<comment type="block">/*
+** This routine is a no-op if the database schema is already initialised.
+** Otherwise, the schema is loaded. An error code is returned.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3ReadSchema</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>db</name>-&gt;<name>init</name>.<name>busy</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3Init</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>&amp;<name>pParse</name>-&gt;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>rc</name> = <name>rc</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pParse</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Check schema cookies in all databases.  If any cookie is out
+** of date, return 0.  If all schema cookies are current, return 1.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>schemaIsValid</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>curTemp</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>cookie</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>allOk</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>curTemp</name> = (<name>BtCursor</name> *)<call><name>sqlite3Malloc</name><argument_list>(<argument><expr><call><name>sqlite3BtreeCursorSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>curTemp</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>iDb</name>=0</expr>;</init> <condition><expr><name>allOk</name> &amp;&amp; <name>iDb</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr>;</condition> <incr><expr><name>iDb</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>pBt</name> = <name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pBt</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pBt</name>==0</expr> )</condition><then> <continue>continue;</continue></then></if>
+      <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>curTemp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sqlite3BtreeCursorSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCursor</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>MASTER_ROOT</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>curTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeGetMeta</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>(<name>u32</name> *)&amp;<name>cookie</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>cookie</name>!=<name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pSchema</name>-&gt;<name>schema_cookie</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>allOk</name> = 0</expr>;</expr_stmt>
+        }</block></then></if>
+        <expr_stmt><expr><call><name>sqlite3BtreeCloseCursor</name><argument_list>(<argument><expr><name>curTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_NOMEM</name> || <name>rc</name>==<name>SQLITE_IOERR_NOMEM</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></for>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>curTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>allOk</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+  }</block></else></if>
+
+  <return>return <expr><name>allOk</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert a schema pointer into the iDb index that indicates
+** which database file in db-&gt;aDb[] the schema refers to.
+**
+** If the same database is attached more than once, the first
+** attached database is returned.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3SchemaToIndex</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>Schema</name> *</type><name>pSchema</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr>-1000000</expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* If pSchema is NULL, then return -1000000. This happens when code in 
+  ** expr.c is trying to resolve a reference to a transient table (i.e. one
+  ** created by a sub-select). In this case the return value of this 
+  ** function should never be used.
+  **
+  ** We return -1000000 instead of the more usual -1 simply because using
+  ** -1000000 as the incorrect index into db-&gt;aDb[] is much 
+  ** more likely to cause a segfault than -1 (of course there are assert()
+  ** statements too, but it never hurts to play the odds).
+  */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pSchema</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><call><name>ALWAYS</name><argument_list>(<argument><expr><name>i</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>i</name></expr>]</index></name>.<name>pSchema</name>==<name>pSchema</name></expr> )</condition><then><block>{
+        <break>break;</break>
+      }</block></then></if>
+    }</block></for>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;=0 &amp;&amp; <name>i</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>i</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Compile the UTF-8 encoded SQL statement zSql into a statement handle.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3Prepare</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>int</name></type> <name>saveSqlFlag</name></decl></param>,          <comment type="block">/* True to copy SQL text into the sqlite3_stmt */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Parse</name></type> <name>sParse</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zErrMsg</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>ppStmt</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>ppStmt</name> = 0</expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>!<name>db</name>-&gt;<name>mallocFailed</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* If any attached database schemas are locked, do not proceed with
+  ** compilation. Instead return SQLITE_LOCKED immediately.
+  */</comment>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+    <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name> =<init> <expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>i</name></expr>]</index></name>.<name>pBt</name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pBt</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeSchemaLocked</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zDb</name> =<init> <expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_LOCKED</name></expr></argument>, <argument><expr>"database schema is locked: %s"</expr></argument>, <argument><expr><name>zDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr><call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_LOCKED</name></expr></argument>)</argument_list></call></expr>;</return>
+      }</block></then></if>
+    }</block></then></if>
+  }</block></for>
+  
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>sParse</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>sParse</name>.<name>db</name> = <name>db</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nBytes</name>&gt;=0 &amp;&amp; (<name>nBytes</name>==0 || <name><name>zSql</name><index>[<expr><name>nBytes</name>-1</expr>]</index></name>!=0)</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zSqlCopy</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>mxLen</name> =<init> <expr><name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_SQL_LENGTH</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>nBytes</name>&gt;<name>mxLen</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_TOOBIG</name></expr></argument>, <argument><expr>"statement too long"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>SQLITE_TOOBIG</name></expr></argument>)</argument_list></call></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>zSqlCopy</name> = <call><name>sqlite3DbStrNDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zSqlCopy</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3RunParser</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr><name>zSqlCopy</name></expr></argument>, <argument><expr>&amp;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSqlCopy</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>sParse</name>.<name>zTail</name> = &amp;<name><name>zSql</name><index>[<expr><name>sParse</name>.<name>zTail</name>-<name>zSqlCopy</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>sParse</name>.<name>zTail</name> = &amp;<name><name>zSql</name><index>[<expr><name>nBytes</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>sqlite3RunParser</name><argument_list>(<argument><expr>&amp;<name>sParse</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr>&amp;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sParse</name>.<name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>sParse</name>.<name>rc</name>==<name>SQLITE_DONE</name></expr> )</condition><then> <expr_stmt><expr><name>sParse</name>.<name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>sParse</name>.<name>checkSchema</name> &amp;&amp; !<call><name>schemaIsValid</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sParse</name>.<name>rc</name> = <name>SQLITE_SCHEMA</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>sParse</name>.<name>rc</name>==<name>SQLITE_SCHEMA</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3ResetInternalSchema</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sParse</name>.<name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pzTail</name></expr> )</condition><then><block>{
+    <expr_stmt><expr>*<name>pzTail</name> = <name>sParse</name>.<name>zTail</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>rc</name> = <name>sParse</name>.<name>rc</name></expr>;</expr_stmt>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_EXPLAIN</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>sParse</name>.<name>pVdbe</name> &amp;&amp; <name>sParse</name>.<name>explain</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>sParse</name>.<name>explain</name>==2</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeSetNumCols</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"order"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"from"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"detail"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeSetNumCols</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>8</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"addr"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"opcode"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"p1"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>3</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"p2"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>4</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"p3"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>5</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"p4"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>6</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"p5"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeSetColName</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr>7</expr></argument>, <argument><expr><name>COLNAME_NAME</name></expr></argument>, <argument><expr>"comment"</expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <if>if<condition>( <expr><call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_MISUSE</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>saveSqlFlag</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeSetSql</name><argument_list>(<argument><expr><name>sParse</name>.<name>pVdbe</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr>(<name>int</name>)(<name>sParse</name>.<name>zTail</name> - <name>zSql</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> || <name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_finalize</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name>*)<name>sParse</name>.<name>pVdbe</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>!(*<name>ppStmt</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr>*<name>ppStmt</name> = (<name>sqlite3_stmt</name>*)<name>sParse</name>.<name>pVdbe</name></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <if>if<condition>( <expr><name>zErrMsg</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>, <argument><expr>"%s"</expr></argument>, <argument><expr><name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>rc</name>&amp;<name>db</name>-&gt;<name>errMask</name>)==<name>rc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3LockAndPrepare</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>int</name></type> <name>saveSqlFlag</name></decl></param>,          <comment type="block">/* True to copy SQL text into the sqlite3_stmt */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr>!<call><name>sqlite3SafetyCheckOk</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnterAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3Prepare</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>nBytes</name></expr></argument>, <argument><expr><name>saveSqlFlag</name></expr></argument>, <argument><expr><name>ppStmt</name></expr></argument>, <argument><expr><name>pzTail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeaveAll</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Rerun the compilation of a statement after a schema change.
+** Return true if the statement was recompiled successfully.
+** Return false if there is an error of some kind.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Reprepare</name><parameter_list>(<param><decl><type><name>Vdbe</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_stmt</name> *</type><name>pNew</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><call><name>sqlite3VdbeDb</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zSql</name> = <call><name>sqlite3_sql</name><argument_list>(<argument><expr>(<name>sqlite3_stmt</name> *)<name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>zSql</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* Reprepare only called for prepare_v2() statements */</comment>
+  <expr_stmt><expr><name>db</name> = <call><name>sqlite3VdbeDb</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3LockAndPrepare</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pNew</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_NOMEM</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNew</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pNew</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3VdbeSwap</name><argument_list>(<argument><expr>(<name>Vdbe</name>*)<name>pNew</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3TransferBindings</name><argument_list>(<argument><expr><name>pNew</name></expr></argument>, <argument><expr>(<name>sqlite3_stmt</name>*)<name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeResetStepResult</name><argument_list>(<argument><expr>(<name>Vdbe</name>*)<name>pNew</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeFinalize</name><argument_list>(<argument><expr>(<name>Vdbe</name>*)<name>pNew</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Two versions of the official API.  Legacy and new use.  In the legacy
+** version, the original SQL text is not saved in the prepared statement
+** and so if a schema change occurs, SQLITE_SCHEMA is returned by
+** sqlite3_step().  In the new version, the original SQL text is retained
+** and the statement is automatically recompiled if an schema change
+** occurs.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_prepare</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3LockAndPrepare</name><argument_list>(<argument><expr><name>db</name></expr></argument>,<argument><expr><name>zSql</name></expr></argument>,<argument><expr><name>nBytes</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr><name>ppStmt</name></expr></argument>,<argument><expr><name>pzTail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_OK</name> || <name>ppStmt</name>==0 || *<name>ppStmt</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* VERIFY: F13021 */</comment>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_prepare_v2</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3LockAndPrepare</name><argument_list>(<argument><expr><name>db</name></expr></argument>,<argument><expr><name>zSql</name></expr></argument>,<argument><expr><name>nBytes</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>ppStmt</name></expr></argument>,<argument><expr><name>pzTail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_OK</name> || <name>ppStmt</name>==0 || *<name>ppStmt</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* VERIFY: F13021 */</comment>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<comment type="block">/*
+** Compile the UTF-16 encoded SQL statement zSql into a statement handle.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3Prepare16</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment> 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>int</name></type> <name>saveSqlFlag</name></decl></param>,          <comment type="block">/* True to save SQL text into the sqlite3_stmt */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>void</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <comment type="block">/* This function currently works by first transforming the UTF-16
+  ** encoded string to UTF-8, then invoking sqlite3_prepare(). The
+  ** tricky bit is figuring out the pointer to return in *pzTail.
+  */</comment>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zSql8</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zTail8</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr>!<call><name>sqlite3SafetyCheckOk</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zSql8</name> = <call><name>sqlite3Utf16to8</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>nBytes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zSql8</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3LockAndPrepare</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql8</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>saveSqlFlag</name></expr></argument>, <argument><expr><name>ppStmt</name></expr></argument>, <argument><expr>&amp;<name>zTail8</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>zTail8</name> &amp;&amp; <name>pzTail</name></expr> )</condition><then><block>{
+    <comment type="block">/* If sqlite3_prepare returns a tail pointer, we calculate the
+    ** equivalent pointer into the UTF-16 string by counting the unicode
+    ** characters between zSql8 and zTail8, and then returning a pointer
+    ** the same number of characters into the UTF-16 string.
+    */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>chars_parsed</name> =<init> <expr><call><name>sqlite3Utf8CharLen</name><argument_list>(<argument><expr><name>zSql8</name></expr></argument>, <argument><expr>(<name>int</name>)(<name>zTail8</name>-<name>zSql8</name>)</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr>*<name>pzTail</name> = (<name>u8</name> *)<name>zSql</name> + <call><name>sqlite3Utf16ByteLen</name><argument_list>(<argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>chars_parsed</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql8</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Two versions of the official API.  Legacy and new use.  In the legacy
+** version, the original SQL text is not saved in the prepared statement
+** and so if a schema change occurs, SQLITE_SCHEMA is returned by
+** sqlite3_step().  In the new version, the original SQL text is retained
+** and the statement is automatically recompiled if an schema change
+** occurs.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_prepare16</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment> 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>void</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3Prepare16</name><argument_list>(<argument><expr><name>db</name></expr></argument>,<argument><expr><name>zSql</name></expr></argument>,<argument><expr><name>nBytes</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr><name>ppStmt</name></expr></argument>,<argument><expr><name>pzTail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_OK</name> || <name>ppStmt</name>==0 || *<name>ppStmt</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* VERIFY: F13021 */</comment>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_prepare16_v2</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,              <comment type="block">/* Database handle. */</comment> 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>zSql</name></decl></param>,         <comment type="block">/* UTF-8 encoded SQL statement. */</comment>
+  <param><decl><type><name>int</name></type> <name>nBytes</name></decl></param>,               <comment type="block">/* Length of zSql in bytes. */</comment>
+  <param><decl><type><name>sqlite3_stmt</name> **</type><name>ppStmt</name></decl></param>,    <comment type="block">/* OUT: A pointer to the prepared statement */</comment>
+  <param><decl><type><name>const</name> <name>void</name> **</type><name>pzTail</name></decl></param>       <comment type="block">/* OUT: End of parsed string */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3Prepare16</name><argument_list>(<argument><expr><name>db</name></expr></argument>,<argument><expr><name>zSql</name></expr></argument>,<argument><expr><name>nBytes</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>ppStmt</name></expr></argument>,<argument><expr><name>pzTail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_OK</name> || <name>ppStmt</name>==0 || *<name>ppStmt</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>  <comment type="block">/* VERIFY: F13021 */</comment>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+</unit>

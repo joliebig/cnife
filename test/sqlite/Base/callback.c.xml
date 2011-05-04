@@ -1,0 +1,453 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="callback.c" filename=""><comment type="block">/*
+** 2005 May 23 
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains functions used to access the internal hash tables
+** of user defined functions and collation sequences.
+**
+** $Id: callback.c,v 1.34 2008/12/10 21:19:57 drh Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Invoke the 'collation needed' callback to request a collation sequence
+** in the database text encoding of name zName, length nName.
+** If the collation sequence
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>callCollNeeded</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <param><decl><type><name>int</name></type> <name>nName</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>!<name>db</name>-&gt;<name>xCollNeeded</name> || !<name>db</name>-&gt;<name>xCollNeeded16</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nName</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>nName</name> = <call><name>sqlite3Strlen</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>xCollNeeded</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name> *</type><name>zExternal</name> =<init> <expr><call><name>sqlite3DbStrNDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr>!<name>zExternal</name></expr> )</condition><then> <return>return;</return></then></if>
+    <expr_stmt><expr><name>db</name>-&gt;<call><name>xCollNeeded</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pCollNeededArg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>(<name>int</name>)<call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zExternal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zExternal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>xCollNeeded16</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name> <name>const</name> *</type><name>zExternal</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>sqlite3_value</name> *</type><name>pTmp</name> =<init> <expr><call><name>sqlite3ValueNew</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3ValueSetStr</name><argument_list>(<argument><expr><name>pTmp</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zExternal</name> = <call><name>sqlite3ValueText</name><argument_list>(<argument><expr><name>pTmp</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zExternal</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>db</name>-&gt;<call><name>xCollNeeded16</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pCollNeededArg</name></expr></argument>, <argument><expr><name>db</name></expr></argument>, <argument><expr>(<name>int</name>)<call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zExternal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3ValueFree</name><argument_list>(<argument><expr><name>pTmp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block></function>
+
+<comment type="block">/*
+** This routine is called if the collation factory fails to deliver a
+** collation function in the best encoding but there may be other versions
+** of this collation function (for other text encodings) available. Use one
+** of these instead if they exist. Avoid a UTF-8 &lt;-&gt; UTF-16 conversion if
+** possible.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>synthCollSeq</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pColl2</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name> =<init> <expr><name>pColl</name>-&gt;<name>zName</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr><call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>u8</name></type> <name><name>aEnc</name><index>[]</index></name> =<init> <expr><block>{ <expr><name>SQLITE_UTF16BE</name></expr>, <expr><name>SQLITE_UTF16LE</name></expr>, <expr><name>SQLITE_UTF8</name></expr> }</block></expr></init></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;3</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>pColl2</name> = <call><name>sqlite3FindCollSeq</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name><name>aEnc</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pColl2</name>-&gt;<name>xCmp</name>!=0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pColl</name></expr></argument>, <argument><expr><name>pColl2</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>CollSeq</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pColl</name>-&gt;<name>xDel</name> = 0</expr>;</expr_stmt>         <comment type="block">/* Do not copy the destructor */</comment>
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This function is responsible for invoking the collation factory callback
+** or substituting a collation sequence of a different encoding when the
+** requested collation sequence is not available in the database native
+** encoding.
+** 
+** If it is not NULL, then pColl must point to the database native encoding 
+** collation sequence with name zName, length nName.
+**
+** The return value is either the collation sequence to be used in database
+** db for collation type name zName, length nName, or NULL, if no collation
+** sequence can be found.
+*/</comment>
+<function><type><name>CollSeq</name> *</type><name>sqlite3GetCollSeq</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name>*</type> <name>db</name></decl></param>, 
+  <param><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>nName</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>CollSeq</name> *</type><name>p</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>p</name> = <name>pColl</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>p</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name> = <call><name>sqlite3FindCollSeq</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr>!<name>p</name> || !<name>p</name>-&gt;<name>xCmp</name></expr> )</condition><then><block>{
+    <comment type="block">/* No collation sequence of this type for this encoding is registered.
+    ** Call the collation factory to see if it can supply us with one.
+    */</comment>
+    <expr_stmt><expr><call><name>callCollNeeded</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name> = <call><name>sqlite3FindCollSeq</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><call><name>ENC</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>p</name> &amp;&amp; !<name>p</name>-&gt;<name>xCmp</name> &amp;&amp; <call><name>synthCollSeq</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>!<name>p</name> || <name>p</name>-&gt;<name>xCmp</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This routine is called on a collation sequence before it is used to
+** check that it is defined. An undefined collation sequence exists when
+** a database is loaded that contains references to collation sequences
+** that have not been defined by sqlite3_create_collation() etc.
+**
+** If required, this routine calls the 'collation needed' callback to
+** request a definition of the collating sequence. If this doesn't work, 
+** an equivalent collating sequence that uses a text encoding different
+** from the main database is substituted, if one is available.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3CheckCollSeq</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>pColl</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name> =<init> <expr><name>pColl</name>-&gt;<name>zName</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>CollSeq</name> *</type><name>p</name> =<init> <expr><call><name>sqlite3GetCollSeq</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>pColl</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr>!<name>p</name></expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>pParse</name>-&gt;<name>nErr</name>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sqlite3ErrorMsg</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>"no such collation sequence: %s"</expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>pParse</name>-&gt;<name>nErr</name>++</expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>==<name>pColl</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+
+
+<comment type="block">/*
+** Locate and return an entry from the db.aCollSeq hash table. If the entry
+** specified by zName and nName is not found and parameter 'create' is
+** true, then create a new entry. Otherwise return NULL.
+**
+** Each pointer stored in the sqlite3.aCollSeq hash table contains an
+** array of three CollSeq structures. The first is the collation sequence
+** prefferred for UTF-8, the second UTF-16le, and the third UTF-16be.
+**
+** Stored immediately after the three collation sequences is a copy of
+** the collation sequence name. A pointer to this string is stored in
+** each collation sequence structure.
+*/</comment>
+<function><type><name>static</name> <name>CollSeq</name> *</type><name>findCollSeqEntry</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>nName</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>create</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>nName</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>nName</name> = <call><name>sqlite3Strlen</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><name>pColl</name> = <call><name>sqlite3HashFind</name><argument_list>(<argument><expr>&amp;<name>db</name>-&gt;<name>aCollSeq</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr>0==<name>pColl</name> &amp;&amp; <name>create</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pColl</name> = <call><name>sqlite3DbMallocZero</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>3*<call><name>sizeof</name><argument_list>(<argument><expr>*<name>pColl</name></expr></argument>)</argument_list></call> + <name>nName</name> + 1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pColl</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pDel</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>0</expr>]</index></name>.<name>zName</name> = (<name>char</name>*)&amp;<name><name>pColl</name><index>[<expr>3</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>0</expr>]</index></name>.<name>enc</name> = <name>SQLITE_UTF8</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>1</expr>]</index></name>.<name>zName</name> = (<name>char</name>*)&amp;<name><name>pColl</name><index>[<expr>3</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>1</expr>]</index></name>.<name>enc</name> = <name>SQLITE_UTF16LE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>2</expr>]</index></name>.<name>zName</name> = (<name>char</name>*)&amp;<name><name>pColl</name><index>[<expr>3</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>2</expr>]</index></name>.<name>enc</name> = <name>SQLITE_UTF16BE</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name><name>pColl</name><index>[<expr>0</expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name><name>pColl</name><index>[<expr>0</expr>]</index></name>.<name><name>zName</name><index>[<expr><name>nName</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pDel</name> = <call><name>sqlite3HashInsert</name><argument_list>(<argument><expr>&amp;<name>db</name>-&gt;<name>aCollSeq</name></expr></argument>, <argument><expr><name><name>pColl</name><index>[<expr>0</expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>, <argument><expr><name>pColl</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* If a malloc() failure occured in sqlite3HashInsert(), it will 
+      ** return the pColl pointer to be deleted (because it wasn't added
+      ** to the hash table).
+      */</comment>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pDel</name>==0 || <name>pDel</name>==<name>pColl</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pDel</name>!=0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pColl</name> = 0</expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>pColl</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Parameter zName points to a UTF-8 encoded string nName bytes long.
+** Return the CollSeq* pointer for the collation sequence named zName
+** for the encoding 'enc' from the database 'db'.
+**
+** If the entry specified is not found and 'create' is true, then create a
+** new entry.  Otherwise return NULL.
+**
+** A separate function sqlite3LocateCollSeq() is a wrapper around
+** this routine.  sqlite3LocateCollSeq() invokes the collation factory
+** if necessary and generates an error message if the collating sequence
+** cannot be found.
+*/</comment>
+<function><type><name>CollSeq</name> *</type><name>sqlite3FindCollSeq</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,
+  <param><decl><type><name>u8</name></type> <name>enc</name></decl></param>,
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>nName</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>create</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>CollSeq</name> *</type><name>pColl</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>zName</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pColl</name> = <call><name>findCollSeqEntry</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>, <argument><expr><name>create</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pColl</name> = <name>db</name>-&gt;<name>pDfltColl</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>SQLITE_UTF8</name>==1 &amp;&amp; <name>SQLITE_UTF16LE</name>==2 &amp;&amp; <name>SQLITE_UTF16BE</name>==3</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>enc</name>&gt;=<name>SQLITE_UTF8</name> &amp;&amp; <name>enc</name>&lt;=<name>SQLITE_UTF16BE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pColl</name></expr> )</condition><then> <expr_stmt><expr><name>pColl</name> += <name>enc</name>-1</expr>;</expr_stmt></then></if>
+  <return>return <expr><name>pColl</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* During the search for the best function definition, this procedure
+** is called to test how well the function passed as the first argument
+** matches the request for a function with nArg arguments in a system
+** that uses encoding enc. The value returned indicates how well the
+** request is matched. A higher value indicates a better match.
+**
+** The returned value is always between 1 and 6, as follows:
+**
+** 1: A variable arguments function that prefers UTF-8 when a UTF-16
+**    encoding is requested, or vice versa.
+** 2: A variable arguments function that uses UTF-16BE when UTF-16LE is
+**    requested, or vice versa.
+** 3: A variable arguments function using the same text encoding.
+** 4: A function with the exact number of arguments requested that
+**    prefers UTF-8 when a UTF-16 encoding is requested, or vice versa.
+** 5: A function with the exact number of arguments requested that
+**    prefers UTF-16LE when UTF-16BE is requested, or vice versa.
+** 6: An exact match.
+**
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>matchQuality</name><parameter_list>(<param><decl><type><name>FuncDef</name> *</type><name>p</name></decl></param>, <param><decl><type><name>int</name></type> <name>nArg</name></decl></param>, <param><decl><type><name>u8</name></type> <name>enc</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>match</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>nArg</name>==-1 || <name>p</name>-&gt;<name>nArg</name>==<name>nArg</name> || <name>nArg</name>==-1</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>match</name> = 1</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>nArg</name>==<name>nArg</name> || <name>nArg</name>==-1</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>match</name> = 4</expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>enc</name>==<name>p</name>-&gt;<name>iPrefEnc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>match</name> += 2</expr>;</expr_stmt>
+    }</block></then>
+    <else>else <if>if<condition>( <expr>(<name>enc</name>==<name>SQLITE_UTF16LE</name> &amp;&amp; <name>p</name>-&gt;<name>iPrefEnc</name>==<name>SQLITE_UTF16BE</name>) ||
+             (<name>enc</name>==<name>SQLITE_UTF16BE</name> &amp;&amp; <name>p</name>-&gt;<name>iPrefEnc</name>==<name>SQLITE_UTF16LE</name>)</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>match</name> += 1</expr>;</expr_stmt>
+    }</block></then></if></else></if>
+  }</block></then></if>
+  <return>return <expr><name>match</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Search a FuncDefHash for a function with the given name.  Return
+** a pointer to the matching FuncDef if found, or 0 if there is no match.
+*/</comment>
+<function><type><name>static</name> <name>FuncDef</name> *</type><name>functionSearch</name><parameter_list>(
+  <param><decl><type><name>FuncDefHash</name> *</type><name>pHash</name></decl></param>,  <comment type="block">/* Hash table to search */</comment>
+  <param><decl><type><name>int</name></type> <name>h</name></decl></param>,               <comment type="block">/* Hash of the name */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zFunc</name></decl></param>,   <comment type="block">/* Name of function */</comment>
+  <param><decl><type><name>int</name></type> <name>nFunc</name></decl></param>            <comment type="block">/* Number of bytes in zFunc */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>FuncDef</name> *</type><name>p</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>p</name>=<name>pHash</name>-&gt;<name><name>a</name><index>[<expr><name>h</name></expr>]</index></name></expr>;</init> <condition><expr><name>p</name></expr>;</condition> <incr><expr><name>p</name>=<name>p</name>-&gt;<name>pHash</name></expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>sqlite3StrNICmp</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zFunc</name></expr></argument>, <argument><expr><name>nFunc</name></expr></argument>)</argument_list></call>==0 &amp;&amp; <name>p</name>-&gt;<name><name>zName</name><index>[<expr><name>nFunc</name></expr>]</index></name>==0</expr> )</condition><then><block>{
+      <return>return <expr><name>p</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Insert a new FuncDef into a FuncDefHash hash table.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3FuncDefInsert</name><parameter_list>(
+  <param><decl><type><name>FuncDefHash</name> *</type><name>pHash</name></decl></param>,  <comment type="block">/* The hash table into which to insert */</comment>
+  <param><decl><type><name>FuncDef</name> *</type><name>pDef</name></decl></param>        <comment type="block">/* The function definition to insert */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>FuncDef</name> *</type><name>pOther</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nName</name> =<init> <expr><call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>pDef</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name></type> <name>c1</name> =<init> <expr>(<name>u8</name>)<name>pDef</name>-&gt;<name><name>zName</name><index>[<expr>0</expr>]</index></name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name> =<init> <expr>(<name><name>sqlite3UpperToLower</name><index>[<expr><name>c1</name></expr>]</index></name> + <name>nName</name>) % <call><name>ArraySize</name><argument_list>(<argument><expr><name>pHash</name>-&gt;<name>a</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pOther</name> = <call><name>functionSearch</name><argument_list>(<argument><expr><name>pHash</name></expr></argument>, <argument><expr><name>h</name></expr></argument>, <argument><expr><name>pDef</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pOther</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pDef</name>-&gt;<name>pNext</name> = <name>pOther</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pOther</name>-&gt;<name>pNext</name> = <name>pDef</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pDef</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pDef</name>-&gt;<name>pHash</name> = <name>pHash</name>-&gt;<name><name>a</name><index>[<expr><name>h</name></expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pHash</name>-&gt;<name><name>a</name><index>[<expr><name>h</name></expr>]</index></name> = <name>pDef</name></expr>;</expr_stmt>
+  }</block></else></if>
+}</block></function>
+  
+  
+
+<comment type="block">/*
+** Locate a user function given a name, a number of arguments and a flag
+** indicating whether the function prefers UTF-16 over UTF-8.  Return a
+** pointer to the FuncDef structure that defines that function, or return
+** NULL if the function does not exist.
+**
+** If the createFlag argument is true, then a new (blank) FuncDef
+** structure is created and liked into the "db" structure if a
+** no matching function previously existed.  When createFlag is true
+** and the nArg parameter is -1, then only a function that accepts
+** any number of arguments will be returned.
+**
+** If createFlag is false and nArg is -1, then the first valid
+** function found is returned.  A function is valid if either xFunc
+** or xStep is non-zero.
+**
+** If createFlag is false, then a function with the required name and
+** number of arguments may be returned even if the eTextRep flag does not
+** match that requested.
+*/</comment>
+<function><type><name>FuncDef</name> *</type><name>sqlite3FindFunction</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,       <comment type="block">/* An open database */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <comment type="block">/* Name of the function.  Not null-terminated */</comment>
+  <param><decl><type><name>int</name></type> <name>nName</name></decl></param>,         <comment type="block">/* Number of characters in the name */</comment>
+  <param><decl><type><name>int</name></type> <name>nArg</name></decl></param>,          <comment type="block">/* Number of arguments.  -1 means any number */</comment>
+  <param><decl><type><name>u8</name></type> <name>enc</name></decl></param>,            <comment type="block">/* Preferred text encoding */</comment>
+  <param><decl><type><name>int</name></type> <name>createFlag</name></decl></param>     <comment type="block">/* Create new entry if true and does not otherwise exist */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>FuncDef</name> *</type><name>p</name></decl>;</decl_stmt>         <comment type="block">/* Iterator variable */</comment>
+  <decl_stmt><decl><type><name>FuncDef</name> *</type><name>pBest</name> =<init> <expr>0</expr></init></decl>;</decl_stmt> <comment type="block">/* Best match found so far */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>bestScore</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>  <comment type="block">/* Score of best match */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name></decl>;</decl_stmt>              <comment type="block">/* Hash value */</comment>
+
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>enc</name>==<name>SQLITE_UTF8</name> || <name>enc</name>==<name>SQLITE_UTF16LE</name> || <name>enc</name>==<name>SQLITE_UTF16BE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nArg</name>&lt;-1</expr> )</condition><then> <expr_stmt><expr><name>nArg</name> = -1</expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><name>h</name> = (<name><name>sqlite3UpperToLower</name><index>[<expr>(<name>u8</name>)<name><name>zName</name><index>[<expr>0</expr>]</index></name></expr>]</index></name> + <name>nName</name>) % <call><name>ArraySize</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>aFunc</name>.<name>a</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* First search for a match amongst the application-defined functions.
+  */</comment>
+  <expr_stmt><expr><name>p</name> = <call><name>functionSearch</name><argument_list>(<argument><expr>&amp;<name>db</name>-&gt;<name>aFunc</name></expr></argument>, <argument><expr><name>h</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>p</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>score</name> =<init> <expr><call><name>matchQuality</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>nArg</name></expr></argument>, <argument><expr><name>enc</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>score</name>&gt;<name>bestScore</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pBest</name> = <name>p</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>bestScore</name> = <name>score</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></while>
+
+  <comment type="block">/* If no match is found, search the built-in functions.
+  **
+  ** Except, if createFlag is true, that means that we are trying to
+  ** install a new function.  Whatever FuncDef structure is returned will
+  ** have fields overwritten with new information appropriate for the
+  ** new function.  But the FuncDefs for built-in functions are read-only.
+  ** So we must not search for built-ins when creating a new function.
+  */</comment> 
+  <if>if<condition>( <expr>!<name>createFlag</name> &amp;&amp; !<name>pBest</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>FuncDefHash</name> *</type><name>pHash</name> =<init> <expr>&amp;<call><name>GLOBAL</name><argument_list>(<argument><expr><name>FuncDefHash</name></expr></argument>, <argument><expr><name>sqlite3GlobalFunctions</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>p</name> = <call><name>functionSearch</name><argument_list>(<argument><expr><name>pHash</name></expr></argument>, <argument><expr><name>h</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <while>while<condition>( <expr><name>p</name></expr> )</condition><block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>score</name> =<init> <expr><call><name>matchQuality</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>nArg</name></expr></argument>, <argument><expr><name>enc</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>score</name>&gt;<name>bestScore</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pBest</name> = <name>p</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>bestScore</name> = <name>score</name></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+    }</block></while>
+  }</block></then></if>
+
+  <comment type="block">/* If the createFlag parameter is true and the search did not reveal an
+  ** exact match for the name, number of arguments and encoding, then add a
+  ** new entry to the hash table and return it.
+  */</comment>
+  <if>if<condition>( <expr><name>createFlag</name> &amp;&amp; (<name>bestScore</name>&lt;6 || <name>pBest</name>-&gt;<name>nArg</name>!=<name>nArg</name>) &amp;&amp; 
+      (<name>pBest</name> = <call><name>sqlite3DbMallocZero</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>pBest</name></expr></argument>)</argument_list></call>+<name>nName</name>+1</expr></argument>)</argument_list></call>)!=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pBest</name>-&gt;<name>zName</name> = (<name>char</name> *)&amp;<name><name>pBest</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBest</name>-&gt;<name>nArg</name> = (<name>u16</name>)<name>nArg</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBest</name>-&gt;<name>iPrefEnc</name> = <name>enc</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pBest</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pBest</name>-&gt;<name><name>zName</name><index>[<expr><name>nName</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3FuncDefInsert</name><argument_list>(<argument><expr>&amp;<name>db</name>-&gt;<name>aFunc</name></expr></argument>, <argument><expr><name>pBest</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>pBest</name> &amp;&amp; (<name>pBest</name>-&gt;<name>xStep</name> || <name>pBest</name>-&gt;<name>xFunc</name> || <name>createFlag</name>)</expr> )</condition><then><block>{
+    <return>return <expr><name>pBest</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Free all resources held by the schema structure. The void* argument points
+** at a Schema struct. This function does not call sqlite3DbFree(db, ) on the 
+** pointer itself, it just cleans up subsiduary resources (i.e. the contents
+** of the schema hash tables).
+**
+** The Schema.cache_size variable is not cleared.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3SchemaFree</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Hash</name></type> <name>temp1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Hash</name></type> <name>temp2</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>pElem</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Schema</name> *</type><name>pSchema</name> =<init> <expr>(<name>Schema</name> *)<name>p</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>temp1</name> = <name>pSchema</name>-&gt;<name>tblHash</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>temp2</name> = <name>pSchema</name>-&gt;<name>trigHash</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>pSchema</name>-&gt;<name>trigHash</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3HashClear</name><argument_list>(<argument><expr>&amp;<name>pSchema</name>-&gt;<name>aFKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3HashClear</name><argument_list>(<argument><expr>&amp;<name>pSchema</name>-&gt;<name>idxHash</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>pElem</name>=<call><name>sqliteHashFirst</name><argument_list>(<argument><expr>&amp;<name>temp2</name></expr></argument>)</argument_list></call></expr>;</init> <condition><expr><name>pElem</name></expr>;</condition> <incr><expr><name>pElem</name>=<call><name>sqliteHashNext</name><argument_list>(<argument><expr><name>pElem</name></expr></argument>)</argument_list></call></expr></incr>)<block>{
+    <expr_stmt><expr><call><name>sqlite3DeleteTrigger</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr>(<name>Trigger</name>*)<call><name>sqliteHashData</name><argument_list>(<argument><expr><name>pElem</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3HashClear</name><argument_list>(<argument><expr>&amp;<name>temp2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>pSchema</name>-&gt;<name>tblHash</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>pElem</name>=<call><name>sqliteHashFirst</name><argument_list>(<argument><expr>&amp;<name>temp1</name></expr></argument>)</argument_list></call></expr>;</init> <condition><expr><name>pElem</name></expr>;</condition> <incr><expr><name>pElem</name>=<call><name>sqliteHashNext</name><argument_list>(<argument><expr><name>pElem</name></expr></argument>)</argument_list></call></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name> =<init> <expr><call><name>sqliteHashData</name><argument_list>(<argument><expr><name>pElem</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3DeleteTable</name><argument_list>(<argument><expr><name>pTab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3HashClear</name><argument_list>(<argument><expr>&amp;<name>temp1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pSchema</name>-&gt;<name>pSeqTab</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pSchema</name>-&gt;<name>flags</name> &amp;= ~<name>DB_SchemaLoaded</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Find and return the schema associated with a BTree.  Create
+** a new one if necessary.
+*/</comment>
+<function><type><name>Schema</name> *</type><name>sqlite3SchemaGet</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>Btree</name> *</type><name>pBt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Schema</name> *</type> <name>p</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pBt</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name> = (<name>Schema</name> *)<call><name>sqlite3BtreeSchema</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Schema</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>sqlite3SchemaFree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>p</name> = (<name>Schema</name> *)<call><name>sqlite3MallocZero</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>Schema</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr>!<name>p</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+  }</block></then><else>else <if>if <condition>( <expr>0==<name>p</name>-&gt;<name>file_format</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>tblHash</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>idxHash</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>trigHash</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3HashInit</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>aFKey</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>enc</name> = <name>SQLITE_UTF8</name></expr>;</expr_stmt>
+  }</block></then></if></else></if>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+</unit>

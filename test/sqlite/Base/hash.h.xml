@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="hash.h"><comment type="block">/*
+** 2001 September 22
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This is the header file for the generic hash-table implemenation
+** used in SQLite.
+**
+** $Id: hash.h,v 1.12 2008/10/10 17:41:29 drh Exp $
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_SQLITE_HASH_H_</name></cpp:ifndef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>_SQLITE_HASH_H_</name></cpp:define>
+
+<comment type="block">/* Forward declarations of structures. */</comment>
+<typedef>typedef <type><struct>struct <name>Hash</name> Hash;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>HashElem</name> HashElem;</struct></type></typedef>
+
+<comment type="block">/* A complete hash table is an instance of the following structure.
+** The internals of this structure are intended to be opaque -- client
+** code should not attempt to access or modify the fields of this structure
+** directly.  Change this structure only by using the routines below.
+** However, many of the "procedures" and "functions" for modifying and
+** accessing this structure are really macros, so we can't really make
+** this structure opaque.
+*/</comment>
+<struct>struct <name>Hash</name> <block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>copyKey</name></decl></decl_stmt>: <expr_stmt><expr>1</expr>;</expr_stmt>  <comment type="block">/* True if copy of key made on insert */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>htsize</name></decl></decl_stmt> : <expr_stmt><expr>31</expr>;</expr_stmt> <comment type="block">/* Number of buckets in the hash table */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>count</name></decl>;</decl_stmt>       <comment type="block">/* Number of entries in this table */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>first</name></decl>;</decl_stmt>          <comment type="block">/* The first element of the array */</comment>
+  <struct>struct <name>_ht</name> <block>{              <comment type="block">/* the hash table */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>count</name></decl>;</decl_stmt>                 <comment type="block">/* Number of entries with this hash */</comment>
+    <decl_stmt><decl><type><name>HashElem</name> *</type><name>chain</name></decl>;</decl_stmt>           <comment type="block">/* Pointer to first entry with this hash */</comment>
+  }</block> <decl>*<name>ht</name></decl>;</struct>
+}</block>;</struct>
+
+<comment type="block">/* Each element in the hash table is an instance of the following 
+** structure.  All elements are stored on a single doubly-linked list.
+**
+** Again, this structure is intended to be opaque, but it can't really
+** be opaque because it is used by macros.
+*/</comment>
+<struct>struct <name>HashElem</name> <block>{
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>next</name>, *<name>prev</name></decl>;</decl_stmt>   <comment type="block">/* Next and previous elements in the table */</comment>
+  <decl_stmt><decl><type><name>void</name> *</type><name>data</name></decl>;</decl_stmt>              <comment type="block">/* Data associated with this element */</comment>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pKey</name></decl>;</decl_stmt> <decl_stmt><decl><type><name>int</name></type> <name>nKey</name></decl>;</decl_stmt>    <comment type="block">/* Key associated with this element */</comment>
+}</block>;</struct>
+
+<comment type="block">/*
+** Access routines.  To delete, insert a NULL pointer.
+*/</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3HashInit</name><parameter_list>(<param><decl><type><name>Hash</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>copyKey</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name> *</type><name>sqlite3HashInsert</name><parameter_list>(<param><decl><type><name>Hash</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pData</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name> *</type><name>sqlite3HashFind</name><parameter_list>(<param><decl><type><name>const</name> <name>Hash</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>HashElem</name> *</type><name>sqlite3HashFindElem</name><parameter_list>(<param><decl><type><name>const</name> <name>Hash</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>pKey</name></decl></param>, <param><decl><type><name>int</name></type> <name>nKey</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3HashClear</name><parameter_list>(<param><decl><type><name>Hash</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/*
+** Macros for looping over all elements of a hash table.  The idiom is
+** like this:
+**
+**   Hash h;
+**   HashElem *p;
+**   ...
+**   for(p=sqliteHashFirst(&amp;h); p; p=sqliteHashNext(p)){
+**     SomeStructure *pData = sqliteHashData(p);
+**     // do something with pData
+**   }
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashFirst</name>(H)  ((H)-&gt;first)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashNext</name>(E)   ((E)-&gt;next)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashData</name>(E)   ((E)-&gt;data)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashKey</name>(E)    ((E)-&gt;pKey)</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashKeysize</name>(E) ((E)-&gt;nKey)</cpp:define>
+
+<comment type="block">/*
+** Number of entries in a hash table
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqliteHashCount</name>(H)  ((H)-&gt;count)</cpp:define>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* _SQLITE_HASH_H_ */</comment>
+</unit>

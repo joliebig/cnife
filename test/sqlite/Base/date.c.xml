@@ -1,0 +1,1090 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="date.c" filename=""><comment type="block">/*
+** 2003 October 31
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains the C functions that implement date and time
+** functions for SQLite.  
+**
+** There is only one exported symbol in this file - the function
+** sqlite3RegisterDateTimeFunctions() found at the bottom of the file.
+** All other code has file scope.
+**
+** $Id: date.c,v 1.99 2008/12/20 13:18:50 drh Exp $
+**
+** SQLite processes all times and dates as Julian Day numbers.  The
+** dates and times are stored as the number of days since noon
+** in Greenwich on November 24, 4714 B.C. according to the Gregorian
+** calendar system. 
+**
+** 1970-01-01 00:00:00 is JD 2440587.5
+** 2000-01-01 00:00:00 is JD 2451544.5
+**
+** This implemention requires years to be expressed as a 4-digit number
+** which means that only dates between 0000-01-01 and 9999-12-31 can
+** be represented, even though julian day numbers allow a much wider
+** range of dates.
+**
+** The Gregorian calendar system is used for all dates and times,
+** even those that predate the Gregorian calendar.  Historians usually
+** use the Julian calendar for dates prior to 1582-10-15 and for some
+** dates afterwards, depending on locale.  Beware of this difference.
+**
+** The conversion algorithms are implemented based on descriptions
+** in the following text:
+**
+**      Jean Meeus
+**      Astronomical Algorithms, 2nd Edition, 1998
+**      ISBM 0-943396-61-1
+**      Willmann-Bell, Inc
+**      Richmond, Virginia (USA)
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;time.h&gt;</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DATETIME_FUNCS</name></cpp:ifndef>
+
+<comment type="block">/*
+** On recent Windows platforms, the localtime_s() function is available
+** as part of the "Secure CRT". It is essentially equivalent to 
+** localtime_r() available under most POSIX platforms, except that the 
+** order of the parameters is reversed.
+**
+** See http://msdn.microsoft.com/en-us/library/a442x3ye(VS.80).aspx.
+**
+** If the user has not indicated to use localtime_r() or localtime_s()
+** already, check for an MSVC build environment that provides 
+** localtime_s().
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>HAVE_LOCALTIME_R</name></expr></argument>)</argument_list></call> &amp;&amp; !<call><name>defined</name><argument_list>(<argument><expr><name>HAVE_LOCALTIME_S</name></expr></argument>)</argument_list></call> &amp;&amp; \
+     <call><name>defined</name><argument_list>(<argument><expr><name>_MSC_VER</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>_CRT_INSECURE_DEPRECATE</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>HAVE_LOCALTIME_S</name> 1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** A structure for holding a single date and time.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>DateTime</name> DateTime;</struct></type></typedef>
+<struct>struct <name>DateTime</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iJD</name></decl>;</decl_stmt> <comment type="block">/* The julian day number times 86400000 */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>Y</name>, <name>M</name>, <name>D</name></decl>;</decl_stmt>       <comment type="block">/* Year, month, and day */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name>, <name>m</name></decl>;</decl_stmt>          <comment type="block">/* Hour and minutes */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>tz</name></decl>;</decl_stmt>            <comment type="block">/* Timezone offset in minutes */</comment>
+  <decl_stmt><decl><type><name>double</name></type> <name>s</name></decl>;</decl_stmt>          <comment type="block">/* Seconds */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>validYMD</name></decl>;</decl_stmt>     <comment type="block">/* True (1) if Y,M,D are valid */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>validHMS</name></decl>;</decl_stmt>     <comment type="block">/* True (1) if h,m,s are valid */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>validJD</name></decl>;</decl_stmt>      <comment type="block">/* True (1) if iJD is valid */</comment>
+  <decl_stmt><decl><type><name>char</name></type> <name>validTZ</name></decl>;</decl_stmt>      <comment type="block">/* True (1) if tz is valid */</comment>
+</public>}</block>;</struct>
+
+
+<comment type="block">/*
+** Convert zDate into one or more integers.  Additional arguments
+** come in groups of 5 as follows:
+**
+**       N       number of digits in the integer
+**       min     minimum allowed value of the integer
+**       max     maximum allowed value of the integer
+**       nextC   first character after the integer
+**       pVal    where to write the integers value.
+**
+** Conversions continue until one with nextC==0 is encountered.
+** The function returns the number of successful conversions.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>getDigits</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zDate</name></decl></param>, <param>...</param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>va_list</name></type> <name>ap</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>val</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>N</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>min</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>max</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nextC</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name> *</type><name>pVal</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>va_start</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>zDate</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <do>do<block>{
+    <expr_stmt><expr><name>N</name> = <call><name>va_arg</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>min</name> = <call><name>va_arg</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>max</name> = <call><name>va_arg</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nextC</name> = <call><name>va_arg</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>int</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVal</name> = <call><name>va_arg</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>int</name>*</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>val</name> = 0</expr>;</expr_stmt>
+    <while>while<condition>( <expr><name>N</name>--</expr> )</condition><block>{
+      <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zDate</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <goto>goto <name>end_getDigits</name>;</goto>
+      }</block></then></if>
+      <expr_stmt><expr><name>val</name> = <name>val</name>*10 + *<name>zDate</name> - '0'</expr>;</expr_stmt>
+      <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+    }</block></while>
+    <if>if<condition>( <expr><name>val</name>&lt;<name>min</name> || <name>val</name>&gt;<name>max</name> || (<name>nextC</name>!=0 &amp;&amp; <name>nextC</name>!=*<name>zDate</name>)</expr> )</condition><then><block>{
+      <goto>goto <name>end_getDigits</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr>*<name>pVal</name> = <name>val</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>cnt</name>++</expr>;</expr_stmt>
+  }</block>while<condition>( <expr><name>nextC</name></expr> )</condition>;</do>
+<label><name>end_getDigits</name>:</label>
+  <expr_stmt><expr><call><name>va_end</name><argument_list>(<argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>cnt</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read text from z[] and convert into a floating point number.  Return
+** the number of digits converted.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>getValue</name> <name>sqlite3AtoF</name></cpp:define>
+
+<comment type="block">/*
+** Parse a timezone extension on the end of a date-time.
+** The extension is of the form:
+**
+**        (+/-)HH:MM
+**
+** Or the "zulu" notation:
+**
+**        Z
+**
+** If the parse is successful, write the number of minutes
+** of change in p-&gt;tz and return 0.  If a parser error occurs,
+** return non-zero.
+**
+** A missing specifier is not considered an error.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>parseTimezone</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zDate</name></decl></param>, <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>sgn</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nHr</name>, <name>nMn</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>c</name></decl>;</decl_stmt>
+  <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zDate</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt> }</block></while>
+  <expr_stmt><expr><name>p</name>-&gt;<name>tz</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>c</name> = *<name>zDate</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>c</name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sgn</name> = -1</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='+'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sgn</name> = +1</expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>c</name>=='Z' || <name>c</name>=='z'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+    <goto>goto <name>zulu_time</name>;</goto>
+  }</block></then><else>else<block>{
+    <return>return <expr><name>c</name>!=0</expr>;</return>
+  }</block></else></if></else></if></else></if>
+  <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>getDigits</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>14</expr></argument>, <argument><expr>':'</expr></argument>, <argument><expr>&amp;<name>nHr</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>59</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>nMn</name></expr></argument>)</argument_list></call>!=2</expr> )</condition><then><block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zDate</name> += 5</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>tz</name> = <name>sgn</name>*(<name>nMn</name> + <name>nHr</name>*60)</expr>;</expr_stmt>
+<label><name>zulu_time</name>:</label>
+  <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zDate</name></expr></argument>)</argument_list></call></expr> )</condition><block>{ <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt> }</block></while>
+  <return>return <expr>*<name>zDate</name>!=0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Parse times of the form HH:MM or HH:MM:SS or HH:MM:SS.FFFF.
+** The HH, MM, and SS must each be exactly 2 digits.  The
+** fractional seconds FFFF can be one or more digits.
+**
+** Return 1 if there is a parsing error and 0 on success.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>parseHhMmSs</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zDate</name></decl></param>, <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>h</name>, <name>m</name>, <name>s</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>double</name></type> <name>ms</name> =<init> <expr>0.0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>getDigits</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>24</expr></argument>, <argument><expr>':'</expr></argument>, <argument><expr>&amp;<name>h</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>59</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>m</name></expr></argument>)</argument_list></call>!=2</expr> )</condition><then><block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zDate</name> += 5</expr>;</expr_stmt>
+  <if>if<condition>( <expr>*<name>zDate</name>==':'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr><call><name>getDigits</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr>2</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>59</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>s</name></expr></argument>)</argument_list></call>!=1</expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>zDate</name> += 2</expr>;</expr_stmt>
+    <if>if<condition>( <expr>*<name>zDate</name>=='.' &amp;&amp; <call><name>isdigit</name><argument_list>(<argument><expr>(<name>u8</name>)<name><name>zDate</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>double</name></type> <name>rScale</name> =<init> <expr>1.0</expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+      <while>while<condition>( <expr><call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zDate</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+        <expr_stmt><expr><name>ms</name> = <name>ms</name>*10.0 + *<name>zDate</name> - '0'</expr>;</expr_stmt>
+        <expr_stmt><expr><name>rScale</name> *= 10.0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+      }</block></while>
+      <expr_stmt><expr><name>ms</name> /= <name>rScale</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>s</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>h</name> = <name>h</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>m</name> = <name>m</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>s</name> = <name>s</name> + <name>ms</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>parseTimezone</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr>1</expr>;</return></then></if>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validTZ</name> = (<name>p</name>-&gt;<name>tz</name>!=0)?1:0</expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Convert from YYYY-MM-DD HH:MM:SS to julian day.  We always assume
+** that the YYYY-MM-DD is according to the Gregorian calendar.
+**
+** Reference:  Meeus page 61
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>computeJD</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>Y</name>, <name>M</name>, <name>D</name>, <name>A</name>, <name>B</name>, <name>X1</name>, <name>X2</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validJD</name></expr> )</condition><then> <return>return;</return></then></if>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validYMD</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>Y</name> = <name>p</name>-&gt;<name>Y</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>M</name> = <name>p</name>-&gt;<name>M</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>D</name> = <name>p</name>-&gt;<name>D</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>Y</name> = 2000</expr>;</expr_stmt>  <comment type="block">/* If no YMD specified, assume 2000-Jan-01 */</comment>
+    <expr_stmt><expr><name>M</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>D</name> = 1</expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><name>M</name>&lt;=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>Y</name>--</expr>;</expr_stmt>
+    <expr_stmt><expr><name>M</name> += 12</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>A</name> = <name>Y</name>/100</expr>;</expr_stmt>
+  <expr_stmt><expr><name>B</name> = 2 - <name>A</name> + (<name>A</name>/4)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>X1</name> = 36525*(<name>Y</name>+4716)/100</expr>;</expr_stmt>
+  <expr_stmt><expr><name>X2</name> = 306001*(<name>M</name>+1)/10000</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> = (<name>sqlite3_int64</name>)((<name>X1</name> + <name>X2</name> + <name>D</name> + <name>B</name> - 1524.5 ) * 86400000)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 1</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validHMS</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += <name>p</name>-&gt;<name>h</name>*3600000 + <name>p</name>-&gt;<name>m</name>*60000 + (<name>sqlite3_int64</name>)(<name>p</name>-&gt;<name>s</name>*1000)</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>validTZ</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> -= <name>p</name>-&gt;<name>tz</name>*60000</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validYMD</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validTZ</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Parse dates of the form
+**
+**     YYYY-MM-DD HH:MM:SS.FFF
+**     YYYY-MM-DD HH:MM:SS
+**     YYYY-MM-DD HH:MM
+**     YYYY-MM-DD
+**
+** Write the result into the DateTime structure and return 0
+** on success and 1 if the input string is not a well-formed
+** date.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>parseYyyyMmDd</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zDate</name></decl></param>, <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>Y</name>, <name>M</name>, <name>D</name>, <name>neg</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name><name>zDate</name><index>[<expr>0</expr>]</index></name>=='-'</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt>
+    <expr_stmt><expr><name>neg</name> = 1</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>neg</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <if>if<condition>( <expr><call><name>getDigits</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>,<argument><expr>4</expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>9999</expr></argument>,<argument><expr>'-'</expr></argument>,<argument><expr>&amp;<name>Y</name></expr></argument>,<argument><expr>2</expr></argument>,<argument><expr>1</expr></argument>,<argument><expr>12</expr></argument>,<argument><expr>'-'</expr></argument>,<argument><expr>&amp;<name>M</name></expr></argument>,<argument><expr>2</expr></argument>,<argument><expr>1</expr></argument>,<argument><expr>31</expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>&amp;<name>D</name></expr></argument>)</argument_list></call>!=3</expr> )</condition><then><block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zDate</name> += 10</expr>;</expr_stmt>
+  <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>zDate</name></expr></argument>)</argument_list></call> || 'T'==*(<name>u8</name>*)<name>zDate</name></expr> )</condition><block>{ <expr_stmt><expr><name>zDate</name>++</expr>;</expr_stmt> }</block></while>
+  <if>if<condition>( <expr><call><name>parseHhMmSs</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <comment type="block">/* We got the time */</comment>
+  }</block></then><else>else <if>if<condition>( <expr>*<name>zDate</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 0</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <return>return <expr>1</expr>;</return>
+  }</block></else></if></else></if>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validYMD</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>Y</name> = <name>neg</name> ? -<name>Y</name> : <name>Y</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>M</name> = <name>M</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>D</name> = <name>D</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validTZ</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Set the time to the current time reported by the VFS
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>setDateTimeToCurrent</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>, <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>double</name></type> <name>r</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><call><name>sqlite3_context_db_handle</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3OsCurrentTime</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pVfs</name></expr></argument>, <argument><expr>&amp;<name>r</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> = (<name>sqlite3_int64</name>)(<name>r</name>*86400000.0 + 0.5)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 1</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Attempt to parse the given string into a Julian Day Number.  Return
+** the number of errors.
+**
+** The following are acceptable forms for the input string:
+**
+**      YYYY-MM-DD HH:MM:SS.FFF  +/-HH:MM
+**      DDDD.DD 
+**      now
+**
+** In the first form, the +/-HH:MM is always optional.  The fractional
+** seconds extension (the ".FFF") is optional.  The seconds portion
+** (":SS.FFF") is option.  The year and date can be omitted as long
+** as there is a time string.  The time string can be omitted as long
+** as there is a year and date.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>parseDateOrTime</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zDate</name></decl></param>, 
+  <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>
+)</parameter_list><block>{
+  <if>if<condition>( <expr><call><name>parseYyyyMmDd</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>,<argument><expr><name>p</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>parseHhMmSs</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>sqlite3StrICmp</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>,<argument><expr>"now"</expr></argument>)</argument_list></call>==0</expr>)</condition><then><block>{
+    <expr_stmt><expr><call><name>setDateTimeToCurrent</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>sqlite3IsNumber</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>double</name></type> <name>r</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>getValue</name><argument_list>(<argument><expr><name>zDate</name></expr></argument>, <argument><expr>&amp;<name>r</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> = (<name>sqlite3_int64</name>)(<name>r</name>*86400000.0 + 0.5)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 1</expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if></else></if></else></if></else></if>
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Compute the Year, Month, and Day from the julian day number.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>computeYMD</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>Z</name>, <name>A</name>, <name>B</name>, <name>C</name>, <name>D</name>, <name>E</name>, <name>X1</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validYMD</name></expr> )</condition><then> <return>return;</return></then></if>
+  <if>if<condition>( <expr>!<name>p</name>-&gt;<name>validJD</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>Y</name> = 2000</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>M</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>D</name> = 1</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>Z</name> = (<name>int</name>)((<name>p</name>-&gt;<name>iJD</name> + 43200000)/86400000)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>A</name> = (<name>int</name>)((<name>Z</name> - 1867216.25)/36524.25)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>A</name> = <name>Z</name> + 1 + <name>A</name> - (<name>A</name>/4)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>B</name> = <name>A</name> + 1524</expr>;</expr_stmt>
+    <expr_stmt><expr><name>C</name> = (<name>int</name>)((<name>B</name> - 122.1)/365.25)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>D</name> = (36525*<name>C</name>)/100</expr>;</expr_stmt>
+    <expr_stmt><expr><name>E</name> = (<name>int</name>)((<name>B</name>-<name>D</name>)/30.6001)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>X1</name> = (<name>int</name>)(30.6001*<name>E</name>)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>D</name> = <name>B</name> - <name>D</name> - <name>X1</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>M</name> = <name>E</name>&lt;14 ? <name>E</name>-1 : <name>E</name>-13</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>Y</name> = <name>p</name>-&gt;<name>M</name>&gt;2 ? <name>C</name> - 4716 : <name>C</name> - 4715</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validYMD</name> = 1</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Compute the Hour, Minute, and Seconds from the julian day number.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>computeHMS</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>s</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>validHMS</name></expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> = (<name>int</name>)((<name>p</name>-&gt;<name>iJD</name> + 43200000) % 86400000)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>s</name> = <name>s</name>/1000.0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> = (<name>int</name>)<name>p</name>-&gt;<name>s</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>s</name> -= <name>s</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>h</name> = <name>s</name>/3600</expr>;</expr_stmt>
+  <expr_stmt><expr><name>s</name> -= <name>p</name>-&gt;<name>h</name>*3600</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>m</name> = <name>s</name>/60</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>s</name> += <name>s</name> - <name>p</name>-&gt;<name>m</name>*60</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 1</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Compute both YMD and HMS
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>computeYMD_HMS</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>computeYMD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>computeHMS</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Clear the YMD and HMS and the TZ
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>clearYMD_HMS_TZ</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>p</name>-&gt;<name>validYMD</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>validTZ</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOCALTIME</name></cpp:ifndef>
+<comment type="block">/*
+** Compute the difference (in milliseconds)
+** between localtime and UTC (a.k.a. GMT)
+** for the time value p where p is in UTC.
+*/</comment>
+<function><type><name>static</name> <name>sqlite3_int64</name></type> <name>localtimeOffset</name><parameter_list>(<param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name>, <name>y</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>time_t</name></type> <name>t</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>x</name> = *<name>p</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>x</name>.<name>Y</name>&lt;1971 || <name>x</name>.<name>Y</name>&gt;=2038</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>x</name>.<name>Y</name> = 2000</expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name>.<name>M</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name>.<name>D</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name>.<name>h</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name>.<name>m</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>x</name>.<name>s</name> = 0.0</expr>;</expr_stmt>
+  }</block></then> <else>else <block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>s</name> =<init> <expr>(<name>int</name>)(<name>x</name>.<name>s</name> + 0.5)</expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>x</name>.<name>s</name> = <name>s</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>x</name>.<name>tz</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>x</name>.<name>validJD</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> = <name>x</name>.<name>iJD</name>/1000 - 21086676*(<name>i64</name>)10000</expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_LOCALTIME_R</name></cpp:ifdef>
+  <block>{
+    <decl_stmt><decl><type>struct <name>tm</name></type> <name>sLocal</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>localtime_r</name><argument_list>(<argument><expr>&amp;<name>t</name></expr></argument>, <argument><expr>&amp;<name>sLocal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>Y</name> = <name>sLocal</name>.<name>tm_year</name> + 1900</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>M</name> = <name>sLocal</name>.<name>tm_mon</name> + 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>D</name> = <name>sLocal</name>.<name>tm_mday</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>h</name> = <name>sLocal</name>.<name>tm_hour</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>m</name> = <name>sLocal</name>.<name>tm_min</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>s</name> = <name>sLocal</name>.<name>tm_sec</name></expr>;</expr_stmt>
+  }</block>
+<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_LOCALTIME_S</name></expr></argument>)</argument_list></call></expr></cpp:elif>
+  <block>{
+    <decl_stmt><decl><type>struct <name>tm</name></type> <name>sLocal</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>localtime_s</name><argument_list>(<argument><expr>&amp;<name>sLocal</name></expr></argument>, <argument><expr>&amp;<name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>Y</name> = <name>sLocal</name>.<name>tm_year</name> + 1900</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>M</name> = <name>sLocal</name>.<name>tm_mon</name> + 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>D</name> = <name>sLocal</name>.<name>tm_mday</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>h</name> = <name>sLocal</name>.<name>tm_hour</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>m</name> = <name>sLocal</name>.<name>tm_min</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>s</name> = <name>sLocal</name>.<name>tm_sec</name></expr>;</expr_stmt>
+  }</block>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <block>{
+    <decl_stmt><decl><type>struct <name>tm</name> *</type><name>pTm</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pTm</name> = <call><name>localtime</name><argument_list>(<argument><expr>&amp;<name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>Y</name> = <name>pTm</name>-&gt;<name>tm_year</name> + 1900</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>M</name> = <name>pTm</name>-&gt;<name>tm_mon</name> + 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>D</name> = <name>pTm</name>-&gt;<name>tm_mday</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>h</name> = <name>pTm</name>-&gt;<name>tm_hour</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>m</name> = <name>pTm</name>-&gt;<name>tm_min</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>y</name>.<name>s</name> = <name>pTm</name>-&gt;<name>tm_sec</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><name>y</name>.<name>validYMD</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>validHMS</name> = 1</expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>validJD</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>y</name>.<name>validTZ</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>y</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>y</name>.<name>iJD</name> - <name>x</name>.<name>iJD</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_LOCALTIME */</comment>
+
+<comment type="block">/*
+** Process a modifier to a date-time stamp.  The modifiers are
+** as follows:
+**
+**     NNN days
+**     NNN hours
+**     NNN minutes
+**     NNN.NNNN seconds
+**     NNN months
+**     NNN years
+**     start of month
+**     start of year
+**     start of week
+**     start of day
+**     weekday N
+**     unixepoch
+**     localtime
+**     utc
+**
+** Return 0 on success and 1 if there is any kind of error.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>parseModifier</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zMod</name></decl></param>, <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>double</name></type> <name>r</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name>, <name><name>zBuf</name><index>[<expr>30</expr>]</index></name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>n</name>=0</expr>;</init> <condition><expr><name>n</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call>-1 &amp;&amp; <name><name>zMod</name><index>[<expr><name>n</name></expr>]</index></name></expr>;</condition> <incr><expr><name>n</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name><name>z</name><index>[<expr><name>n</name></expr>]</index></name> = (<name>char</name>)<name><name>sqlite3UpperToLower</name><index>[<expr>(<name>u8</name>)<name><name>zMod</name><index>[<expr><name>n</name></expr>]</index></name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><name><name>z</name><index>[<expr><name>n</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <switch>switch<condition>( <expr><name><name>z</name><index>[<expr>0</expr>]</index></name></expr> )</condition><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOCALTIME</name></cpp:ifndef>
+    <case>case <expr>'l'</expr>: <block>{
+      <comment type="block">/*    localtime
+      **
+      ** Assuming the current time value is UTC (a.k.a. GMT), shift it to
+      ** show local time.
+      */</comment>
+      <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"localtime"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += <call><name>localtimeOffset</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    </case><case>case <expr>'u'</expr>: <block>{
+      <comment type="block">/*
+      **    unixepoch
+      **
+      ** Treat the current value of p-&gt;iJD as the number of
+      ** seconds since 1970.  Convert to a real julian day number.
+      */</comment>
+      <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"unixepoch"</expr></argument>)</argument_list></call>==0 &amp;&amp; <name>p</name>-&gt;<name>validJD</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> = <name>p</name>-&gt;<name>iJD</name>/86400 + 21086676*(<name>i64</name>)10000000</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_LOCALTIME</name></cpp:ifndef>
+      <else>else <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"utc"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>c1</name></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>c1</name> = <call><name>localtimeOffset</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> -= <name>c1</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += <name>c1</name> - <call><name>localtimeOffset</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then></if></else></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr>'w'</expr>: <block>{
+      <comment type="block">/*
+      **    weekday N
+      **
+      ** Move the date to the same time on the next occurrence of
+      ** weekday N where 0==Sunday, 1==Monday, and so forth.  If the
+      ** date is already on the appropriate weekday, this is a no-op.
+      */</comment>
+      <if>if<condition>( <expr><call><name>strncmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"weekday "</expr></argument>, <argument><expr>8</expr></argument>)</argument_list></call>==0 &amp;&amp; <call><name>getValue</name><argument_list>(<argument><expr>&amp;<name><name>z</name><index>[<expr>8</expr>]</index></name></expr></argument>,<argument><expr>&amp;<name>r</name></expr></argument>)</argument_list></call>&gt;0
+                 &amp;&amp; (<name>n</name>=(<name>int</name>)<name>r</name>)==<name>r</name> &amp;&amp; <name>n</name>&gt;=0 &amp;&amp; <name>r</name>&lt;7</expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>Z</name></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>validTZ</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>Z</name> = ((<name>p</name>-&gt;<name>iJD</name> + 129600000)/86400000) % 7</expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>Z</name>&gt;<name>n</name></expr> )</condition><then> <expr_stmt><expr><name>Z</name> -= 7</expr>;</expr_stmt></then></if>
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>n</name> - <name>Z</name>)*86400000</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr>'s'</expr>: <block>{
+      <comment type="block">/*
+      **    start of TTTTT
+      **
+      ** Move the date backwards to the beginning of the current day,
+      ** or month or year.
+      */</comment>
+      <if>if<condition>( <expr><call><name>strncmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>"start of "</expr></argument>, <argument><expr>9</expr></argument>)</argument_list></call>!=0</expr> )</condition><then> <break>break;</break></then></if>
+      <expr_stmt><expr><name>z</name> += 9</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>computeYMD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validHMS</name> = 1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>h</name> = <name>p</name>-&gt;<name>m</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>s</name> = 0.0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validTZ</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+      <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"month"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>D</name> = 1</expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"year"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>computeYMD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>M</name> = 1</expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>D</name> = 1</expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"day"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      }</block></then></if></else></if></else></if>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr>'+'</expr>:
+    </case><case>case <expr>'-'</expr>:
+    </case><case>case <expr>'0'</expr>:
+    </case><case>case <expr>'1'</expr>:
+    </case><case>case <expr>'2'</expr>:
+    </case><case>case <expr>'3'</expr>:
+    </case><case>case <expr>'4'</expr>:
+    </case><case>case <expr>'5'</expr>:
+    </case><case>case <expr>'6'</expr>:
+    </case><case>case <expr>'7'</expr>:
+    </case><case>case <expr>'8'</expr>:
+    </case><case>case <expr>'9'</expr>: <block>{
+      <expr_stmt><expr><name>n</name> = <call><name>getValue</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>&amp;<name>r</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;=1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>n</name></expr>]</index></name>==':'</expr> )</condition><then><block>{
+        <comment type="block">/* A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+        ** specified number of hours, minutes, seconds, and fractional seconds
+        ** to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+        ** omitted.
+        */</comment>
+        <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z2</name> =<init> <expr><name>z</name></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>DateTime</name></type> <name>tx</name></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>day</name></decl>;</decl_stmt>
+        <if>if<condition>( <expr>!<call><name>isdigit</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z2</name></expr></argument>)</argument_list></call></expr> )</condition><then> <expr_stmt><expr><name>z2</name>++</expr>;</expr_stmt></then></if>
+        <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>tx</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>tx</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><call><name>parseHhMmSs</name><argument_list>(<argument><expr><name>z2</name></expr></argument>, <argument><expr>&amp;<name>tx</name></expr></argument>)</argument_list></call></expr> )</condition><then> <break>break;</break></then></if>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>tx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>tx</name>.<name>iJD</name> -= 43200000</expr>;</expr_stmt>
+        <expr_stmt><expr><name>day</name> = <name>tx</name>.<name>iJD</name>/86400000</expr>;</expr_stmt>
+        <expr_stmt><expr><name>tx</name>.<name>iJD</name> -= <name>day</name>*86400000</expr>;</expr_stmt>
+        <if>if<condition>( <expr><name><name>z</name><index>[<expr>0</expr>]</index></name>=='-'</expr> )</condition><then> <expr_stmt><expr><name>tx</name>.<name>iJD</name> = -<name>tx</name>.<name>iJD</name></expr>;</expr_stmt></then></if>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += <name>tx</name>.<name>iJD</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+        <break>break;</break>
+      }</block></then></if>
+      <expr_stmt><expr><name>z</name> += <name>n</name></expr>;</expr_stmt>
+      <while>while<condition>( <expr><call><name>isspace</name><argument_list>(<argument><expr>*(<name>u8</name>*)<name>z</name></expr></argument>)</argument_list></call></expr> )</condition> <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt></while>
+      <expr_stmt><expr><name>n</name> = <call><name>sqlite3Strlen30</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>n</name>&gt;10 || <name>n</name>&lt;3</expr> )</condition><then> <break>break;</break></then></if>
+      <if>if<condition>( <expr><name><name>z</name><index>[<expr><name>n</name>-1</expr>]</index></name>=='s'</expr> )</condition><then><block>{ <expr_stmt><expr><name><name>z</name><index>[<expr><name>n</name>-1</expr>]</index></name> = 0</expr>;</expr_stmt> <expr_stmt><expr><name>n</name>--</expr>;</expr_stmt> }</block></then></if>
+      <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = 0</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>n</name>==3 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"day"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>sqlite3_int64</name>)(<name>r</name>*86400000.0 + 0.5)</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>n</name>==4 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"hour"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>sqlite3_int64</name>)(<name>r</name>*(86400000.0/24.0) + 0.5)</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>n</name>==6 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"minute"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>sqlite3_int64</name>)(<name>r</name>*(86400000.0/(24.0*60.0)) + 0.5)</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>n</name>==6 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"second"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>sqlite3_int64</name>)(<name>r</name>*(86400000.0/(24.0*60.0*60.0)) + 0.5)</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>n</name>==5 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"month"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>int</name></type> <name>x</name>, <name>y</name></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>M</name> += (<name>int</name>)<name>r</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>x</name> = <name>p</name>-&gt;<name>M</name>&gt;0 ? (<name>p</name>-&gt;<name>M</name>-1)/12 : (<name>p</name>-&gt;<name>M</name>-12)/12</expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>Y</name> += <name>x</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>M</name> -= <name>x</name>*12</expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>y</name> = (<name>int</name>)<name>r</name></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>y</name>!=<name>r</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> += (<name>sqlite3_int64</name>)((<name>r</name> - <name>y</name>)*30.0*86400000.0 + 0.5)</expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then><else>else <if>if<condition>( <expr><name>n</name>==4 &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>z</name></expr></argument>,<argument><expr>"year"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>Y</name> += (<name>int</name>)<name>r</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>rc</name> = 1</expr>;</expr_stmt>
+      }</block></else></if></else></if></else></if></else></if></else></if></else></if>
+      <expr_stmt><expr><call><name>clearYMD_HMS_TZ</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+    </case><default>default: <block>{
+      <break>break;</break>
+    }</block>
+  </default>}</block></switch>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Process time function arguments.  argv[0] is a date-time stamp.
+** argv[1] and following are modifiers.  Parse them all and write
+** the resulting time into the DateTime structure p.  Return 0
+** on success and 1 if there are any errors.
+**
+** If there are zero parameters (if even argv[0] is undefined)
+** then assume a default value of "now" for argv[0].
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>isDate</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>, 
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>, 
+  <param><decl><type><name>DateTime</name> *</type><name>p</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>eType</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>p</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>argc</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>setDateTimeToCurrent</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr>(<name>eType</name> = <call><name>sqlite3_value_type</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call>)==<name>SQLITE_FLOAT</name>
+                   || <name>eType</name>==<name>SQLITE_INTEGER</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>iJD</name> = (<name>sqlite3_int64</name>)(<call><name>sqlite3_value_double</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call>*86400000.0 + 0.5)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>validJD</name> = 1</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>z</name> = <call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>!<name>z</name> || <call><name>parseDateOrTime</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr>(<name>char</name>*)<name>z</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+  }</block></else></if></else></if>
+  <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><name>i</name>&lt;<name>argc</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr>(<name>z</name> = <call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call>)==0 || <call><name>parseModifier</name><argument_list>(<argument><expr>(<name>char</name>*)<name>z</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr>1</expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** The following routines implement the various date and time functions
+** of SQLite.
+*/</comment>
+
+<comment type="block">/*
+**    julianday( TIMESTRING, MOD, MOD, ...)
+**
+** Return the julian day number of the date specified in the arguments
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>juliandayFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isDate</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>, <argument><expr><name>argv</name></expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_result_double</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>x</name>.<name>iJD</name>/86400000.0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+**    datetime( TIMESTRING, MOD, MOD, ...)
+**
+** Return YYYY-MM-DD HH:MM:SS
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>datetimeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isDate</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>, <argument><expr><name>argv</name></expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%04d-%02d-%02d %02d:%02d:%02d"</expr></argument>,
+                     <argument><expr><name>x</name>.<name>Y</name></expr></argument>, <argument><expr><name>x</name>.<name>M</name></expr></argument>, <argument><expr><name>x</name>.<name>D</name></expr></argument>, <argument><expr><name>x</name>.<name>h</name></expr></argument>, <argument><expr><name>x</name>.<name>m</name></expr></argument>, <argument><expr>(<name>int</name>)(<name>x</name>.<name>s</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+**    time( TIMESTRING, MOD, MOD, ...)
+**
+** Return HH:MM:SS
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>timeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isDate</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>, <argument><expr><name>argv</name></expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>computeHMS</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%02d:%02d:%02d"</expr></argument>, <argument><expr><name>x</name>.<name>h</name></expr></argument>, <argument><expr><name>x</name>.<name>m</name></expr></argument>, <argument><expr>(<name>int</name>)<name>x</name>.<name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+**    date( TIMESTRING, MOD, MOD, ...)
+**
+** Return YYYY-MM-DD
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>dateFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>isDate</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>, <argument><expr><name>argv</name></expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>computeYMD</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%04d-%02d-%02d"</expr></argument>, <argument><expr><name>x</name>.<name>Y</name></expr></argument>, <argument><expr><name>x</name>.<name>M</name></expr></argument>, <argument><expr><name>x</name>.<name>D</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+**    strftime( FORMAT, TIMESTRING, MOD, MOD, ...)
+**
+** Return a string described by FORMAT.  Conversions as follows:
+**
+**   %d  day of month
+**   %f  ** fractional seconds  SS.SSS
+**   %H  hour 00-24
+**   %j  day of year 000-366
+**   %J  ** Julian day number
+**   %m  month 01-12
+**   %M  minute 00-59
+**   %s  seconds since 1970-01-01
+**   %S  seconds 00-59
+**   %w  day of week 0-6  sunday==0
+**   %W  week of year 00-53
+**   %Y  year 0000-9999
+**   %%  %
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>strftimeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>DateTime</name></type> <name>x</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>size_t</name></type> <name>i</name>,<name>j</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zFmt</name> =<init> <expr>(<name>const</name> <name>char</name>*)<call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>zFmt</name>==0 || <call><name>isDate</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>argc</name>-1</expr></argument>, <argument><expr><name>argv</name>+1</expr></argument>, <argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><name>db</name> = <call><name>sqlite3_context_db_handle</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>, <expr><name>n</name>=1</expr>;</init> <condition><expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</condition> <incr><expr><name>i</name>++</expr>, <expr><name>n</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name>=='%'</expr> )</condition><then><block>{
+      <switch>switch<condition>( <expr><name><name>zFmt</name><index>[<expr><name>i</name>+1</expr>]</index></name></expr> )</condition><block>{
+        <case>case <expr>'d'</expr>:
+        </case><case>case <expr>'H'</expr>:
+        </case><case>case <expr>'m'</expr>:
+        </case><case>case <expr>'M'</expr>:
+        </case><case>case <expr>'S'</expr>:
+        </case><case>case <expr>'W'</expr>:
+          <expr_stmt><expr><name>n</name>++</expr>;</expr_stmt>
+          <comment type="block">/* fall thru */</comment>
+        </case><case>case <expr>'w'</expr>:
+        </case><case>case <expr>'%'</expr>:
+          <break>break;</break>
+        </case><case>case <expr>'f'</expr>:
+          <expr_stmt><expr><name>n</name> += 8</expr>;</expr_stmt>
+          <break>break;</break>
+        </case><case>case <expr>'j'</expr>:
+          <expr_stmt><expr><name>n</name> += 3</expr>;</expr_stmt>
+          <break>break;</break>
+        </case><case>case <expr>'Y'</expr>:
+          <expr_stmt><expr><name>n</name> += 8</expr>;</expr_stmt>
+          <break>break;</break>
+        </case><case>case <expr>'s'</expr>:
+        </case><case>case <expr>'J'</expr>:
+          <expr_stmt><expr><name>n</name> += 50</expr>;</expr_stmt>
+          <break>break;</break>
+        </case><default>default:
+          <return>return;</return>  <comment type="block">/* ERROR.  return a NULL */</comment>
+      </default>}</block></switch>
+      <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+  <if>if<condition>( <expr><name>n</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>n</name>&gt;(<name>u64</name>)<name>db</name>-&gt;<name><name>aLimit</name><index>[<expr><name>SQLITE_LIMIT_LENGTH</name></expr>]</index></name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_result_error_toobig</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return;</return>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>z</name> = <call><name>sqlite3DbMallocRaw</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>(<name>int</name>)<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>z</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_result_error_nomem</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return;</return>
+    }</block></then></if>
+  }</block></else></if></else></if>
+  <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>computeYMD_HMS</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=<name>j</name>=0</expr>;</init> <condition><expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name>!='%'</expr> )</condition><then><block>{
+      <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = <name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+      <switch>switch<condition>( <expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name></expr> )</condition><block>{
+        <case>case <expr>'d'</expr>:  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr><name>x</name>.<name>D</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=2</expr>;</expr_stmt> <break>break;</break>
+        </case><case>case <expr>'f'</expr>: <block>{
+          <decl_stmt><decl><type><name>double</name></type> <name>s</name> =<init> <expr><name>x</name>.<name>s</name></expr></init></decl>;</decl_stmt>
+          <if>if<condition>( <expr><name>s</name>&gt;59.999</expr> )</condition><then> <expr_stmt><expr><name>s</name> = 59.999</expr>;</expr_stmt></then></if>
+          <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>7</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%06.3f"</expr></argument>, <argument><expr><name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>j</name> += <call><name>sqlite3Strlen30</name><argument_list>(<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <break>break;</break>
+        }</block>
+        </case><case>case <expr>'H'</expr>:  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr><name>x</name>.<name>h</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=2</expr>;</expr_stmt> <break>break;</break>
+        </case><case>case <expr>'W'</expr>: <comment type="block">/* Fall thru */</comment>
+        </case><case>case <expr>'j'</expr>: <block>{
+          <decl_stmt><decl><type><name>int</name></type> <name>nDay</name></decl>;</decl_stmt>             <comment type="block">/* Number of days since 1st day of year */</comment>
+          <decl_stmt><decl><type><name>DateTime</name></type> <name>y</name> =<init> <expr><name>x</name></expr></init></decl>;</decl_stmt>
+          <expr_stmt><expr><name>y</name>.<name>validJD</name> = 0</expr>;</expr_stmt>
+          <expr_stmt><expr><name>y</name>.<name>M</name> = 1</expr>;</expr_stmt>
+          <expr_stmt><expr><name>y</name>.<name>D</name> = 1</expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>computeJD</name><argument_list>(<argument><expr>&amp;<name>y</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>nDay</name> = (<name>int</name>)((<name>x</name>.<name>iJD</name>-<name>y</name>.<name>iJD</name>+43200000)/86400000)</expr>;</expr_stmt>
+          <if>if<condition>( <expr><name><name>zFmt</name><index>[<expr><name>i</name></expr>]</index></name>=='W'</expr> )</condition><then><block>{
+            <decl_stmt><decl><type><name>int</name></type> <name>wd</name></decl>;</decl_stmt>   <comment type="block">/* 0=Monday, 1=Tuesday, ... 6=Sunday */</comment>
+            <expr_stmt><expr><name>wd</name> = (<name>int</name>)(((<name>x</name>.<name>iJD</name>+43200000)/86400000)%7)</expr>;</expr_stmt>
+            <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr>(<name>nDay</name>+7-<name>wd</name>)/7</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>j</name> += 2</expr>;</expr_stmt>
+          }</block></then><else>else<block>{
+            <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>4</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%03d"</expr></argument>,<argument><expr><name>nDay</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>j</name> += 3</expr>;</expr_stmt>
+          }</block></else></if>
+          <break>break;</break>
+        }</block>
+        </case><case>case <expr>'J'</expr>: <block>{
+          <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>20</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%.16g"</expr></argument>,<argument><expr><name>x</name>.<name>iJD</name>/86400000.0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>j</name>+=<call><name>sqlite3Strlen30</name><argument_list>(<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <break>break;</break>
+        }</block>
+        </case><case>case <expr>'m'</expr>:  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr><name>x</name>.<name>M</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=2</expr>;</expr_stmt> <break>break;</break>
+        </case><case>case <expr>'M'</expr>:  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>, <argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr><name>x</name>.<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=2</expr>;</expr_stmt> <break>break;</break>
+        </case><case>case <expr>'s'</expr>: <block>{
+          <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>30</expr></argument>,<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%d"</expr></argument>,
+                           <argument><expr>(<name>int</name>)(<name>x</name>.<name>iJD</name>/1000.0 - 210866760000.0)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>j</name> += <call><name>sqlite3Strlen30</name><argument_list>(<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <break>break;</break>
+        }</block>
+        </case><case>case <expr>'S'</expr>:  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>3</expr></argument>,<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%02d"</expr></argument>,<argument><expr>(<name>int</name>)<name>x</name>.<name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=2</expr>;</expr_stmt> <break>break;</break>
+        </case><case>case <expr>'w'</expr>: <block>{
+          <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = (<name>char</name>)(((<name>x</name>.<name>iJD</name>+129600000)/86400000) % 7) + '0'</expr>;</expr_stmt>
+          <break>break;</break>
+        }</block>
+        </case><case>case <expr>'Y'</expr>: <block>{
+          <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>5</expr></argument>,<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>"%04d"</expr></argument>,<argument><expr><name>x</name>.<name>Y</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <expr_stmt><expr><name>j</name>+=<call><name>sqlite3Strlen30</name><argument_list>(<argument><expr>&amp;<name><name>z</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <break>break;</break>
+        }</block>
+        </case><default>default:   <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name>++</expr>]</index></name> = '%'</expr>;</expr_stmt> <break>break;</break>
+      </default>}</block></switch>
+    }</block></else></if>
+  }</block></for>
+  <expr_stmt><expr><name><name>z</name><index>[<expr><name>j</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr>-1</expr></argument>,
+                      <argument><expr><name>z</name>==<name>zBuf</name> ? <name>SQLITE_TRANSIENT</name> : <name>SQLITE_DYNAMIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** current_time()
+**
+** This function returns the same value as time('now').
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>ctimeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>NotUsed</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>NotUsed2</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>NotUsed2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>timeFunc</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** current_date()
+**
+** This function returns the same value as date('now').
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>cdateFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>NotUsed</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>NotUsed2</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>NotUsed2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>dateFunc</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** current_timestamp()
+**
+** This function returns the same value as datetime('now').
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>ctimestampFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>NotUsed</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>NotUsed2</name></decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>NotUsed2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>datetimeFunc</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* !defined(SQLITE_OMIT_DATETIME_FUNCS) */</comment>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DATETIME_FUNCS</name></cpp:ifdef>
+<comment type="block">/*
+** If the library is compiled to omit the full-scale date and time
+** handling (to get a smaller binary), the following minimal version
+** of the functions current_time(), current_date() and current_timestamp()
+** are included instead. This is to support column declarations that
+** include "DEFAULT CURRENT_TIME" etc.
+**
+** This function uses the C-library functions time(), gmtime()
+** and strftime(). The format string to pass to strftime() is supplied
+** as the user-data for the function.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>currentTimeFunc</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,
+  <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>time_t</name></type> <name>t</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFormat</name> =<init> <expr>(<name>char</name> *)<call><name>sqlite3_user_data</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>double</name></type> <name>rT</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>20</expr>]</index></name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>db</name> = <call><name>sqlite3_context_db_handle</name><argument_list>(<argument><expr><name>context</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3OsCurrentTime</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pVfs</name></expr></argument>, <argument><expr>&amp;<name>rT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> = 86400.0*(<name>rT</name> - 2440587.5) + 0.5</expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_GMTIME_R</name></cpp:ifdef>
+  <block>{
+    <decl_stmt><decl><type>struct <name>tm</name></type> <name>sNow</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>gmtime_r</name><argument_list>(<argument><expr>&amp;<name>t</name></expr></argument>, <argument><expr>&amp;<name>sNow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>strftime</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>20</expr></argument>, <argument><expr><name>zFormat</name></expr></argument>, <argument><expr>&amp;<name>sNow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <block>{
+    <decl_stmt><decl><type>struct <name>tm</name> *</type><name>pTm</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pTm</name> = <call><name>gmtime</name><argument_list>(<argument><expr>&amp;<name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>strftime</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>20</expr></argument>, <argument><expr><name>zFormat</name></expr></argument>, <argument><expr><name>pTm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_STATIC_MASTER</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** This function registered all of the above C functions as SQL
+** functions.  This should be the only routine in this file with
+** external linkage.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3RegisterDateTimeFunctions</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>SQLITE_WSD</name> <name>FuncDef</name></type> <name><name>aDateTimeFuncs</name><index>[]</index></name> =<init> <expr><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DATETIME_FUNCS</name></cpp:ifndef>
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>julianday</name></expr></argument>,        <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>juliandayFunc</name></expr></argument> )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>date</name></expr></argument>,             <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>dateFunc</name></expr></argument>      )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>time</name></expr></argument>,             <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>timeFunc</name></expr></argument>      )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>datetime</name></expr></argument>,         <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>datetimeFunc</name></expr></argument>  )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>strftime</name></expr></argument>,         <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>strftimeFunc</name></expr></argument>  )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>current_time</name></expr></argument>,      <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>ctimeFunc</name></expr></argument>     )</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>current_timestamp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>ctimestampFunc</name></expr></argument>)</argument_list></call></expr>,
+    <expr><call><name>FUNCTION</name><argument_list>(<argument><expr><name>current_date</name></expr></argument>,      <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>cdateFunc</name></expr></argument>     )</argument_list></call></expr>,
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+    <expr><call><name>STR_FUNCTION</name><argument_list>(<argument><expr><name>current_time</name></expr></argument>,      <argument><expr>0</expr></argument>, <argument><expr>"%H:%M:%S"</expr></argument>,          <argument><expr>0</expr></argument>, <argument><expr><name>currentTimeFunc</name></expr></argument>)</argument_list></call></expr>,
+    <expr><call><name>STR_FUNCTION</name><argument_list>(<argument><expr><name>current_timestamp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>"%Y-%m-%d"</expr></argument>,          <argument><expr>0</expr></argument>, <argument><expr><name>currentTimeFunc</name></expr></argument>)</argument_list></call></expr>,
+    <expr><call><name>STR_FUNCTION</name><argument_list>(<argument><expr><name>current_date</name></expr></argument>,      <argument><expr>0</expr></argument>, <argument><expr>"%Y-%m-%d %H:%M:%S"</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>currentTimeFunc</name></expr></argument>)</argument_list></call></expr>,
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>FuncDefHash</name> *</type><name>pHash</name> =<init> <expr>&amp;<call><name>GLOBAL</name><argument_list>(<argument><expr><name>FuncDefHash</name></expr></argument>, <argument><expr><name>sqlite3GlobalFunctions</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>FuncDef</name> *</type><name>aFunc</name> =<init> <expr>(<name>FuncDef</name>*)&amp;<call><name>GLOBAL</name><argument_list>(<argument><expr><name>FuncDef</name></expr></argument>, <argument><expr><name>aDateTimeFuncs</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>ArraySize</name><argument_list>(<argument><expr><name>aDateTimeFuncs</name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>sqlite3FuncDefInsert</name><argument_list>(<argument><expr><name>pHash</name></expr></argument>, <argument><expr>&amp;<name><name>aFunc</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+}</block></function>
+</unit>

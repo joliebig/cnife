@@ -1,0 +1,777 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_journal.c" filename=""><comment type="block">/*
+** 2008 Jan 22
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+******************************************************************************
+**
+** This file contains code for a VFS layer that acts as a wrapper around
+** an existing VFS. The code in this file attempts to verify that SQLite
+** correctly populates and syncs a journal file before writing to a
+** corresponding database file.
+**
+** $Id: test_journal.c,v 1.9 2009/01/11 18:24:27 drh Exp $
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_TEST</name></expr></cpp:if>          <comment type="block">/* This file is used for testing only */</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqlite3.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** INTERFACE
+**
+**   The public interface to this wrapper VFS is two functions:
+**
+**     jt_register()
+**     jt_unregister()
+**
+**   See header comments associated with those two functions below for 
+**   details.
+**
+** LIMITATIONS
+**
+**   This wrapper will not work if "PRAGMA synchronous = off" is used.
+**
+** OPERATION
+**
+**  Starting a Transaction:
+**
+**   When a write-transaction is started, the contents of the database is
+**   inspected and the following data stored as part of the database file 
+**   handle (type struct jt_file):
+**
+**     a) The page-size of the database file.
+**     b) The number of pages that are in the database file.
+**     c) The set of page numbers corresponding to free-list leaf pages.
+**     d) A check-sum for every page in the database file.
+**
+**   The start of a write-transaction is deemed to have occured when a 
+**   28-byte journal header is written to byte offset 0 of the journal 
+**   file.
+**
+**  Syncing the Journal File:
+**
+**   Whenever the xSync method is invoked to sync a journal-file, the
+**   contents of the journal file are read. For each page written to
+**   the journal file, a check-sum is calculated and compared to the  
+**   check-sum calculated for the corresponding database page when the
+**   write-transaction was initialized. The success of the comparison
+**   is assert()ed. So if SQLite has written something other than the
+**   original content to the database file, an assert() will fail.
+**
+**   Additionally, the set of page numbers for which records exist in
+**   the journal file is added to (unioned with) the set of page numbers
+**   corresponding to free-list leaf pages collected when the 
+**   write-transaction was initialized. This set comprises the page-numbers 
+**   corresponding to those pages that SQLite may now safely modify.
+**
+**  Writing to the Database File:
+**
+**   When a block of data is written to a database file, the following
+**   invariants are asserted:
+**
+**     a) That the block of data is an aligned block of page-size bytes.
+**
+**     b) That if the page being written did not exist when the 
+**        transaction was started (i.e. the database file is growing), then
+**        the journal-file must have been synced at least once since
+**        the start of the transaction.
+**
+**     c) That if the page being written did exist when the transaction 
+**        was started, then the page must have either been a free-list
+**        leaf page at the start of the transaction, or else must have
+**        been stored in the journal file prior to the most recent sync.
+**
+**  Closing a Transaction:
+**
+**   When a transaction is closed, all data collected at the start of
+**   the transaction, or following an xSync of a journal-file, is 
+**   discarded. The end of a transaction is recognized when any one 
+**   of the following occur:
+**
+**     a) A block of zeroes (or anything else that is not a valid 
+**        journal-header) is written to the start of the journal file.
+**
+**     b) A journal file is truncated to zero bytes in size using xTruncate.
+**
+**     c) The journal file is deleted using xDelete.
+*/</comment>
+
+<comment type="block">/*
+** Maximum pathname length supported by the jt backend.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>JT_MAX_PATHNAME</name> 512</cpp:define>
+
+<comment type="block">/*
+** Name used to identify this VFS.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>JT_VFS_NAME</name> "jt"</cpp:define>
+
+<typedef>typedef <type><struct>struct <name>jt_file</name> jt_file;</struct></type></typedef>
+<struct>struct <name>jt_file</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_file</name></type> <name>base</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl>;</decl_stmt>       <comment type="block">/* Name of open file */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>flags</name></decl>;</decl_stmt>               <comment type="block">/* Flags the file was opened with */</comment>
+
+  <comment type="block">/* The following are only used by database file file handles */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>eLock</name></decl>;</decl_stmt>               <comment type="block">/* Current lock held on the file */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nPage</name></decl>;</decl_stmt>               <comment type="block">/* Size of file in pages when transaction started */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nPagesize</name></decl>;</decl_stmt>           <comment type="block">/* Page size when transaction started */</comment>
+  <decl_stmt><decl><type><name>Bitvec</name> *</type><name>pWritable</name></decl>;</decl_stmt>       <comment type="block">/* Bitvec of pages that may be written to the file */</comment>
+  <decl_stmt><decl><type><name>u32</name> *</type><name>aCksum</name></decl>;</decl_stmt>             <comment type="block">/* Checksum for first nPage pages */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nSync</name></decl>;</decl_stmt>               <comment type="block">/* Number of times journal file has been synced */</comment>
+
+  <comment type="block">/* Only used by journal file-handles */</comment>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iMaxOff</name></decl>;</decl_stmt>   <comment type="block">/* Maximum offset written to this transaction */</comment>
+
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>pNext</name></decl>;</decl_stmt>          <comment type="block">/* All files are stored in a linked list */</comment>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pReal</name></decl>;</decl_stmt>     <comment type="block">/* The file handle for the underlying vfs */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Method declarations for jt_file.
+*/</comment>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtRead</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>void</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>, <param><decl><type><name>sqlite3_int64</name></type> <name>iOfst</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtWrite</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>,<param><decl><type><name>const</name> <name>void</name>*</type></decl></param>,<param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>, <param><decl><type><name>sqlite3_int64</name></type> <name>iOfst</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>sqlite3_int64</name></type> <name>size</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>sqlite3_int64</name> *</type><name>pSize</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtUnlock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtCheckReservedLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtFileControl</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pArg</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtSectorSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtDeviceCharacteristics</name><parameter_list>(<param><decl><type><name>sqlite3_file</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/*
+** Method declarations for jt_vfs.
+*/</comment>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type></decl></param>, <param><decl><type><name>sqlite3_file</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param> , <param><decl><type><name>int</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtDelete</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <param><decl><type><name>int</name></type> <name>syncDir</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtAccess</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtFullPathname</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>char</name> *</type><name>zOut</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name> *</type><name>jtDlOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zFilename</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>jtDlError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zErrMsg</name></decl></param>)</parameter_list>;</function_decl>
+<decl_stmt><decl><type><name>static</name></type> <name>void</name> <argument_list>(<argument><expr>*<call><name>jtDlSym</name><argument_list>(<argument><expr><name>sqlite3_vfs</name>*</expr></argument>,<argument><expr><name>void</name>*</expr></argument>, <argument><expr><name>const</name> <name>char</name> *<name>zSymbol</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list><argument_list>(<argument><expr><name>void</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+<function_decl><type><name>static</name> <name>void</name></type> <name>jtDlClose</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>void</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtRandomness</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zOut</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtSleep</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>microseconds</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>int</name></type> <name>jtCurrentTime</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name>*</type></decl></param>, <param><decl><type><name>double</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<decl_stmt><decl><type><name>static</name> <name>sqlite3_vfs</name></type> <name>jt_vfs</name> =<init> <expr><block>{
+  <expr>1</expr>,                             <comment type="block">/* iVersion */</comment>
+  <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>jt_file</name></expr></argument>)</argument_list></call></expr>,               <comment type="block">/* szOsFile */</comment>
+  <expr><name>JT_MAX_PATHNAME</name></expr>,               <comment type="block">/* mxPathname */</comment>
+  <expr>0</expr>,                             <comment type="block">/* pNext */</comment>
+  <expr><name>JT_VFS_NAME</name></expr>,                   <comment type="block">/* zName */</comment>
+  <expr>0</expr>,                             <comment type="block">/* pAppData */</comment>
+  <expr><name>jtOpen</name></expr>,                        <comment type="block">/* xOpen */</comment>
+  <expr><name>jtDelete</name></expr>,                      <comment type="block">/* xDelete */</comment>
+  <expr><name>jtAccess</name></expr>,                      <comment type="block">/* xAccess */</comment>
+  <expr><name>jtFullPathname</name></expr>,                <comment type="block">/* xFullPathname */</comment>
+  <expr><name>jtDlOpen</name></expr>,                      <comment type="block">/* xDlOpen */</comment>
+  <expr><name>jtDlError</name></expr>,                     <comment type="block">/* xDlError */</comment>
+  <expr><name>jtDlSym</name></expr>,                       <comment type="block">/* xDlSym */</comment>
+  <expr><name>jtDlClose</name></expr>,                     <comment type="block">/* xDlClose */</comment>
+  <expr><name>jtRandomness</name></expr>,                  <comment type="block">/* xRandomness */</comment>
+  <expr><name>jtSleep</name></expr>,                       <comment type="block">/* xSleep */</comment>
+  <expr><name>jtCurrentTime</name></expr>                  <comment type="block">/* xCurrentTime */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+
+<decl_stmt><decl><type><name>static</name> <name>sqlite3_io_methods</name></type> <name>jt_io_methods</name> =<init> <expr><block>{
+  <expr>1</expr>,                             <comment type="block">/* iVersion */</comment>
+  <expr><name>jtClose</name></expr>,                       <comment type="block">/* xClose */</comment>
+  <expr><name>jtRead</name></expr>,                        <comment type="block">/* xRead */</comment>
+  <expr><name>jtWrite</name></expr>,                       <comment type="block">/* xWrite */</comment>
+  <expr><name>jtTruncate</name></expr>,                    <comment type="block">/* xTruncate */</comment>
+  <expr><name>jtSync</name></expr>,                        <comment type="block">/* xSync */</comment>
+  <expr><name>jtFileSize</name></expr>,                    <comment type="block">/* xFileSize */</comment>
+  <expr><name>jtLock</name></expr>,                        <comment type="block">/* xLock */</comment>
+  <expr><name>jtUnlock</name></expr>,                      <comment type="block">/* xUnlock */</comment>
+  <expr><name>jtCheckReservedLock</name></expr>,           <comment type="block">/* xCheckReservedLock */</comment>
+  <expr><name>jtFileControl</name></expr>,                 <comment type="block">/* xFileControl */</comment>
+  <expr><name>jtSectorSize</name></expr>,                  <comment type="block">/* xSectorSize */</comment>
+  <expr><name>jtDeviceCharacteristics</name></expr>        <comment type="block">/* xDeviceCharacteristics */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+
+<struct>struct <name>JtGlobal</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl>;</decl_stmt>             <comment type="block">/* Parent VFS */</comment>
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>pList</name></decl>;</decl_stmt>                <comment type="block">/* List of all open files */</comment>
+</public>}</block>;</struct>
+<decl_stmt><decl><type><name>static</name> struct <name>JtGlobal</name></type> <name>g</name> =<init> <expr><block>{<expr>0</expr>, <expr>0</expr>}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** The jt_file pointed to by the argument may or may not be a file-handle
+** open on a main database file. If it is, and a transaction is currently
+** opened on the file, then discard all transaction related data.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>closeTransaction</name><parameter_list>(<param><decl><type><name>jt_file</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3BitvecDestroy</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pWritable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>aCksum</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pWritable</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>aCksum</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nSync</name> = 0</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Close an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> **</type><name>pp</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>closeTransaction</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>zName</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>pp</name>=&amp;<name>g</name>.<name>pList</name></expr>;</init> <condition><expr>*<name>pp</name>!=<name>p</name></expr>;</condition> <incr><expr><name>pp</name>=&amp;(*<name>pp</name>)-&gt;<name>pNext</name></expr></incr>)<empty_stmt>;</empty_stmt></for>
+    <expr_stmt><expr>*<name>pp</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <return>return <expr><call><name>sqlite3OsClose</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read data from an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtRead</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, 
+  <param><decl><type><name>void</name> *</type><name>zBuf</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>, 
+  <param><decl><type><name>sqlite_int64</name></type> <name>iOfst</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>iAmt</name></expr></argument>, <argument><expr><name>iOfst</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Parameter zJournal is the name of a journal file that is currently 
+** open. This function locates and returns the handle opened on the
+** corresponding database file by the pager that currently has the
+** journal file opened. This file-handle is identified by the 
+** following properties:
+**
+**   a) SQLITE_OPEN_MAIN_DB was specified when the file was opened.
+**
+**   b) The file-name specified when the file was opened matches
+**      all but the final 8 characters of the journal file name.
+**
+**   c) There is currently a reserved lock on the file.
+**/</comment>
+<function><type><name>static</name> <name>jt_file</name> *</type><name>locateDatabaseHandle</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zJournal</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>pMain</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <for>for(<init><expr><name>pMain</name>=<name>g</name>.<name>pList</name></expr>;</init> <condition><expr><name>pMain</name></expr>;</condition> <incr><expr><name>pMain</name>=<name>pMain</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>nName</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>zJournal</name></expr></argument>)</argument_list></call> - <call><name>strlen</name><argument_list>(<argument><expr>"-journal"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr>(<name>pMain</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_DB</name>)
+     &amp;&amp; (<call><name>strlen</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call>==<name>nName</name>)
+     &amp;&amp; 0==<call><name>memcmp</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zJournal</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call>
+     &amp;&amp; (<name>pMain</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_RESERVED</name>)</expr>
+    )</condition><then><block>{
+      <break>break;</break>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr><name>pMain</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Parameter z points to a buffer of 4 bytes in size containing a 
+** unsigned 32-bit integer stored in big-endian format. Decode the 
+** integer and return its value.
+*/</comment>
+<function><type><name>static</name> <name>u32</name></type> <name>decodeUint32</name><parameter_list>(<param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>z</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name><name>z</name><index>[<expr>0</expr>]</index></name>&lt;&lt;24) + (<name><name>z</name><index>[<expr>1</expr>]</index></name>&lt;&lt;16) + (<name><name>z</name><index>[<expr>2</expr>]</index></name>&lt;&lt;8) + <name><name>z</name><index>[<expr>3</expr>]</index></name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Calculate a checksum from the buffer of length n bytes pointed to
+** by parameter z.
+*/</comment>
+<function><type><name>static</name> <name>u32</name></type> <name>genCksum</name><parameter_list>(<param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>cksum</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>n</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>cksum</name> = <name>cksum</name> + <name><name>z</name><index>[<expr><name>i</name></expr>]</index></name> + (<name>cksum</name>&lt;&lt;3)</expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>cksum</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The first argument, zBuf, points to a buffer containing a 28 byte
+** serialized journal header. This function deserializes four of the
+** integer fields contained in the journal header and writes their
+** values to the output variables.
+**
+** SQLITE_OK is returned if the journal-header is successfully 
+** decoded. Otherwise, SQLITE_ERROR.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>decodeJournalHdr</name><parameter_list>(
+  <param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>zBuf</name></decl></param>,         <comment type="block">/* Input: 28 byte journal header */</comment>
+  <param><decl><type><name>u32</name> *</type><name>pnRec</name></decl></param>,                        <comment type="block">/* Out: Number of journalled records */</comment>
+  <param><decl><type><name>u32</name> *</type><name>pnPage</name></decl></param>,                       <comment type="block">/* Out: Original database page count */</comment>
+  <param><decl><type><name>u32</name> *</type><name>pnSector</name></decl></param>,                     <comment type="block">/* Out: Sector size in bytes */</comment>
+  <param><decl><type><name>u32</name> *</type><name>pnPagesize</name></decl></param>                    <comment type="block">/* Out: Page size in bytes */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name><name>aMagic</name><index>[]</index></name> =<init> <expr><block>{ <expr>0xd9</expr>, <expr>0xd5</expr>, <expr>0x05</expr>, <expr>0xf9</expr>, <expr>0x20</expr>, <expr>0xa1</expr>, <expr>0x63</expr>, <expr>0xd7</expr> }</block></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><call><name>memcmp</name><argument_list>(<argument><expr><name>aMagic</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>8</expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>SQLITE_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><name>pnRec</name></expr> )</condition><then> <expr_stmt><expr>*<name>pnRec</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr>8</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>pnPage</name></expr> )</condition><then> <expr_stmt><expr>*<name>pnPage</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr>16</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>pnSector</name></expr> )</condition><then> <expr_stmt><expr>*<name>pnSector</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr>20</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>pnPagesize</name></expr> )</condition><then> <expr_stmt><expr>*<name>pnPagesize</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr>24</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This function is called when a new transaction is opened, just after
+** the first journal-header is written to the journal file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>openTransaction</name><parameter_list>(<param><decl><type><name>jt_file</name> *</type><name>pMain</name></decl></param>, <param><decl><type><name>jt_file</name> *</type><name>pJournal</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>aData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>p</name> =<init> <expr><name>pMain</name>-&gt;<name>pReal</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>aData</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMain</name>-&gt;<name>pWritable</name> = <call><name>sqlite3BitvecCreate</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>nPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMain</name>-&gt;<name>aCksum</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>u32</name></expr></argument>)</argument_list></call> * (<name>pMain</name>-&gt;<name>nPage</name> + 1)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pJournal</name>-&gt;<name>iMaxOff</name> = 0</expr>;</expr_stmt>
+
+  <if>if<condition>( <expr>!<name>pMain</name>-&gt;<name>pWritable</name> || !<name>pMain</name>-&gt;<name>aCksum</name> || !<name>aData</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_IOERR_NOMEM</name></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><name>pMain</name>-&gt;<name>nPage</name>&gt;0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>iTrunk</name></decl>;</decl_stmt>
+
+    <comment type="block">/* Read the database free-list. Add the page-number for each free-list
+    ** leaf to the jt_file.pWritable bitvec.
+    */</comment>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>aData</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>iTrunk</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>aData</name><index>[<expr>32</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <while>while<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>iTrunk</name>&gt;0</expr> )</condition><block>{
+      <decl_stmt><decl><type><name>u32</name></type> <name>nLeaf</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>u32</name></type> <name>iLeaf</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iOff</name> =<init> <expr>(<name>iTrunk</name>-1)*<name>pMain</name>-&gt;<name>nPagesize</name></expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>aData</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>, <argument><expr><name>iOff</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>nLeaf</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>aData</name><index>[<expr>4</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <for>for(<init><expr><name>iLeaf</name>=0</expr>;</init> <condition><expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>iLeaf</name>&lt;<name>nLeaf</name></expr>;</condition> <incr><expr><name>iLeaf</name>++</expr></incr>)<block>{
+        <decl_stmt><decl><type><name>u32</name></type> <name>pgno</name> =<init> <expr><call><name>decodeUint32</name><argument_list>(<argument><expr>&amp;<name><name>aData</name><index>[<expr>8+4*<name>iLeaf</name></expr>]</index></name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>sqlite3BitvecSet</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>pWritable</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></for>
+      <expr_stmt><expr><name>iTrunk</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr><name>aData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></while>
+
+    <comment type="block">/* Calculate and store a checksum for each page in the database file. */</comment>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+      <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>ii</name>&lt;<name>pMain</name>-&gt;<name>nPage</name></expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+        <decl_stmt><decl><type><name>i64</name></type> <name>iOff</name> =<init> <expr>(<name>i64</name>)(<name>pMain</name>-&gt;<name>nPagesize</name>) * (<name>i64</name>)<name>ii</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>aData</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>, <argument><expr><name>iOff</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pMain</name>-&gt;<name><name>aCksum</name><index>[<expr><name>ii</name></expr>]</index></name> = <call><name>genCksum</name><argument_list>(<argument><expr><name>aData</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></for>
+    }</block></then></if>
+  }</block></then></if></else></if>
+
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>aData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Write data to an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtWrite</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>zBuf</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>, 
+  <param><decl><type><name>sqlite_int64</name></type> <name>iOfst</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_JOURNAL</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>iOfst</name>==0</expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>jt_file</name> *</type><name>pMain</name> =<init> <expr><call><name>locateDatabaseHandle</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMain</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  
+      <if>if<condition>( <expr><call><name>decodeJournalHdr</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pMain</name>-&gt;<name>nPage</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <comment type="block">/* Zeroing the first journal-file header. This is the end of a
+        ** transaction. */</comment>
+        <expr_stmt><expr><call><name>closeTransaction</name><argument_list>(<argument><expr><name>pMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <comment type="block">/* Writing the first journal header to a journal file. This happens
+        ** when a transaction is first started.  */</comment>
+        <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+        <if>if<condition>( <expr><name>SQLITE_OK</name>!=(<name>rc</name>=<call><name>openTransaction</name><argument_list>(<argument><expr><name>pMain</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call>)</expr> )</condition><then><block>{
+          <return>return <expr><name>rc</name></expr>;</return>
+        }</block></then></if>
+      }</block></else></if>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>iMaxOff</name>&lt;(<name>iOfst</name> + <name>iAmt</name>)</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>iMaxOff</name> = <name>iOfst</name> + <name>iAmt</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_DB</name> &amp;&amp; <name>p</name>-&gt;<name>pWritable</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>pgno</name> =<init> <expr><name>iOfst</name>/<name>p</name>-&gt;<name>nPagesize</name> + 1</expr></init></decl>;</decl_stmt>
+
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>iAmt</name>==1 || <name>iAmt</name>==<name>p</name>-&gt;<name>nPagesize</name>) &amp;&amp; ((<name>iOfst</name>+<name>iAmt</name>)%<name>p</name>-&gt;<name>nPagesize</name>)==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pgno</name>&lt;=<name>p</name>-&gt;<name>nPage</name> || <name>p</name>-&gt;<name>nSync</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pgno</name>&gt;<name>p</name>-&gt;<name>nPage</name> || <call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pWritable</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <return>return <expr><call><name>sqlite3OsWrite</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>iAmt</name></expr></argument>, <argument><expr><name>iOfst</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Truncate an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>sqlite_int64</name></type> <name>size</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_JOURNAL</name> &amp;&amp; <name>size</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* Truncating a journal file. This is the end of a transaction. */</comment>
+    <decl_stmt><decl><type><name>jt_file</name> *</type><name>pMain</name> =<init> <expr><call><name>locateDatabaseHandle</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>closeTransaction</name><argument_list>(<argument><expr><name>pMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_DB</name> &amp;&amp; <name>p</name>-&gt;<name>pWritable</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>pgno</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name>locking_page</name> =<init> <expr>(<name>u32</name>)(<name>PENDING_BYTE</name>/<name>p</name>-&gt;<name>nPagesize</name>+1)</expr></init></decl>;</decl_stmt>
+    <for>for(<init><expr><name>pgno</name>=<name>size</name>/<name>p</name>-&gt;<name>nPagesize</name>+1</expr>;</init> <condition><expr><name>pgno</name>&lt;=<name>p</name>-&gt;<name>nPage</name></expr>;</condition> <incr><expr><name>pgno</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pgno</name>==<name>locking_page</name> || <call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pWritable</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+  }</block></then></if>
+  <return>return <expr><call><name>sqlite3OsTruncate</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>size</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The first argument to this function is a handle open on a journal file.
+** This function reads the journal file and adds the page number for each
+** page in the journal to the Bitvec object passed as the second argument.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>readJournalFile</name><parameter_list>(<param><decl><type><name>jt_file</name> *</type><name>p</name></decl></param>, <param><decl><type><name>jt_file</name> *</type><name>pMain</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name><name>zBuf</name><index>[<expr>28</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pReal</name> =<init> <expr><name>p</name>-&gt;<name>pReal</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iOff</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>iSize</name> =<init> <expr><name>p</name>-&gt;<name>iMaxOff</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>aPage</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>aPage</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>aPage</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_IOERR_NOMEM</name></expr>;</return>
+  }</block></then></if>
+
+  <while>while<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>iOff</name>&lt;<name>iSize</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>nRec</name>, <name>nPage</name>, <name>nSector</name>, <name>nPagesize</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name>ii</name></decl>;</decl_stmt>
+
+    <comment type="block">/* Read and decode the next journal-header from the journal file. */</comment>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>pReal</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>28</expr></argument>, <argument><expr><name>iOff</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> 
+     || <call><name>decodeJournalHdr</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>&amp;<name>nRec</name></expr></argument>, <argument><expr>&amp;<name>nPage</name></expr></argument>, <argument><expr>&amp;<name>nSector</name></expr></argument>, <argument><expr>&amp;<name>nPagesize</name></expr></argument>)</argument_list></call></expr> 
+    )</condition><then><block>{
+      <goto>goto <name>finish_rjf</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr><name>iOff</name> += <name>nSector</name></expr>;</expr_stmt>
+
+    <if>if<condition>( <expr><name>nRec</name>==0</expr> )</condition><then><block>{
+      <comment type="block">/* A trick. There might be another journal-header immediately 
+      ** following this one. In this case, 0 records means 0 records, 
+      ** not "read until the end of the file". See also ticket #2565.
+      */</comment>
+      <if>if<condition>( <expr><name>iSize</name>&gt;=(<name>iOff</name>+<name>nSector</name>)</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>pReal</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>28</expr></argument>, <argument><expr><name>iOff</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name> || 0==<call><name>decodeJournalHdr</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+          <continue>continue;</continue>
+        }</block></then></if>
+      }</block></then></if>
+      <expr_stmt><expr><name>nRec</name> = (<name>iSize</name>-<name>iOff</name>) / (<name>pMain</name>-&gt;<name>nPagesize</name>+8)</expr>;</expr_stmt>
+    }</block></then></if>
+
+    <comment type="block">/* Read all the records that follow the journal-header just read. */</comment>
+    <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>ii</name>&lt;<name>nRec</name> &amp;&amp; <name>iOff</name>&lt;<name>iSize</name></expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+      <decl_stmt><decl><type><name>u32</name></type> <name>pgno</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>pReal</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>4</expr></argument>, <argument><expr><name>iOff</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pgno</name> = <call><name>decodeUint32</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pgno</name>&gt;0 &amp;&amp; <name>pgno</name>&lt;=<name>pMain</name>-&gt;<name>nPage</name></expr> )</condition><then><block>{
+          <if>if<condition>( <expr>0==<call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>pWritable</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+            <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsRead</name><argument_list>(<argument><expr><name>pReal</name></expr></argument>, <argument><expr><name>aPage</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>, <argument><expr><name>iOff</name>+4</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+              <decl_stmt><decl><type><name>u32</name></type> <name>cksum</name> =<init> <expr><call><name>genCksum</name><argument_list>(<argument><expr><name>aPage</name></expr></argument>, <argument><expr><name>pMain</name>-&gt;<name>nPagesize</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+              <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>cksum</name>==<name>pMain</name>-&gt;<name><name>aCksum</name><index>[<expr><name>pgno</name>-1</expr>]</index></name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+            }</block></then></if>
+          }</block></then></if>
+          <expr_stmt><expr><call><name>sqlite3BitvecSet</name><argument_list>(<argument><expr><name>pMain</name>-&gt;<name>pWritable</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+        <expr_stmt><expr><name>iOff</name> += (8 + <name>pMain</name>-&gt;<name>nPagesize</name>)</expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></for>
+
+    <expr_stmt><expr><name>iOff</name> = ((<name>iOff</name> + (<name>nSector</name>-1)) / <name>nSector</name>) * <name>nSector</name></expr>;</expr_stmt>
+  }</block></while>
+
+<label><name>finish_rjf</name>:</label>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>aPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_IOERR_SHORT_READ</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Sync an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_JOURNAL</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>jt_file</name> *</type><name>pMain</name></decl>;</decl_stmt>                   <comment type="block">/* The associated database file */</comment>
+
+    <comment type="block">/* The journal file is being synced. At this point, we inspect the 
+    ** contents of the file up to this point and set each bit in the 
+    ** jt_file.pWritable bitvec of the main database file associated with
+    ** this journal file.
+    */</comment>
+    <expr_stmt><expr><name>pMain</name> = <call><name>locateDatabaseHandle</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* Set the bitvec values */</comment>
+    <if>if<condition>( <expr><name>pMain</name>-&gt;<name>pWritable</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pMain</name>-&gt;<name>nSync</name>++</expr>;</expr_stmt>
+      <expr_stmt><expr><name>rc</name> = <call><name>readJournalFile</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>pMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <return>return <expr><name>rc</name></expr>;</return>
+      }</block></then></if>
+    }</block></then></if>
+  }</block></then></if>
+
+  <return>return <expr><call><name>sqlite3OsSync</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the current file-size of an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>sqlite_int64</name> *</type><name>pSize</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsFileSize</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>pSize</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Lock an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>eLock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsLock</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>eLock</name>&gt;<name>p</name>-&gt;<name>eLock</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>eLock</name> = <name>eLock</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Unlock an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtUnlock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>eLock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsUnlock</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>eLock</name>&lt;<name>p</name>-&gt;<name>eLock</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>eLock</name> = <name>eLock</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Check if another file-handle holds a RESERVED lock on an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtCheckReservedLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsCheckReservedLock</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>pResOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** File control method. For custom operations on an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtFileControl</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pArg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsFileControl</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>pArg</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the sector-size in bytes for an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtSectorSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsSectorSize</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the device characteristic flags supported by an jt-file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtDeviceCharacteristics</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>sqlite3OsDeviceCharacteristics</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Open an jt file handle.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtOpen</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>,
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>,
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,
+  <param><decl><type><name>int</name> *</type><name>pOutFlags</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>jt_file</name> *</type><name>p</name> =<init> <expr>(<name>jt_file</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pReal</name> = (<name>sqlite3_file</name> *)&amp;<name><name>p</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pReal</name>-&gt;<name>pMethods</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3OsOpen</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pOutFlags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_OK</name> || <name>p</name>-&gt;<name>pReal</name>-&gt;<name>pMethods</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pFile</name>-&gt;<name>pMethods</name> = &amp;<name>jt_io_methods</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>eLock</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>zName</name> = <name>zName</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>flags</name> = <name>flags</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>pWritable</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>aCksum</name> = 0</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>zName</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>pNext</name> = <name>g</name>.<name>pList</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>g</name>.<name>pList</name> = <name>p</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Delete the file located at zPath. If the dirSync argument is true,
+** ensure the file-system modifications are synced to disk before
+** returning.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtDelete</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, <param><decl><type><name>int</name></type> <name>dirSync</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nPath</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>zPath</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>nPath</name>&gt;8 &amp;&amp; 0==<call><name>strcmp</name><argument_list>(<argument><expr>"-journal"</expr></argument>, <argument><expr>&amp;<name><name>zPath</name><index>[<expr><name>nPath</name>-8</expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <comment type="block">/* Deleting a journal file. The end of a transaction. */</comment>
+    <decl_stmt><decl><type><name>jt_file</name> *</type><name>pMain</name> =<init> <expr><call><name>locateDatabaseHandle</name><argument_list>(<argument><expr><name>zPath</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pMain</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>closeTransaction</name><argument_list>(<argument><expr><name>pMain</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <return>return <expr><call><name>sqlite3OsDelete</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>dirSync</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Test for access permissions. Return true if the requested permission
+** is available, or false otherwise.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtAccess</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, 
+  <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>
+)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3OsAccess</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pResOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Populate buffer zOut with the full canonical pathname corresponding
+** to the pathname in zPath. zOut is guaranteed to point to a buffer
+** of at least (JT_MAX_PATHNAME+1) bytes.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtFullPathname</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>nOut</name></decl></param>, 
+  <param><decl><type><name>char</name> *</type><name>zOut</name></decl></param>
+)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3OsFullPathname</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>nOut</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Open the dynamic library located at zPath and return a handle.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>jtDlOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>g</name>.<name>pVfs</name>-&gt;<call><name>xDlOpen</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Populate the buffer zErrMsg (size nByte bytes) with a human readable
+** utf-8 string describing the most recent error encountered associated 
+** with dynamic libraries.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>jtDlError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zErrMsg</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>g</name>.<name>pVfs</name>-&gt;<call><name>xDlError</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Return a pointer to the symbol zSymbol in the dynamic library pHandle.
+*/</comment>
+<decl_stmt><decl><type><name>static</name></type> <name>void</name> <argument_list>(<argument><expr>*<call><name>jtDlSym</name><argument_list>(<argument><expr><name>sqlite3_vfs</name> *<name>pVfs</name></expr></argument>, <argument><expr><name>void</name> *<name>p</name></expr></argument>, <argument><expr><name>const</name> <name>char</name> *<name>zSym</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list><argument_list>(<argument><expr><name>void</name></expr></argument>)</argument_list><block>{
+  <return>return <expr><name>g</name>.<name>pVfs</name>-&gt;<call><name>xDlSym</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>zSym</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></decl></decl_stmt>
+
+<comment type="block">/*
+** Close the dynamic library handle pHandle.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>jtDlClose</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pHandle</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>g</name>.<name>pVfs</name>-&gt;<call><name>xDlClose</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>pHandle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Populate the buffer pointed to by zBufOut with nByte bytes of 
+** random data.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtRandomness</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBufOut</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3OsRandomness</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zBufOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Sleep for nMicro microseconds. Return the number of microseconds 
+** actually slept.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtSleep</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nMicro</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3OsSleep</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>nMicro</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the current time as a Julian Day number in *pTimeOut.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>jtCurrentTime</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name></decl></param>, <param><decl><type><name>double</name> *</type><name>pTimeOut</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3OsCurrentTime</name><argument_list>(<argument><expr><name>g</name>.<name>pVfs</name></expr></argument>, <argument><expr><name>pTimeOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/**************************************************************************
+** Start of public API.
+*/</comment>
+
+<comment type="block">/*
+** Configure the jt VFS as a wrapper around the VFS named by parameter 
+** zWrap. If the isDefault parameter is true, then the jt VFS is installed
+** as the new default VFS for SQLite connections. If isDefault is not
+** true, then the jt VFS is installed as non-default. In this case it
+** is available via its name, "jt".
+*/</comment>
+<function><type><name>int</name></type> <name>jt_register</name><parameter_list>(<param><decl><type><name>char</name> *</type><name>zWrap</name></decl></param>, <param><decl><type><name>int</name></type> <name>isDefault</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>g</name>.<name>pVfs</name> = <call><name>sqlite3_vfs_find</name><argument_list>(<argument><expr><name>zWrap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>g</name>.<name>pVfs</name>==0</expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>jt_vfs</name>.<name>szOsFile</name> = <call><name>sizeof</name><argument_list>(<argument><expr><name>jt_file</name></expr></argument>)</argument_list></call> + <name>g</name>.<name>pVfs</name>-&gt;<name>szOsFile</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_vfs_register</name><argument_list>(<argument><expr>&amp;<name>jt_vfs</name></expr></argument>, <argument><expr><name>isDefault</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Uninstall the jt VFS, if it is installed.
+*/</comment>
+<function><type><name>void</name></type> <name>jt_unregister</name><parameter_list>()</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3_vfs_unregister</name><argument_list>(<argument><expr>&amp;<name>jt_vfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

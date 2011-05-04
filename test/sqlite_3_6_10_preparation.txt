@@ -1,0 +1,9 @@
+tar xzf sqlite-3.6.10.tar.gz
+mv sqlite-3.6.10 sqlite
+cd sqlite
+mv src Base
+cd Base
+for i in `ls *.c`;
+do
+	src2srcml2009 $i $i.xml
+done

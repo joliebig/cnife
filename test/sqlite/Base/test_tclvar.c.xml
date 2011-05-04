@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_tclvar.c" filename=""><comment type="block">/*
+** 2006 June 13
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Code for testing the virtual table interfaces.  This code
+** is not included in the SQLite library.  It is used for automated
+** testing of the SQLite library.
+**
+** The emphasis of this file is a virtual table that provides
+** access to TCL variables.
+**
+** $Id: test_tclvar.c,v 1.17 2008/08/12 14:48:41 danielk1977 Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_VIRTUALTABLE</name></cpp:ifndef>
+
+<typedef>typedef <type><struct>struct <name>tclvar_vtab</name> tclvar_vtab;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>tclvar_cursor</name> tclvar_cursor;</struct></type></typedef>
+
+<comment type="block">/* 
+** A tclvar virtual-table object 
+*/</comment>
+<struct>struct <name>tclvar_vtab</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_vtab</name></type> <name>base</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/* A tclvar cursor object */</comment>
+<struct>struct <name>tclvar_cursor</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_vtab_cursor</name></type> <name>base</name></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pList1</name></decl>;</decl_stmt>     <comment type="block">/* Result of [info vars ?pattern?] */</comment>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pList2</name></decl>;</decl_stmt>     <comment type="block">/* Result of [array names [lindex $pList1 $i1]] */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>i1</name></decl>;</decl_stmt>              <comment type="block">/* Current item in pList1 */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>i2</name></decl>;</decl_stmt>              <comment type="block">/* Current item (if any) in pList2 */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/* Methods for the tclvar module */</comment>
+<function><type><name>static</name> <name>int</name></type> <name>tclvarConnect</name><parameter_list>(
+  <param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>,
+  <param><decl><type><name>void</name> *</type><name>pAux</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *<name>const</name>*</type><name>argv</name></decl></param>,
+  <param><decl><type><name>sqlite3_vtab</name> **</type><name>ppVtab</name></decl></param>,
+  <param><decl><type><name>char</name> **</type><name>pzErr</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>tclvar_vtab</name> *</type><name>pVtab</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name></type> <name><name>zSchema</name><index>[]</index></name> =<init> 
+     <expr>"CREATE TABLE whatever(name TEXT, arrayname TEXT, value TEXT)"</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pVtab</name> = <call><name>sqlite3MallocZero</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>pVtab</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pVtab</name>==0</expr> )</condition><then> <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return></then></if>
+  <expr_stmt><expr>*<name>ppVtab</name> = &amp;<name>pVtab</name>-&gt;<name>base</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pVtab</name>-&gt;<name>interp</name> = (<name>Tcl_Interp</name> *)<name>pAux</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_declare_vtab</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSchema</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+<comment type="block">/* Note that for this virtual table, the xCreate and xConnect
+** methods are identical. */</comment>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarDisconnect</name><parameter_list>(<param><decl><type><name>sqlite3_vtab</name> *</type><name>pVtab</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pVtab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+<comment type="block">/* The xDisconnect and xDestroy methods are also the same */</comment>
+
+<comment type="block">/*
+** Open a new tclvar cursor.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>tclvarOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vtab</name> *</type><name>pVTab</name></decl></param>, <param><decl><type><name>sqlite3_vtab_cursor</name> **</type><name>ppCursor</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3MallocZero</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>tclvar_cursor</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>ppCursor</name> = &amp;<name>pCur</name>-&gt;<name>base</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Close a tclvar cursor.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>tclvarClose</name><parameter_list>(<param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>cur</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name> =<init> <expr>(<name>tclvar_cursor</name> *)<name>cur</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pCur</name>-&gt;<name>pList1</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pList1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>pCur</name>-&gt;<name>pList2</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pList2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Returns 1 if data is ready, or 0 if not.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>next2</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>, <param><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name></decl></param>, <param><decl><type><name>Tcl_Obj</name> *</type><name>pObj</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>p</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pObj</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr>!<name>pCur</name>-&gt;<name>pList2</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name> = <call><name>Tcl_NewStringObj</name><argument_list>(<argument><expr>"array names"</expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_IncrRefCount</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>pObj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_EvalObjEx</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>TCL_EVAL_GLOBAL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pCur</name>-&gt;<name>pList2</name> = <call><name>Tcl_GetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_IncrRefCount</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pList2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pCur</name>-&gt;<name>i2</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><name>pCur</name>-&gt;<name>i2</name>++</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_ListObjLength</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>pList2</name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pCur</name>-&gt;<name>i2</name>&gt;=<name>n</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pList2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pCur</name>-&gt;<name>pList2</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>pCur</name>-&gt;<name>i2</name> = 0</expr>;</expr_stmt>
+        <return>return <expr>0</expr>;</return>
+      }</block></then></if>
+    }</block></else></if>
+  }</block></then></if>
+
+  <return>return <expr>1</expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarNext</name><parameter_list>(<param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>cur</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pObj</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>ok</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name> =<init> <expr>(<name>tclvar_cursor</name> *)<name>cur</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Interp</name> *</type><name>interp</name> =<init> <expr>((<name>tclvar_vtab</name> *)(<name>cur</name>-&gt;<name>pVtab</name>))-&gt;<name>interp</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>Tcl_ListObjLength</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>pList1</name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr>!<name>ok</name> &amp;&amp; <name>pCur</name>-&gt;<name>i1</name>&lt;<name>n</name></expr> )</condition><block>{
+    <expr_stmt><expr><call><name>Tcl_ListObjIndex</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>pList1</name></expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>i1</name></expr></argument>, <argument><expr>&amp;<name>pObj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>ok</name> = <call><name>next2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pCur</name></expr></argument>, <argument><expr><name>pObj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>!<name>ok</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pCur</name>-&gt;<name>i1</name>++</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></while>
+
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarFilter</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>pVtabCursor</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>idxNum</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>idxStr</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>, <param><decl><type><name>sqlite3_value</name> **</type><name>argv</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name> =<init> <expr>(<name>tclvar_cursor</name> *)<name>pVtabCursor</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Interp</name> *</type><name>interp</name> =<init> <expr>((<name>tclvar_vtab</name> *)(<name>pVtabCursor</name>-&gt;<name>pVtab</name>))-&gt;<name>interp</name></expr></init></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>p</name> =<init> <expr><call><name>Tcl_NewStringObj</name><argument_list>(<argument><expr>"info vars"</expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>Tcl_IncrRefCount</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>argc</name>==0 || <name>argc</name>==1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>argc</name>==1</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pArg</name> =<init> <expr><call><name>Tcl_NewStringObj</name><argument_list>(<argument><expr>(<name>char</name>*)<call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>pArg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>Tcl_EvalObjEx</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>TCL_EVAL_GLOBAL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCur</name>-&gt;<name>pList1</name> = <call><name>Tcl_GetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_IncrRefCount</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pList1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pCur</name>-&gt;<name>i1</name>==0 &amp;&amp; <name>pCur</name>-&gt;<name>i2</name>==0 &amp;&amp; <name>pCur</name>-&gt;<name>pList2</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><call><name>tclvarNext</name><argument_list>(<argument><expr><name>pVtabCursor</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarColumn</name><parameter_list>(<param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>cur</name></decl></param>, <param><decl><type><name>sqlite3_context</name> *</type><name>ctx</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>p1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>p2</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z1</name></decl>;</decl_stmt> 
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z2</name> =<init> <expr>""</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name> =<init> <expr>(<name>tclvar_cursor</name>*)<name>cur</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_Interp</name> *</type><name>interp</name> =<init> <expr>((<name>tclvar_vtab</name> *)<name>cur</name>-&gt;<name>pVtab</name>)-&gt;<name>interp</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>Tcl_ListObjIndex</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>pList1</name></expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>i1</name></expr></argument>, <argument><expr>&amp;<name>p1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_ListObjIndex</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>pList2</name></expr></argument>, <argument><expr><name>pCur</name>-&gt;<name>i2</name></expr></argument>, <argument><expr>&amp;<name>p2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>z1</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name>p1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p2</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z2</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name>p2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <switch>switch <condition>(<expr><name>i</name></expr>)</condition> <block>{
+    <case>case <expr>0</expr>: <block>{
+      <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>ctx</name></expr></argument>, <argument><expr><name>z1</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr>1</expr>: <block>{
+      <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>ctx</name></expr></argument>, <argument><expr><name>z2</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+    </case><case>case <expr>2</expr>: <block>{
+      <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pVal</name> =<init> <expr><call><name>Tcl_GetVar2Ex</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>z1</name></expr></argument>, <argument><expr>*<name>z2</name>?<name>z2</name>:0</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>sqlite3_result_text</name><argument_list>(<argument><expr><name>ctx</name></expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+  </case>}</block></switch>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarRowid</name><parameter_list>(<param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>cur</name></decl></param>, <param><decl><type><name>sqlite_int64</name> *</type><name>pRowid</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr>*<name>pRowid</name> = 0</expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarEof</name><parameter_list>(<param><decl><type><name>sqlite3_vtab_cursor</name> *</type><name>cur</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>tclvar_cursor</name> *</type><name>pCur</name> =<init> <expr>(<name>tclvar_cursor</name>*)<name>cur</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr>(<name>pCur</name>-&gt;<name>pList2</name>?0:1)</expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>tclvarBestIndex</name><parameter_list>(<param><decl><type><name>sqlite3_vtab</name> *</type><name>tab</name></decl></param>, <param><decl><type><name>sqlite3_index_info</name> *</type><name>pIdxInfo</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>ii</name>&lt;<name>pIdxInfo</name>-&gt;<name>nConstraint</name></expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type>struct <name>sqlite3_index_constraint</name> <name>const</name> *</type><name>pCons</name> =<init> <expr>&amp;<name>pIdxInfo</name>-&gt;<name><name>aConstraint</name><index>[<expr><name>ii</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pCons</name>-&gt;<name>iColumn</name>==0 &amp;&amp; <name>pCons</name>-&gt;<name>usable</name>
+           &amp;&amp; <name>pCons</name>-&gt;<name>op</name>==<name>SQLITE_INDEX_CONSTRAINT_EQ</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type>struct <name>sqlite3_index_constraint_usage</name> *</type><name>pUsage</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>pUsage</name> = &amp;<name>pIdxInfo</name>-&gt;<name><name>aConstraintUsage</name><index>[<expr><name>ii</name></expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pUsage</name>-&gt;<name>omit</name> = 0</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pUsage</name>-&gt;<name>argvIndex</name> = 1</expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+
+  <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>ii</name>&lt;<name>pIdxInfo</name>-&gt;<name>nConstraint</name></expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type>struct <name>sqlite3_index_constraint</name> <name>const</name> *</type><name>pCons</name> =<init> <expr>&amp;<name>pIdxInfo</name>-&gt;<name><name>aConstraint</name><index>[<expr><name>ii</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pCons</name>-&gt;<name>iColumn</name>==0 &amp;&amp; <name>pCons</name>-&gt;<name>usable</name>
+           &amp;&amp; <name>pCons</name>-&gt;<name>op</name>==<name>SQLITE_INDEX_CONSTRAINT_MATCH</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type>struct <name>sqlite3_index_constraint_usage</name> *</type><name>pUsage</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>pUsage</name> = &amp;<name>pIdxInfo</name>-&gt;<name><name>aConstraintUsage</name><index>[<expr><name>ii</name></expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pUsage</name>-&gt;<name>omit</name> = 1</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pUsage</name>-&gt;<name>argvIndex</name> = 1</expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** A virtual table module that provides read-only access to a
+** Tcl global variable namespace.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>sqlite3_module</name></type> <name>tclvarModule</name> =<init> <expr><block>{
+  <expr>0</expr>,                         <comment type="block">/* iVersion */</comment>
+  <expr><name>tclvarConnect</name></expr>,
+  <expr><name>tclvarConnect</name></expr>,
+  <expr><name>tclvarBestIndex</name></expr>,
+  <expr><name>tclvarDisconnect</name></expr>, 
+  <expr><name>tclvarDisconnect</name></expr>,
+  <expr><name>tclvarOpen</name></expr>,                  <comment type="block">/* xOpen - open a cursor */</comment>
+  <expr><name>tclvarClose</name></expr>,                 <comment type="block">/* xClose - close a cursor */</comment>
+  <expr><name>tclvarFilter</name></expr>,                <comment type="block">/* xFilter - configure scan constraints */</comment>
+  <expr><name>tclvarNext</name></expr>,                  <comment type="block">/* xNext - advance a cursor */</comment>
+  <expr><name>tclvarEof</name></expr>,                   <comment type="block">/* xEof - check for end of scan */</comment>
+  <expr><name>tclvarColumn</name></expr>,                <comment type="block">/* xColumn - read data */</comment>
+  <expr><name>tclvarRowid</name></expr>,                 <comment type="block">/* xRowid - read data */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xUpdate */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xBegin */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xSync */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xCommit */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xRollback */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xFindMethod */</comment>
+  <expr>0</expr>,                           <comment type="block">/* xRename */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** Decode a pointer to an sqlite3 object.
+*/</comment>
+<function_decl><type><name>extern</name> <name>int</name></type> <name>getDbPointer</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zA</name></decl></param>, <param><decl><type><name>sqlite3</name> **</type><name>ppDb</name></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/*
+** Register the echo virtual table module.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>register_tclvar_module</name><parameter_list>(
+  <param><decl><type><name>ClientData</name></type> <name>clientData</name></decl></param>, <comment type="block">/* Pointer to sqlite3_enable_XXX function */</comment>
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>  <comment type="block">/* Command arguments */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"DB"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_VIRTUALTABLE</name></cpp:ifndef>
+  <expr_stmt><expr><call><name>sqlite3_create_module</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"tclvar"</expr></argument>, <argument><expr>&amp;<name>tclvarModule</name></expr></argument>, <argument><expr>(<name>void</name> *)<name>interp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*
+** Register commands with the TCL interpreter.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetesttclvar_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_VIRTUALTABLE</name></cpp:ifndef>
+  <decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+     <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+     <decl_stmt><decl><type><name>Tcl_ObjCmdProc</name> *</type><name>xProc</name></decl>;</decl_stmt>
+     <decl_stmt><decl><type><name>void</name> *</type><name>clientData</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aObjCmd</name><index>[]</index></name> =<init> <expr><block>{
+     <expr><block>{ <expr>"register_tclvar_module"</expr>,   <expr><name>register_tclvar_module</name></expr>, <expr>0</expr> }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aObjCmd</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aObjCmd</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, 
+        <argument><expr><name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>xProc</name></expr></argument>, <argument><expr><name><name>aObjCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>clientData</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

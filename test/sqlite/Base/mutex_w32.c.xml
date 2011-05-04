@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="mutex_w32.c" filename=""><comment type="block">/*
+** 2007 August 14
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains the C functions that implement mutexes for win32
+**
+** $Id: mutex_w32.c,v 1.13 2008/12/08 18:19:18 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** The code in this file is only used if we are compiling multithreaded
+** on a win32 system.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MUTEX_W32</name></cpp:ifdef>
+
+<comment type="block">/*
+** Each recursive mutex is an instance of the following structure.
+*/</comment>
+<struct>struct <name>sqlite3_mutex</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>CRITICAL_SECTION</name></type> <name>mutex</name></decl>;</decl_stmt>    <comment type="block">/* Mutex controlling the lock */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>id</name></decl>;</decl_stmt>                    <comment type="block">/* Mutex type */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRef</name></decl>;</decl_stmt>                  <comment type="block">/* Number of enterances */</comment>
+  <decl_stmt><decl><type><name>DWORD</name></type> <name>owner</name></decl>;</decl_stmt>               <comment type="block">/* Thread holding this mutex */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Return true (non-zero) if we are running under WinNT, Win2K, WinXP,
+** or WinCE.  Return false (zero) for Win95, Win98, or WinME.
+**
+** Here is an interesting observation:  Win95, Win98, and WinME lack
+** the LockFileEx() API.  But we can still statically link against that
+** API as long as we don't call it win running Win95/98/ME.  A call to
+** this routine is used to determine if the host is Win95/98/ME or
+** WinNT/2K/XP so that we will know whether or not we can safely call
+** the LockFileEx() API.
+**
+** mutexIsNT() is only used for the TryEnterCriticalSection() API call,
+** which is only available if your application was compiled with 
+** _WIN32_WINNT defined to a value &gt;= 0x0400.  Currently, the only
+** call to TryEnterCriticalSection() is #ifdef'ed out, so #ifdef 
+** this out as well.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>0</expr></cpp:if>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_WINCE</name></expr></cpp:if>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>mutexIsNT</name>()  (1)</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  static int mutexIsNT(void){
+    static int osType = 0;
+    if( osType==0 ){
+      OSVERSIONINFO sInfo;
+      sInfo.dwOSVersionInfoSize = sizeof(sInfo);
+      GetVersionEx(&amp;sInfo);
+      osType = sInfo.dwPlatformId==VER_PLATFORM_WIN32_NT ? 2 : 1;
+    }
+    return osType==2;
+  }
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OS_WINCE */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+<comment type="block">/*
+** The sqlite3_mutex_held() and sqlite3_mutex_notheld() routine are
+** intended for use only inside assert() statements.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winMutexHeld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>p</name>-&gt;<name>nRef</name>!=0 &amp;&amp; <name>p</name>-&gt;<name>owner</name>==<call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>winMutexNotheld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>p</name>-&gt;<name>nRef</name>==0 || <name>p</name>-&gt;<name>owner</name>!=<call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*
+** Initialize and deinitialize the mutex subsystem.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>winMutexInit</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ <return>return <expr><name>SQLITE_OK</name></expr>;</return> }</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>winMutexEnd</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ <return>return <expr><name>SQLITE_OK</name></expr>;</return> }</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_alloc() routine allocates a new
+** mutex and returns a pointer to it.  If it returns NULL
+** that means that a mutex could not be allocated.  SQLite
+** will unwind its stack and return an error.  The argument
+** to sqlite3_mutex_alloc() is one of these integer constants:
+**
+** &lt;ul&gt;
+** &lt;li&gt;  SQLITE_MUTEX_FAST               0
+** &lt;li&gt;  SQLITE_MUTEX_RECURSIVE          1
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_MASTER      2
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_MEM         3
+** &lt;li&gt;  SQLITE_MUTEX_STATIC_PRNG        4
+** &lt;/ul&gt;
+**
+** The first two constants cause sqlite3_mutex_alloc() to create
+** a new mutex.  The new mutex is recursive when SQLITE_MUTEX_RECURSIVE
+** is used but not necessarily so when SQLITE_MUTEX_FAST is used.
+** The mutex implementation does not need to make a distinction
+** between SQLITE_MUTEX_RECURSIVE and SQLITE_MUTEX_FAST if it does
+** not want to.  But SQLite will only request a recursive mutex in
+** cases where it really needs one.  If a faster non-recursive mutex
+** implementation is available on the host platform, the mutex subsystem
+** might return such a mutex in response to SQLITE_MUTEX_FAST.
+**
+** The other allowed parameters to sqlite3_mutex_alloc() each return
+** a pointer to a static preexisting mutex.  Three static mutexes are
+** used by the current version of SQLite.  Future versions of SQLite
+** may add additional static mutexes.  Static mutexes are for internal
+** use by SQLite only.  Applications that use SQLite mutexes should
+** use only the dynamic mutexes returned by SQLITE_MUTEX_FAST or
+** SQLITE_MUTEX_RECURSIVE.
+**
+** Note that if one of the dynamic mutex parameters (SQLITE_MUTEX_FAST
+** or SQLITE_MUTEX_RECURSIVE) is used then sqlite3_mutex_alloc()
+** returns a different mutex on every call.  But for the static 
+** mutex types, the same mutex is returned on every call that has
+** the same type number.
+*/</comment>
+<function><type><name>static</name> <name>sqlite3_mutex</name> *</type><name>winMutexAlloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>iType</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl>;</decl_stmt>
+
+  <switch>switch<condition>( <expr><name>iType</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_MUTEX_FAST</name></expr>:
+    </case><case>case <expr><name>SQLITE_MUTEX_RECURSIVE</name></expr>: <block>{
+      <expr_stmt><expr><name>p</name> = <call><name>sqlite3MallocZero</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>id</name> = <name>iType</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>InitializeCriticalSection</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <break>break;</break>
+    }</block>
+    </case><default>default: <block>{
+      <decl_stmt><decl><type><name>static</name> <name>sqlite3_mutex</name></type> <name><name>staticMutexes</name><index>[<expr>6</expr>]</index></name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>isInit</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+      <while>while<condition>( <expr>!<name>isInit</name></expr> )</condition><block>{
+        <decl_stmt><decl><type><name>static</name> <name>long</name></type> <name>lock</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+        <if>if<condition>( <expr><call><name>InterlockedIncrement</name><argument_list>(<argument><expr>&amp;<name>lock</name></expr></argument>)</argument_list></call>==1</expr> )</condition><then><block>{
+          <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+          <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>staticMutexes</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>staticMutexes</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+            <expr_stmt><expr><call><name>InitializeCriticalSection</name><argument_list>(<argument><expr>&amp;<name><name>staticMutexes</name><index>[<expr><name>i</name></expr>]</index></name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          }</block></for>
+          <expr_stmt><expr><name>isInit</name> = 1</expr>;</expr_stmt>
+        }</block></then><else>else<block>{
+          <expr_stmt><expr><call><name>Sleep</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></else></if>
+      }</block></while>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iType</name>-2 &gt;= 0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iType</name>-2 &lt; <call><name>sizeof</name><argument_list>(<argument><expr><name>staticMutexes</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>staticMutexes</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name> = &amp;<name><name>staticMutexes</name><index>[<expr><name>iType</name>-2</expr>]</index></name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>id</name> = <name>iType</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block>
+  </default>}</block></switch>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** This routine deallocates a previously
+** allocated mutex.  SQLite is careful to deallocate every
+** mutex that it allocates.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>winMutexFree</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_FAST</name> || <name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>DeleteCriticalSection</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_enter() and sqlite3_mutex_try() routines attempt
+** to enter a mutex.  If another thread is already within the mutex,
+** sqlite3_mutex_enter() will block and sqlite3_mutex_try() will return
+** SQLITE_BUSY.  The sqlite3_mutex_try() interface returns SQLITE_OK
+** upon successful entry.  Mutexes created using SQLITE_MUTEX_RECURSIVE can
+** be entered multiple times by the same thread.  In such cases the,
+** mutex must be exited an equal number of times before another thread
+** can enter.  If the same thread tries to enter any other kind of mutex
+** more than once, the behavior is undefined.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>winMutexEnter</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name> || <call><name>winMutexNotheld</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>EnterCriticalSection</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>owner</name> = <call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</expr_stmt> 
+  <expr_stmt><expr><name>p</name>-&gt;<name>nRef</name>++</expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>winMutexTry</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_BUSY</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name> || <call><name>winMutexNotheld</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <comment type="block">/*
+  ** The sqlite3_mutex_try() routine is very rarely used, and when it
+  ** is used it is merely an optimization.  So it is OK for it to always
+  ** fail.  
+  **
+  ** The TryEnterCriticalSection() interface is only available on WinNT.
+  ** And some windows compilers complain if you try to use it without
+  ** first doing some #defines that prevent SQLite from building on Win98.
+  ** For that reason, we will omit this optimization for now.  See
+  ** ticket #2685.
+  */</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>0</expr></cpp:if>
+  if( mutexIsNT() &amp;&amp; TryEnterCriticalSection(&amp;p-&gt;mutex) ){
+    p-&gt;owner = GetCurrentThreadId();
+    p-&gt;nRef++;
+    rc = SQLITE_OK;
+  }
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The sqlite3_mutex_leave() routine exits a mutex that was
+** previously entered by the same thread.  The behavior
+** is undefined if the mutex is not currently entered or
+** is not currently allocated.  SQLite will never do either.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>winMutexLeave</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>owner</name>==<call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nRef</name>--</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>nRef</name>==0 || <name>p</name>-&gt;<name>id</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LeaveCriticalSection</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>sqlite3_mutex_methods</name> *</type><name>sqlite3DefaultMutex</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>sqlite3_mutex_methods</name></type> <name>sMutex</name> =<init> <expr><block>{
+    <expr><name>winMutexInit</name></expr>,
+    <expr><name>winMutexEnd</name></expr>,
+    <expr><name>winMutexAlloc</name></expr>,
+    <expr><name>winMutexFree</name></expr>,
+    <expr><name>winMutexEnter</name></expr>,
+    <expr><name>winMutexTry</name></expr>,
+    <expr><name>winMutexLeave</name></expr>,
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+    <expr><name>winMutexHeld</name></expr>,
+    <expr><name>winMutexNotheld</name>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+    0</expr>,
+    <expr>0</expr>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <return>return <expr>&amp;<name>sMutex</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_MUTEX_W32 */</comment>
+</unit>

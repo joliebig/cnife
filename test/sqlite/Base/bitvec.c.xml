@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="bitvec.c" filename=""><comment type="block">/*
+** 2008 February 16
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file implements an object that represents a fixed-length
+** bitmap.  Bits are numbered starting with 1.
+**
+** A bitmap is used to record which pages of a database file have been
+** journalled during a transaction, or which pages have the "dont-write"
+** property.  Usually only a few pages are meet either condition.
+** So the bitmap is usually sparse and has low cardinality.
+** But sometimes (for example when during a DROP of a large table) most
+** or all of the pages in a database can get journalled.  In those cases, 
+** the bitmap becomes dense with high cardinality.  The algorithm needs 
+** to handle both cases well.
+**
+** The size of the bitmap is fixed when the object is created.
+**
+** All bits are clear when the bitmap is created.  Individual bits
+** may be set or cleared one at a time.
+**
+** Test operations are about 100 times more common that set operations.
+** Clear operations are exceedingly rare.  There are usually between
+** 5 and 500 set operations per Bitvec object, though the number of sets can
+** sometimes grow into tens of thousands or larger.  The size of the
+** Bitvec object is the number of pages in the database file at the
+** start of a transaction, and is thus usually less than a few thousand,
+** but can be as large as 2 billion for a really big database.
+**
+** @(#) $Id: bitvec.c,v 1.10 2009/01/02 21:39:39 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/* Size of the Bitvec structure in bytes. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_SZ</name>        512</cpp:define>
+
+<comment type="block">/* Round the union size down to the nearest pointer boundary, since that's how 
+** it will be aligned within the Bitvec struct. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_USIZE</name>     (((BITVEC_SZ-(3*sizeof(u32)))/sizeof(Bitvec*))*sizeof(Bitvec*))</cpp:define>
+
+<comment type="block">/* Type of the array "element" for the bitmap representation. 
+** Should be a power of 2, and ideally, evenly divide into BITVEC_USIZE. 
+** Setting this to the "natural word" size of your CPU may improve
+** performance. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_TELEM</name>     <name>u8</name></cpp:define>
+<comment type="block">/* Size, in bits, of the bitmap element. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_SZELEM</name>    8</cpp:define>
+<comment type="block">/* Number of elements in a bitmap array. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_NELEM</name>     (BITVEC_USIZE/sizeof(BITVEC_TELEM))</cpp:define>
+<comment type="block">/* Number of bits in the bitmap array. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_NBIT</name>      (BITVEC_NELEM*BITVEC_SZELEM)</cpp:define>
+
+<comment type="block">/* Number of u32 values in hash table. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_NINT</name>      (BITVEC_USIZE/sizeof(u32))</cpp:define>
+<comment type="block">/* Maximum number of entries in hash table before 
+** sub-dividing and re-hashing. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_MXHASH</name>    (BITVEC_NINT/2)</cpp:define>
+<comment type="block">/* Hashing function for the aHash representation.
+** Empirical testing showed that the *37 multiplier 
+** (an arbitrary prime)in the hash function provided 
+** no fewer collisions than the no-op *1. */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_HASH</name>(X)   (((X)*1)%BITVEC_NINT)</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BITVEC_NPTR</name>      (BITVEC_USIZE/sizeof(Bitvec *))</cpp:define>
+
+
+<comment type="block">/*
+** A bitmap is an instance of the following structure.
+**
+** This bitmap records the existance of zero or more bits
+** with values between 1 and iSize, inclusive.
+**
+** There are three possible representations of the bitmap.
+** If iSize&lt;=BITVEC_NBIT, then Bitvec.u.aBitmap[] is a straight
+** bitmap.  The least significant bit is bit 1.
+**
+** If iSize&gt;BITVEC_NBIT and iDivisor==0 then Bitvec.u.aHash[] is
+** a hash table that will hold up to BITVEC_MXHASH distinct values.
+**
+** Otherwise, the value i is redirected into one of BITVEC_NPTR
+** sub-bitmaps pointed to by Bitvec.u.apSub[].  Each subbitmap
+** handles up to iDivisor separate values of i.  apSub[0] holds
+** values between 1 and iDivisor.  apSub[1] holds values between
+** iDivisor+1 and 2*iDivisor.  apSub[N] holds values between
+** N*iDivisor+1 and (N+1)*iDivisor.  Each subbitmap is normalized
+** to hold deal with values between 1 and iDivisor.
+*/</comment>
+<struct>struct <name>Bitvec</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>u32</name></type> <name>iSize</name></decl>;</decl_stmt>      <comment type="block">/* Maximum bit index.  Max iSize is 4,294,967,296. */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nSet</name></decl>;</decl_stmt>       <comment type="block">/* Number of bits that are set - only valid for aHash element */</comment>
+                  <comment type="block">/* Max nSet is BITVEC_NINT.  For BITVEC_SZ of 512, this would be 125. */</comment>
+  <decl_stmt><decl><type><name>u32</name></type> <name>iDivisor</name></decl>;</decl_stmt>   <comment type="block">/* Number of bits handled by each apSub[] entry. */</comment>
+                  <comment type="block">/* Should &gt;=0 for apSub element. */</comment>
+                  <comment type="block">/* Max iDivisor is max(u32) / BITVEC_NPTR + 1.  */</comment>
+                  <comment type="block">/* For a BITVEC_SZ of 512, this would be 34,359,739. */</comment>
+  <decl_stmt><decl><type><struct>union <block>{<public type="default"/>
+    <decl_stmt><decl><type><name>BITVEC_TELEM</name></type> <name><name>aBitmap</name><index>[<expr><name>BITVEC_NELEM</name></expr>]</index></name></decl>;</decl_stmt>    <comment type="block">/* Bitmap representation */</comment>
+    <decl_stmt><decl><type><name>u32</name></type> <name><name>aHash</name><index>[<expr><name>BITVEC_NINT</name></expr>]</index></name></decl>;</decl_stmt>      <comment type="block">/* Hash table representation */</comment>
+    <decl_stmt><decl><type><name>Bitvec</name> *</type><name><name>apSub</name><index>[<expr><name>BITVEC_NPTR</name></expr>]</index></name></decl>;</decl_stmt>  <comment type="block">/* Recursive representation */</comment>
+  }</block> <decl><name>u</name></decl>;</struct></type></decl></decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** Create a new bitmap object able to handle bits between 0 and iSize,
+** inclusive.  Return a pointer to the new object.  Return NULL if 
+** malloc fails.
+*/</comment>
+<function><type><name>Bitvec</name> *</type><name>sqlite3BitvecCreate</name><parameter_list>(<param><decl><type><name>u32</name></type> <name>iSize</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Bitvec</name> *</type><name>p</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>p</name></expr></argument>)</argument_list></call>==<name>BITVEC_SZ</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name> = <call><name>sqlite3MallocZero</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>*<name>p</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>iSize</name> = <name>iSize</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Check to see if the i-th bit is set.  Return true or false.
+** If p is NULL (if the bitmap has not been created) or if
+** i is out of range, then return false.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3BitvecTest</name><parameter_list>(<param><decl><type><name>Bitvec</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <if>if<condition>( <expr><name>i</name>&gt;<name>p</name>-&gt;<name>iSize</name> || <name>i</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <expr_stmt><expr><name>i</name>--</expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>p</name>-&gt;<name>iDivisor</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>bin</name> =<init> <expr><name>i</name>/<name>p</name>-&gt;<name>iDivisor</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>i</name> = <name>i</name>%<name>p</name>-&gt;<name>iDivisor</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name></expr>;</expr_stmt>
+    <if>if <condition>(<expr>!<name>p</name></expr>)</condition><then> <block>{
+      <return>return <expr>0</expr>;</return>
+    }</block></then></if>
+  }</block></while>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>iSize</name>&lt;=<name>BITVEC_NBIT</name></expr> )</condition><then><block>{
+    <return>return <expr>(<name>p</name>-&gt;<name>u</name>.<name><name>aBitmap</name><index>[<expr><name>i</name>/<name>BITVEC_SZELEM</name></expr>]</index></name> &amp; (1&lt;&lt;(<name>i</name>&amp;(<name>BITVEC_SZELEM</name>-1))))!=0</expr>;</return>
+  }</block></then> <else>else<block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>h</name> =<init> <expr><call><name>BITVEC_HASH</name><argument_list>(<argument><expr><name>i</name>++</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <while>while<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name></expr> )</condition><block>{
+      <if>if<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name>==<name>i</name></expr> )</condition><then> <return>return <expr>1</expr>;</return></then></if>
+      <expr_stmt><expr><name>h</name>++</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>h</name>&gt;=<name>BITVEC_NINT</name></expr> )</condition><then> <expr_stmt><expr><name>h</name> = 0</expr>;</expr_stmt></then></if>
+    }</block></while>
+    <return>return <expr>0</expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Set the i-th bit.  Return 0 on success and an error code if
+** anything goes wrong.
+**
+** This routine might cause sub-bitmaps to be allocated.  Failing
+** to get the memory needed to hold the sub-bitmap is the only
+** that can go wrong with an insert, assuming p and i are valid.
+**
+** The calling function must ensure that p is a valid Bitvec object
+** and that the value for "i" is within range of the Bitvec object.
+** Otherwise the behavior is undefined.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3BitvecSet</name><parameter_list>(<param><decl><type><name>Bitvec</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>h</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&lt;=<name>p</name>-&gt;<name>iSize</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>i</name>--</expr>;</expr_stmt>
+  <while>while<condition>(<expr>(<name>p</name>-&gt;<name>iSize</name> &gt; <name>BITVEC_NBIT</name>) &amp;&amp; <name>p</name>-&gt;<name>iDivisor</name></expr>)</condition> <block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>bin</name> =<init> <expr><name>i</name>/<name>p</name>-&gt;<name>iDivisor</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>i</name> = <name>i</name>%<name>p</name>-&gt;<name>iDivisor</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name> = <call><name>sqlite3BitvecCreate</name><argument_list>( <argument><expr><name>p</name>-&gt;<name>iDivisor</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name>==0</expr> )</condition><then> <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return></then></if>
+    }</block></then></if>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></while>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>iSize</name>&lt;=<name>BITVEC_NBIT</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>u</name>.<name><name>aBitmap</name><index>[<expr><name>i</name>/<name>BITVEC_SZELEM</name></expr>]</index></name> |= 1 &lt;&lt; (<name>i</name>&amp;(<name>BITVEC_SZELEM</name>-1))</expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>h</name> = <call><name>BITVEC_HASH</name><argument_list>(<argument><expr><name>i</name>++</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <comment type="block">/* if there wasn't a hash collision, and this doesn't */</comment>
+  <comment type="block">/* completely fill the hash, then just add it without */</comment>
+  <comment type="block">/* worring about sub-dividing and re-hashing. */</comment>
+  <if>if<condition>( <expr>!<name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name></expr> )</condition><then><block>{
+    <if>if <condition>(<expr><name>p</name>-&gt;<name>nSet</name>&lt;(<name>BITVEC_NINT</name>-1)</expr>)</condition><then> <block>{
+      <goto>goto <name>bitvec_set_end</name>;</goto>
+    }</block></then> <else>else <block>{
+      <goto>goto <name>bitvec_set_rehash</name>;</goto>
+    }</block></else></if>
+  }</block></then></if>
+  <comment type="block">/* there was a collision, check to see if it's already */</comment>
+  <comment type="block">/* in hash, if not, try to find a spot for it */</comment>
+  <do>do <block>{
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name>==<name>i</name></expr> )</condition><then> <return>return <expr><name>SQLITE_OK</name></expr>;</return></then></if>
+    <expr_stmt><expr><name>h</name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>h</name>&gt;=<name>BITVEC_NINT</name></expr> )</condition><then> <expr_stmt><expr><name>h</name> = 0</expr>;</expr_stmt></then></if>
+  }</block> while<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name></expr> )</condition>;</do>
+  <comment type="block">/* we didn't find it in the hash.  h points to the first */</comment>
+  <comment type="block">/* available free spot. check to see if this is going to */</comment>
+  <comment type="block">/* make our hash too "full".  */</comment>
+<label><name>bitvec_set_rehash</name>:</label>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>nSet</name>&gt;=<name>BITVEC_MXHASH</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>j</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name><name>aiValues</name><index>[<expr><name>BITVEC_NINT</name></expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>u</name>.<name>aHash</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>u</name>.<name>apSub</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>iDivisor</name> = (<name>p</name>-&gt;<name>iSize</name> + <name>BITVEC_NPTR</name> - 1)/<name>BITVEC_NPTR</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BitvecSet</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>j</name>=0</expr>;</init> <condition><expr><name>j</name>&lt;<name>BITVEC_NINT</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name></expr> )</condition><then> <expr_stmt><expr><name>rc</name> |= <call><name>sqlite3BitvecSet</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+    }</block></for>
+    <return>return <expr><name>rc</name></expr>;</return>
+  }</block></then></if>
+<label><name>bitvec_set_end</name>:</label>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nSet</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name> = <name>i</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Clear the i-th bit.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3BitvecClear</name><parameter_list>(<param><decl><type><name>Bitvec</name> *</type><name>p</name></decl></param>, <param><decl><type><name>u32</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>i</name>&gt;0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>i</name>--</expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>p</name>-&gt;<name>iDivisor</name></expr> )</condition><block>{
+    <decl_stmt><decl><type><name>u32</name></type> <name>bin</name> =<init> <expr><name>i</name>/<name>p</name>-&gt;<name>iDivisor</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>i</name> = <name>i</name>%<name>p</name>-&gt;<name>iDivisor</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>bin</name></expr>]</index></name></expr>;</expr_stmt>
+    <if>if <condition>(<expr>!<name>p</name></expr>)</condition><then> <block>{
+      <return>return;</return>
+    }</block></then></if>
+  }</block></while>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>iSize</name>&lt;=<name>BITVEC_NBIT</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>u</name>.<name><name>aBitmap</name><index>[<expr><name>i</name>/<name>BITVEC_SZELEM</name></expr>]</index></name> &amp;= ~(1 &lt;&lt; (<name>i</name>&amp;(<name>BITVEC_SZELEM</name>-1)))</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>j</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name><name>aiValues</name><index>[<expr><name>BITVEC_NINT</name></expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>u</name>.<name>aHash</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>u</name>.<name>aHash</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>aiValues</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>nSet</name> = 0</expr>;</expr_stmt>
+    <for>for(<init><expr><name>j</name>=0</expr>;</init> <condition><expr><name>j</name>&lt;<name>BITVEC_NINT</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name> &amp;&amp; <name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name>!=(<name>i</name>+1)</expr> )</condition><then><block>{
+        <decl_stmt><decl><type><name>u32</name></type> <name>h</name> =<init> <expr><call><name>BITVEC_HASH</name><argument_list>(<argument><expr><name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name>-1</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>nSet</name>++</expr>;</expr_stmt>
+        <while>while<condition>( <expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name></expr> )</condition><block>{
+          <expr_stmt><expr><name>h</name>++</expr>;</expr_stmt>
+          <if>if<condition>( <expr><name>h</name>&gt;=<name>BITVEC_NINT</name></expr> )</condition><then> <expr_stmt><expr><name>h</name> = 0</expr>;</expr_stmt></then></if>
+        }</block></while>
+        <expr_stmt><expr><name>p</name>-&gt;<name>u</name>.<name><name>aHash</name><index>[<expr><name>h</name></expr>]</index></name> = <name><name>aiValues</name><index>[<expr><name>j</name></expr>]</index></name></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></for>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Destroy a bitmap object.  Reclaim all memory used.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3BitvecDestroy</name><parameter_list>(<param><decl><type><name>Bitvec</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>iDivisor</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>i</name></decl>;</decl_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>BITVEC_NPTR</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3BitvecDestroy</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>u</name>.<name><name>apSub</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_BUILTIN_TEST</name></cpp:ifndef>
+<comment type="block">/*
+** Let V[] be an array of unsigned characters sufficient to hold
+** up to N bits.  Let I be an integer between 0 and N.  0&lt;=I&lt;N.
+** Then the following macros can be used to set, clear, or test
+** individual bits within V.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>SETBIT</name>(V,I)      V[I&gt;&gt;3] |= (1&lt;&lt;(I&amp;7))</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>CLEARBIT</name>(V,I)    V[I&gt;&gt;3] &amp;= ~(1&lt;&lt;(I&amp;7))</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>TESTBIT</name>(V,I)     (V[I&gt;&gt;3]&amp;(1&lt;&lt;(I&amp;7)))!=0</cpp:define>
+
+<comment type="block">/*
+** This routine runs an extensive test of the Bitvec code.
+**
+** The input is an array of integers that acts as a program
+** to test the Bitvec.  The integers are opcodes followed
+** by 0, 1, or 3 operands, depending on the opcode.  Another
+** opcode follows immediately after the last operand.
+**
+** There are 6 opcodes numbered from 0 through 5.  0 is the
+** "halt" opcode and causes the test to end.
+**
+**    0          Halt and return the number of errors
+**    1 N S X    Set N bits beginning with S and incrementing by X
+**    2 N S X    Clear N bits beginning with S and incrementing by X
+**    3 N        Set N randomly chosen bits
+**    4 N        Clear N randomly chosen bits
+**    5 N S X    Set N bits from S increment X in array only, not in bitvec
+**
+** The opcodes 1 through 4 perform set and clear operations are performed
+** on both a Bitvec object and on a linear array of bits obtained from malloc.
+** Opcode 5 works on the linear array only, not on the Bitvec.
+** Opcode 5 is used to deliberately induce a fault in order to
+** confirm that error detection works.
+**
+** At the conclusion of the test the linear array is compared
+** against the Bitvec object.  If there are any differences,
+** an error is returned.  If they are the same, zero is returned.
+**
+** If a memory allocation error occurs, return -1.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3BitvecBuiltinTest</name><parameter_list>(<param><decl><type><name>int</name></type> <name>sz</name></decl></param>, <param><decl><type><name>int</name> *</type><name>aOp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Bitvec</name> *</type><name>pBitvec</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>pV</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr>-1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>nx</name>, <name>pc</name>, <name>op</name></decl>;</decl_stmt>
+
+  <comment type="block">/* Allocate the Bitvec to be tested and a linear array of
+  ** bits to act as the reference */</comment>
+  <expr_stmt><expr><name>pBitvec</name> = <call><name>sqlite3BitvecCreate</name><argument_list>( <argument><expr><name>sz</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pV</name> = <call><name>sqlite3_malloc</name><argument_list>( <argument><expr>(<name>sz</name>+7)/8 + 1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pBitvec</name>==0 || <name>pV</name>==0</expr> )</condition><then> <goto>goto <name>bitvec_end</name>;</goto></then></if>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pV</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>(<name>sz</name>+7)/8 + 1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Run the program */</comment>
+  <expr_stmt><expr><name>pc</name> = 0</expr>;</expr_stmt>
+  <while>while<condition>( <expr>(<name>op</name> = <name><name>aOp</name><index>[<expr><name>pc</name></expr>]</index></name>)!=0</expr> )</condition><block>{
+    <switch>switch<condition>( <expr><name>op</name></expr> )</condition><block>{
+      <case>case <expr>1</expr>:
+      </case><case>case <expr>2</expr>:
+      </case><case>case <expr>5</expr>: <block>{
+        <expr_stmt><expr><name>nx</name> = 4</expr>;</expr_stmt>
+        <expr_stmt><expr><name>i</name> = <name><name>aOp</name><index>[<expr><name>pc</name>+2</expr>]</index></name> - 1</expr>;</expr_stmt>
+        <expr_stmt><expr><name><name>aOp</name><index>[<expr><name>pc</name>+2</expr>]</index></name> += <name><name>aOp</name><index>[<expr><name>pc</name>+3</expr>]</index></name></expr>;</expr_stmt>
+        <break>break;</break>
+      }</block>
+      </case><case>case <expr>3</expr>:
+      </case><case>case <expr>4</expr>: 
+      </case><default>default: <block>{
+        <expr_stmt><expr><name>nx</name> = 2</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3_randomness</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+      }</block>
+    </default>}</block></switch>
+    <if>if<condition>( <expr>(--<name><name>aOp</name><index>[<expr><name>pc</name>+1</expr>]</index></name>) &gt; 0</expr> )</condition><then> <expr_stmt><expr><name>nx</name> = 0</expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><name>pc</name> += <name>nx</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>i</name> = (<name>i</name> &amp; 0x7fffffff)%<name>sz</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr>(<name>op</name> &amp; 1)!=0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>SETBIT</name><argument_list>(<argument><expr><name>pV</name></expr></argument>, <argument><expr>(<name>i</name>+1)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>op</name>!=5</expr> )</condition><then><block>{
+        <if>if<condition>( <expr><call><name>sqlite3BitvecSet</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>, <argument><expr><name>i</name>+1</expr></argument>)</argument_list></call></expr> )</condition><then> <goto>goto <name>bitvec_end</name>;</goto></then></if>
+      }</block></then></if>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>CLEARBIT</name><argument_list>(<argument><expr><name>pV</name></expr></argument>, <argument><expr>(<name>i</name>+1)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3BitvecClear</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>, <argument><expr><name>i</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></while>
+
+  <comment type="block">/* Test to make sure the linear array exactly matches the
+  ** Bitvec object.  Start with the assumption that they do
+  ** match (rc==0).  Change rc to non-zero if a discrepancy
+  ** is found.
+  */</comment>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call> + <call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>, <argument><expr><name>sz</name>+1</expr></argument>)</argument_list></call>
+          + <call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><name>i</name>&lt;=<name>sz</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>(  <expr>(<call><name>TESTBIT</name><argument_list>(<argument><expr><name>pV</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call>)!=<call><name>sqlite3BitvecTest</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <name>i</name></expr>;</expr_stmt>
+      <break>break;</break>
+    }</block></then></if>
+  }</block></for>
+
+  <comment type="block">/* Free allocated structure */</comment>
+<label><name>bitvec_end</name>:</label>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pV</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BitvecDestroy</name><argument_list>(<argument><expr><name>pBitvec</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_BUILTIN_TEST */</comment>
+</unit>

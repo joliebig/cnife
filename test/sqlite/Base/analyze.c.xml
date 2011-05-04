@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="analyze.c" filename=""><comment type="block">/*
+** 2005 July 8
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains code associated with the ANALYZE command.
+**
+** @(#) $Id: analyze.c,v 1.47 2008/12/10 16:45:51 drh Exp $
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_ANALYZE</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+** This routine generates code that opens the sqlite_stat1 table on cursor
+** iStatCur.
+**
+** If the sqlite_stat1 tables does not previously exist, it is created.
+** If it does previously exist, all entires associated with table zWhere
+** are removed.  If zWhere==0 then all entries are removed.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>openStatTable</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,          <comment type="block">/* Parsing context */</comment>
+  <param><decl><type><name>int</name></type> <name>iDb</name></decl></param>,                <comment type="block">/* The database we are looking in */</comment>
+  <param><decl><type><name>int</name></type> <name>iStatCur</name></decl></param>,           <comment type="block">/* Open the sqlite_stat1 table on this cursor */</comment>
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zWhere</name></decl></param>      <comment type="block">/* Delete entries associated with this table */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Db</name> *</type><name>pDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iRootPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name></type> <name>createStat1</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Table</name> *</type><name>pStat</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr><call><name>sqlite3GetVdbe</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>v</name>==0</expr> )</condition><then> <return>return;</return></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3BtreeHoldsAllMutexes</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3VdbeDb</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call>==<name>db</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pDb</name> = &amp;<name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr>(<name>pStat</name> = <call><name>sqlite3FindTable</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"sqlite_stat1"</expr></argument>, <argument><expr><name>pDb</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call>)==0</expr> )</condition><then><block>{
+    <comment type="block">/* The sqlite_stat1 tables does not exist.  Create it.  
+    ** Note that a side-effect of the CREATE TABLE statement is to leave
+    ** the rootpage of the new table in register pParse-&gt;regRoot.  This is
+    ** important because the OpenWrite opcode below will be needing it. */</comment>
+    <expr_stmt><expr><call><name>sqlite3NestedParse</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>,
+      <argument><expr>"CREATE TABLE %Q.sqlite_stat1(tbl,idx,stat)"</expr></argument>,
+      <argument><expr><name>pDb</name>-&gt;<name>zName</name></expr></argument>
+    )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>iRootPage</name> = <name>pParse</name>-&gt;<name>regRoot</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>createStat1</name> = 1</expr>;</expr_stmt>  <comment type="block">/* Cause rootpage to be taken from top of stack */</comment>
+  }</block></then><else>else <if>if<condition>( <expr><name>zWhere</name></expr> )</condition><then><block>{
+    <comment type="block">/* The sqlite_stat1 table exists.  Delete all entries associated with
+    ** the table zWhere. */</comment>
+    <expr_stmt><expr><call><name>sqlite3NestedParse</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>,
+       <argument><expr>"DELETE FROM %Q.sqlite_stat1 WHERE tbl=%Q"</expr></argument>,
+       <argument><expr><name>pDb</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zWhere</name></expr></argument>
+    )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>iRootPage</name> = <name>pStat</name>-&gt;<name>tnum</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <comment type="block">/* The sqlite_stat1 table already exists.  Delete all rows. */</comment>
+    <expr_stmt><expr><name>iRootPage</name> = <name>pStat</name>-&gt;<name>tnum</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Clear</name></expr></argument>, <argument><expr><name>pStat</name>-&gt;<name>tnum</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if></else></if>
+
+  <comment type="block">/* Open the sqlite_stat1 table for writing. Unless it was created
+  ** by this vdbe program, lock it for writing at the shared-cache level. 
+  ** If this vdbe did create the sqlite_stat1 table, then it must have 
+  ** already obtained a schema-lock, making the write-lock redundant.
+  */</comment>
+  <if>if<condition>( <expr>!<name>createStat1</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3TableLock</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>iRootPage</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr>"sqlite_stat1"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_SetNumColumns</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_OpenWrite</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>iRootPage</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeChangeP5</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>createStat1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Generate code to do an analysis of all indices associated with
+** a single table.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>analyzeOneTable</name><parameter_list>(
+  <param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>,   <comment type="block">/* Parser context */</comment>
+  <param><decl><type><name>Table</name> *</type><name>pTab</name></decl></param>,     <comment type="block">/* Table whose indices are to be analyzed */</comment>
+  <param><decl><type><name>int</name></type> <name>iStatCur</name></decl></param>,    <comment type="block">/* Index of VdbeCursor that writes the sqlite_stat1 table */</comment>
+  <param><decl><type><name>int</name></type> <name>iMem</name></decl></param>         <comment type="block">/* Available memory locations begin here */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Index</name> *</type><name>pIdx</name></decl>;</decl_stmt>     <comment type="block">/* An index to being analyzed */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdxCur</name></decl>;</decl_stmt>     <comment type="block">/* Index of VdbeCursor for index being analyzed */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nCol</name></decl>;</decl_stmt>        <comment type="block">/* Number of columns in the index */</comment>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name></decl>;</decl_stmt>         <comment type="block">/* The virtual machine being built up */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>           <comment type="block">/* Loop counter */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>topOfLoop</name></decl>;</decl_stmt>   <comment type="block">/* The top of the loop */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>endOfLoop</name></decl>;</decl_stmt>   <comment type="block">/* The end of the loop */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>addr</name></decl>;</decl_stmt>        <comment type="block">/* The address of an instruction */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name></decl>;</decl_stmt>         <comment type="block">/* Index of database containing pTab */</comment>
+
+  <expr_stmt><expr><name>v</name> = <call><name>sqlite3GetVdbe</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>v</name>==0 || <name>pTab</name>==0 || <name>pTab</name>-&gt;<name>pIndex</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* Do no analysis for tables that have no indices */</comment>
+    <return>return;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3BtreeHoldsAllMutexes</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>iDb</name> = <call><name>sqlite3SchemaToIndex</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>pSchema</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>&gt;=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTHORIZATION</name></cpp:ifndef>
+  <if>if<condition>( <expr><call><name>sqlite3AuthCheck</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>SQLITE_ANALYZE</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>zName</name></expr></argument>, <argument><expr>0</expr></argument>,
+      <argument><expr><name>pParse</name>-&gt;<name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr></argument> )</argument_list></call></expr> )</condition><then><block>{
+    <return>return;</return>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <comment type="block">/* Establish a read-lock on the table at the shared-cache level. */</comment>
+  <expr_stmt><expr><call><name>sqlite3TableLock</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>tnum</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>iIdxCur</name> = <name>pParse</name>-&gt;<name>nTab</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>pIdx</name>=<name>pTab</name>-&gt;<name>pIndex</name></expr>;</init> <condition><expr><name>pIdx</name></expr>;</condition> <incr><expr><name>pIdx</name>=<name>pIdx</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>KeyInfo</name> *</type><name>pKey</name> =<init> <expr><call><name>sqlite3IndexKeyinfo</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pIdx</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>regFields</name></decl>;</decl_stmt>    <comment type="block">/* Register block for building records */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>regRec</name></decl>;</decl_stmt>       <comment type="block">/* Register holding completed record */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>regTemp</name></decl>;</decl_stmt>      <comment type="block">/* Temporary use register */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>regCol</name></decl>;</decl_stmt>       <comment type="block">/* Content of a column from the table being analyzed */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>regRowid</name></decl>;</decl_stmt>     <comment type="block">/* Rowid for the inserted record */</comment>
+    <decl_stmt><decl><type><name>int</name></type> <name>regF2</name></decl>;</decl_stmt>
+
+    <comment type="block">/* Open a cursor to the index to be analyzed
+    */</comment>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>==<call><name>sqlite3SchemaToIndex</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>pIdx</name>-&gt;<name>pSchema</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>nCol</name> = <name>pIdx</name>-&gt;<name>nColumn</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_SetNumColumns</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nCol</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp4</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_OpenRead</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>, <argument><expr><name>pIdx</name>-&gt;<name>tnum</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>,
+        <argument><expr>(<name>char</name> *)<name>pKey</name></expr></argument>, <argument><expr><name>P4_KEYINFO_HANDOFF</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>VdbeComment</name><argument_list>(<argument><expr>(<name>v</name>, "%s", <name>pIdx</name>-&gt;<name>zName</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>regFields</name> = <name>iMem</name>+<name>nCol</name>*2</expr>;</expr_stmt>
+    <expr_stmt><expr><name>regTemp</name> = <name>regRowid</name> = <name>regCol</name> = <name>regFields</name>+3</expr>;</expr_stmt>
+    <expr_stmt><expr><name>regRec</name> = <name>regCol</name>+1</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>regRec</name>&gt;<name>pParse</name>-&gt;<name>nMem</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pParse</name>-&gt;<name>nMem</name> = <name>regRec</name></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <comment type="block">/* Memory cells are used as follows:
+    **
+    **    mem[iMem]:             The total number of rows in the table.
+    **    mem[iMem+1]:           Number of distinct values in column 1
+    **    ...
+    **    mem[iMem+nCol]:        Number of distinct values in column N
+    **    mem[iMem+nCol+1]       Last observed value of column 1
+    **    ...
+    **    mem[iMem+nCol+nCol]:   Last observed value of column N
+    **
+    ** Cells iMem through iMem+nCol are initialized to 0.  The others
+    ** are initialized to NULL.
+    */</comment>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;=<name>nCol</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Integer</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iMem</name>+<name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>nCol</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Null</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iMem</name>+<name>nCol</name>+<name>i</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+
+    <comment type="block">/* Do the analysis.
+    */</comment>
+    <expr_stmt><expr><name>endOfLoop</name> = <call><name>sqlite3VdbeMakeLabel</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Rewind</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>, <argument><expr><name>endOfLoop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>topOfLoop</name> = <call><name>sqlite3VdbeCurrentAddr</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_AddImm</name></expr></argument>, <argument><expr><name>iMem</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>nCol</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Column</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>regCol</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Ne</name></expr></argument>, <argument><expr><name>regCol</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iMem</name>+<name>nCol</name>+<name>i</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <comment type="block">/**** TODO:  add collating sequence *****/</comment>
+      <expr_stmt><expr><call><name>sqlite3VdbeChangeP5</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>SQLITE_JUMPIFNULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Goto</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>endOfLoop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>nCol</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeJumpHere</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>topOfLoop</name> + 2*(<name>i</name> + 1)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_AddImm</name></expr></argument>, <argument><expr><name>iMem</name>+<name>i</name>+1</expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Column</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>iMem</name>+<name>nCol</name>+<name>i</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><call><name>sqlite3VdbeResolveLabel</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>endOfLoop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Next</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>, <argument><expr><name>topOfLoop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Close</name></expr></argument>, <argument><expr><name>iIdxCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* Store the results.  
+    **
+    ** The result is a single row of the sqlite_stat1 table.  The first
+    ** two columns are the names of the table and index.  The third column
+    ** is a string composed of a list of integer statistics about the
+    ** index.  The first integer in the list is the total number of entires
+    ** in the index.  There is one additional integer in the list for each
+    ** column of the table.  This additional integer is a guess of how many
+    ** rows of the table the index will select.  If D is the count of distinct
+    ** values and K is the total number of rows, then the integer is computed
+    ** as:
+    **
+    **        I = (K+D-1)/D
+    **
+    ** If K==0 then no entry is made into the sqlite_stat1 table.  
+    ** If K&gt;0 then it is always the case the D&gt;0 so division by zero
+    ** is never possible.
+    */</comment>
+    <expr_stmt><expr><name>addr</name> = <call><name>sqlite3VdbeAddOp1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_IfNot</name></expr></argument>, <argument><expr><name>iMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp4</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_String8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>regFields</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>zName</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp4</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_String8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>regFields</name>+1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pIdx</name>-&gt;<name>zName</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>regF2</name> = <name>regFields</name>+2</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_SCopy</name></expr></argument>, <argument><expr><name>iMem</name></expr></argument>, <argument><expr><name>regF2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>nCol</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp4</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_String8</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>regTemp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>" "</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Concat</name></expr></argument>, <argument><expr><name>regTemp</name></expr></argument>, <argument><expr><name>regF2</name></expr></argument>, <argument><expr><name>regF2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Add</name></expr></argument>, <argument><expr><name>iMem</name></expr></argument>, <argument><expr><name>iMem</name>+<name>i</name>+1</expr></argument>, <argument><expr><name>regTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_AddImm</name></expr></argument>, <argument><expr><name>regTemp</name></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Divide</name></expr></argument>, <argument><expr><name>iMem</name>+<name>i</name>+1</expr></argument>, <argument><expr><name>regTemp</name></expr></argument>, <argument><expr><name>regTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_ToInt</name></expr></argument>, <argument><expr><name>regTemp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Concat</name></expr></argument>, <argument><expr><name>regTemp</name></expr></argument>, <argument><expr><name>regF2</name></expr></argument>, <argument><expr><name>regF2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp4</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_MakeRecord</name></expr></argument>, <argument><expr><name>regFields</name></expr></argument>, <argument><expr>3</expr></argument>, <argument><expr><name>regRec</name></expr></argument>, <argument><expr>"aaa"</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp2</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_NewRowid</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>regRowid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp3</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_Insert</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>regRec</name></expr></argument>, <argument><expr><name>regRowid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeChangeP5</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OPFLAG_APPEND</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeJumpHere</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>addr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+}</block></function>
+
+<comment type="block">/*
+** Generate code that will cause the most recent index analysis to
+** be laoded into internal hash tables where is can be used.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>loadAnalysis</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>int</name></type> <name>iDb</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr><call><name>sqlite3GetVdbe</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>v</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeAddOp1</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr><name>OP_LoadAnalysis</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Generate code that will do an analysis of an entire database
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>analyzeDatabase</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>int</name></type> <name>iDb</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Schema</name> *</type><name>pSchema</name> =<init> <expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pSchema</name></expr></init></decl>;</decl_stmt>    <comment type="block">/* Schema of database iDb */</comment>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>k</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iStatCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iMem</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>sqlite3BeginWriteOperation</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>iStatCur</name> = <name>pParse</name>-&gt;<name>nTab</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>openStatTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>iMem</name> = <name>pParse</name>-&gt;<name>nMem</name>+1</expr>;</expr_stmt>
+  <for>for(<init><expr><name>k</name>=<call><name>sqliteHashFirst</name><argument_list>(<argument><expr>&amp;<name>pSchema</name>-&gt;<name>tblHash</name></expr></argument>)</argument_list></call></expr>;</init> <condition><expr><name>k</name></expr>;</condition> <incr><expr><name>k</name>=<call><name>sqliteHashNext</name><argument_list>(<argument><expr><name>k</name></expr></argument>)</argument_list></call></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name> =<init> <expr>(<name>Table</name>*)<call><name>sqliteHashData</name><argument_list>(<argument><expr><name>k</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>analyzeOneTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pTab</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>iMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>loadAnalysis</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Generate code that will do an analysis of a single table in
+** a database.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>analyzeTable</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>Table</name> *</type><name>pTab</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iStatCur</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pTab</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3BtreeHoldsAllMutexes</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>iDb</name> = <call><name>sqlite3SchemaToIndex</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>pSchema</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BeginWriteOperation</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>iStatCur</name> = <name>pParse</name>-&gt;<name>nTab</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>openStatTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>pTab</name>-&gt;<name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>analyzeOneTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pTab</name></expr></argument>, <argument><expr><name>iStatCur</name></expr></argument>, <argument><expr><name>pParse</name>-&gt;<name>nMem</name>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>loadAnalysis</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Generate code for the ANALYZE command.  The parser calls this routine
+** when it recognizes an ANALYZE command.
+**
+**        ANALYZE                            -- 1
+**        ANALYZE  &lt;database&gt;                -- 2
+**        ANALYZE  ?&lt;database&gt;.?&lt;tablename&gt;  -- 3
+**
+** Form 1 causes all indices in all attached databases to be analyzed.
+** Form 2 analyzes all indices the single database named.
+** Form 3 analyzes all indices associated with the named table.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3Analyze</name><parameter_list>(<param><decl><type><name>Parse</name> *</type><name>pParse</name></decl></param>, <param><decl><type><name>Token</name> *</type><name>pName1</name></decl></param>, <param><decl><type><name>Token</name> *</type><name>pName2</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>pParse</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name>, *<name>zDb</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Table</name> *</type><name>pTab</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Token</name> *</type><name>pTableName</name></decl>;</decl_stmt>
+
+  <comment type="block">/* Read the database schema. If an error occurs, leave an error message
+  ** and code in pParse and return NULL. */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3BtreeHoldsAllMutexes</name><argument_list>(<argument><expr><name>pParse</name>-&gt;<name>db</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>SQLITE_OK</name>!=<call><name>sqlite3ReadSchema</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>pName1</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* Form 1:  Analyze everything */</comment>
+    <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><name>i</name>==1</expr> )</condition><then> <continue>continue;</continue></then></if>  <comment type="block">/* Do not analyze the TEMP database */</comment>
+      <expr_stmt><expr><call><name>analyzeDatabase</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+  }</block></then><else>else <if>if<condition>( <expr><name>pName2</name>==0 || <name>pName2</name>-&gt;<name>n</name>==0</expr> )</condition><then><block>{
+    <comment type="block">/* Form 2:  Analyze the database or table named */</comment>
+    <expr_stmt><expr><name>iDb</name> = <call><name>sqlite3FindDb</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pName1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>iDb</name>&gt;=0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>analyzeDatabase</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>iDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>z</name> = <call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pName1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>z</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pTab</name> = <call><name>sqlite3LocateTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pTab</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>analyzeTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pTab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then></if>
+    }</block></else></if>
+  }</block></then><else>else<block>{
+    <comment type="block">/* Form 3: Analyze the fully qualified table name */</comment>
+    <expr_stmt><expr><name>iDb</name> = <call><name>sqlite3TwoPartName</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pName1</name></expr></argument>, <argument><expr><name>pName2</name></expr></argument>, <argument><expr>&amp;<name>pTableName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>iDb</name>&gt;=0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>zDb</name> = <name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>z</name> = <call><name>sqlite3NameFromToken</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>pTableName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>z</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pTab</name> = <call><name>sqlite3LocateTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>zDb</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pTab</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>analyzeTable</name><argument_list>(<argument><expr><name>pParse</name></expr></argument>, <argument><expr><name>pTab</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then></if>
+    }</block></then></if>   
+  }</block></else></if></else></if>
+}</block></function>
+
+<comment type="block">/*
+** Used to pass information from the analyzer reader through to the
+** callback routine.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>analysisInfo</name> analysisInfo;</struct></type></typedef>
+<struct>struct <name>analysisInfo</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zDatabase</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** This callback is invoked once for each index when reading the
+** sqlite_stat1 table.  
+**
+**     argv[0] = name of the index
+**     argv[1] = results of analysis - on integer for each column
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>analysisLoader</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pData</name></decl></param>, <param><decl><type><name>int</name></type> <name>argc</name></decl></param>, <param><decl><type><name>char</name> **</type><name>argv</name></decl></param>, <param><decl><type><name>char</name> **</type><name>NotUsed</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>analysisInfo</name> *</type><name>pInfo</name> =<init> <expr>(<name>analysisInfo</name>*)<name>pData</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Index</name> *</type><name>pIndex</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>c</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>v</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>argc</name>==2</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>argc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>argv</name>==0 || <name><name>argv</name><index>[<expr>0</expr>]</index></name>==0 || <name><name>argv</name><index>[<expr>1</expr>]</index></name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pIndex</name> = <call><name>sqlite3FindIndex</name><argument_list>(<argument><expr><name>pInfo</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, <argument><expr><name>pInfo</name>-&gt;<name>zDatabase</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pIndex</name>==0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>z</name> = <name><name>argv</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr>*<name>z</name> &amp;&amp; <name>i</name>&lt;=<name>pIndex</name>-&gt;<name>nColumn</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>v</name> = 0</expr>;</expr_stmt>
+    <while>while<condition>( <expr>(<name>c</name>=<name><name>z</name><index>[<expr>0</expr>]</index></name>)&gt;='0' &amp;&amp; <name>c</name>&lt;='9'</expr> )</condition><block>{
+      <expr_stmt><expr><name>v</name> = <name>v</name>*10 + <name>c</name> - '0'</expr>;</expr_stmt>
+      <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt>
+    }</block></while>
+    <expr_stmt><expr><name>pIndex</name>-&gt;<name><name>aiRowEst</name><index>[<expr><name>i</name></expr>]</index></name> = <name>v</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr>*<name>z</name>==' '</expr> )</condition><then> <expr_stmt><expr><name>z</name>++</expr>;</expr_stmt></then></if>
+  }</block></for>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Load the content of the sqlite_stat1 table into the index hash tables.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3AnalysisLoad</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>int</name></type> <name>iDb</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>analysisInfo</name></type> <name>sInfo</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>HashElem</name> *</type><name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zSql</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>iDb</name>&gt;=0 &amp;&amp; <name>iDb</name>&lt;<name>db</name>-&gt;<name>nDb</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pBt</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3BtreeHoldsMutex</name><argument_list>(<argument><expr><name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pBt</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Clear any prior statistics */</comment>
+  <for>for(<init><expr><name>i</name>=<call><name>sqliteHashFirst</name><argument_list>(<argument><expr>&amp;<name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pSchema</name>-&gt;<name>idxHash</name></expr></argument>)</argument_list></call></expr>;</init><condition><expr><name>i</name></expr>;</condition><incr><expr><name>i</name>=<call><name>sqliteHashNext</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></incr>)<block>{
+    <decl_stmt><decl><type><name>Index</name> *</type><name>pIdx</name> =<init> <expr><call><name>sqliteHashData</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3DefaultRowEst</name><argument_list>(<argument><expr><name>pIdx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+
+  <comment type="block">/* Check to make sure the sqlite_stat1 table existss */</comment>
+  <expr_stmt><expr><name>sInfo</name>.<name>db</name> = <name>db</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>sInfo</name>.<name>zDatabase</name> = <name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>zName</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3FindTable</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"sqlite_stat1"</expr></argument>, <argument><expr><name>sInfo</name>.<name>zDatabase</name></expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+     <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+
+  <comment type="block">/* Load new statistics out of the sqlite_stat1 table */</comment>
+  <expr_stmt><expr><name>zSql</name> = <call><name>sqlite3MPrintf</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr>"SELECT idx, stat FROM %Q.sqlite_stat1"</expr></argument>,
+                        <argument><expr><name>sInfo</name>.<name>zDatabase</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_exec</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>, <argument><expr><name>analysisLoader</name></expr></argument>, <argument><expr>&amp;<name>sInfo</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>(<name>void</name>)<call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zSql</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_ANALYZE */</comment>
+</unit>

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="pcache.h"><comment type="block">/*
+** 2008 August 05
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This header file defines the interface that the sqlite page cache
+** subsystem. 
+**
+** @(#) $Id: pcache.h,v 1.16 2008/11/19 16:52:44 danielk1977 Exp $
+*/</comment>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_PCACHE_H_</name></cpp:ifndef>
+
+<typedef>typedef <type><struct>struct <name>PgHdr</name> PgHdr;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>PCache</name> PCache;</struct></type></typedef>
+
+<comment type="block">/*
+** Every page in the cache is controlled by an instance of the following
+** structure.
+*/</comment>
+<struct>struct <name>PgHdr</name> <block>{
+  <decl_stmt><decl><type><name>void</name> *</type><name>pData</name></decl>;</decl_stmt>                   <comment type="block">/* Content of this page */</comment>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pExtra</name></decl>;</decl_stmt>                  <comment type="block">/* Extra content */</comment>
+  <decl_stmt><decl><type><name>PgHdr</name> *</type><name>pDirty</name></decl>;</decl_stmt>                 <comment type="block">/* Transient list of dirty pages */</comment>
+  <decl_stmt><decl><type><name>Pgno</name></type> <name>pgno</name></decl>;</decl_stmt>                     <comment type="block">/* Page number for this page */</comment>
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>                 <comment type="block">/* The pager this page is part of */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_CHECK_PAGES</name></cpp:ifdef>
+  <decl_stmt><decl><type><name>u32</name></type> <name>pageHash</name></decl>;</decl_stmt>                  <comment type="block">/* Hash of page content */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <decl_stmt><decl><type><name>u16</name></type> <name>flags</name></decl>;</decl_stmt>                     <comment type="block">/* PGHDR flags defined below */</comment>
+
+  <comment type="block">/**********************************************************************
+  ** Elements above are public.  All that follows is private to pcache.c
+  ** and should not be accessed by other modules.
+  */</comment>
+  <decl_stmt><decl><type><name>i16</name></type> <name>nRef</name></decl>;</decl_stmt>                      <comment type="block">/* Number of users of this page */</comment>
+  <decl_stmt><decl><type><name>PCache</name> *</type><name>pCache</name></decl>;</decl_stmt>                <comment type="block">/* Cache that owns this page */</comment>
+
+  <decl_stmt><decl><type><name>PgHdr</name> *</type><name>pDirtyNext</name></decl>;</decl_stmt>             <comment type="block">/* Next element in list of dirty pages */</comment>
+  <decl_stmt><decl><type><name>PgHdr</name> *</type><name>pDirtyPrev</name></decl>;</decl_stmt>             <comment type="block">/* Previous element in list of dirty pages */</comment>
+}</block>;</struct>
+
+<comment type="block">/* Bit values for PgHdr.flags */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PGHDR_DIRTY</name>             0x002</cpp:define>  <comment type="block">/* Page has changed */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PGHDR_NEED_SYNC</name>         0x004</cpp:define>  <comment type="block">/* Fsync the rollback journal before
+                                       ** writing this page to the database */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PGHDR_NEED_READ</name>         0x008</cpp:define>  <comment type="block">/* Content is unread */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PGHDR_REUSE_UNLIKELY</name>    0x010</cpp:define>  <comment type="block">/* A hint that reuse is unlikely */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PGHDR_DONT_WRITE</name>        0x020</cpp:define>  <comment type="block">/* Do not write content to disk */</comment>
+
+<comment type="block">/* Initialize and shutdown the page cache subsystem */</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheInitialize</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheShutdown</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Page cache buffer management:
+** These routines implement SQLITE_CONFIG_PAGECACHE.
+*/</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PCacheBufferSetup</name><parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>, <param><decl><type><name>int</name></type> <name>sz</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Create a new pager cache.
+** Under memory stress, invoke xStress to try to make pages clean.
+** Only clean and unpinned pages can be reclaimed.
+*/</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheOpen</name><parameter_list>(
+  <param><decl><type><name>int</name></type> <name>szPage</name></decl></param>,                    <comment type="block">/* Size of every page */</comment>
+  <param><decl><type><name>int</name></type> <name>szExtra</name></decl></param>,                   <comment type="block">/* Extra space associated with each page */</comment>
+  <param><decl><type><name>int</name></type> <name>bPurgeable</name></decl></param>,                <comment type="block">/* True if pages are on backing store */</comment>
+  <param><function_decl><type><name>int</name></type> (*<name>xStress</name>)<parameter_list>(<param><decl><type><name>void</name>*</type></decl></param>, <param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>, <comment type="block">/* Call to try to make pages clean */</comment>
+  <param><decl><type><name>void</name> *</type><name>pStress</name></decl></param>,                 <comment type="block">/* Argument to xStress */</comment>
+  <param><decl><type><name>PCache</name> *</type><name>pToInit</name></decl></param></function_decl></param>                <comment type="block">/* Preallocated space for the PCache */</comment>
+)</parameter_list>;</function_decl>
+
+<comment type="block">/* Modify the page-size after the cache has been created. */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheSetPageSize</name><parameter_list>(<param><decl><type><name>PCache</name> *</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Return the size in bytes of a PCache object.  Used to preallocate
+** storage space.
+*/</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheSize</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* One release per successful fetch.  Page is pinned until released.
+** Reference counted. 
+*/</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheFetch</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>, <param><decl><type><name>Pgno</name></type></decl></param>, <param><decl><type><name>int</name></type> <name>createFlag</name></decl></param>, <param><decl><type><name>PgHdr</name>**</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheRelease</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheDrop</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>         <comment type="block">/* Remove page from cache */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheMakeDirty</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>    <comment type="block">/* Make sure page is marked dirty */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheMakeClean</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>    <comment type="block">/* Mark a single page as clean */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheCleanAll</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>    <comment type="block">/* Mark all dirty list pages as clean */</comment>
+
+<comment type="block">/* Change a page number.  Used by incr-vacuum. */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheMove</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>, <param><decl><type><name>Pgno</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Remove all pages with pgno&gt;x.  Reset the cache if x==0 */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheTruncate</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>, <param><decl><type><name>Pgno</name></type> <name>x</name></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Get a list of all dirty pages in the cache, sorted by page number */</comment>
+<function_decl><type><name>PgHdr</name> *</type><name>sqlite3PcacheDirtyList</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Reset and close the cache object */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheClose</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Clear flags from pages of the page cache */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheClearSyncFlags</name><parameter_list>(<param><decl><type><name>PCache</name> *</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Discard the contents of the cache */</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheClear</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Return the total number of outstanding page references */</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheRefCount</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Increment the reference count of an existing page */</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheRef</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<function_decl><type><name>int</name></type> <name>sqlite3PcachePageRefcount</name><parameter_list>(<param><decl><type><name>PgHdr</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* Return the total number of pages stored in the cache */</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcachePagecount</name><parameter_list>(<param><decl><type><name>PCache</name>*</type></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_CHECK_PAGES</name></cpp:ifdef>
+<comment type="block">/* Iterate through all dirty pages currently stored in the cache. This
+** interface is only available if SQLITE_CHECK_PAGES is defined when the 
+** library is built.
+*/</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheIterateDirty</name><parameter_list>(<param><decl><type><name>PCache</name> *</type><name>pCache</name></decl></param>, <param><function_decl><type><name>void</name></type> (*<name>xIter</name>)<parameter_list>(<param><decl><type><name>PgHdr</name> *</type></decl></param>)</parameter_list></function_decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/* Set and get the suggested cache-size for the specified pager-cache.
+**
+** If no global maximum is configured, then the system attempts to limit
+** the total number of pages cached by purgeable pager-caches to the sum
+** of the suggested cache-sizes.
+*/</comment>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheSetCachesize</name><parameter_list>(<param><decl><type><name>PCache</name> *</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheGetCachesize</name><parameter_list>(<param><decl><type><name>PCache</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMORY_MANAGEMENT</name></cpp:ifdef>
+<comment type="block">/* Try to return memory used by the pcache module to the main memory heap */</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PcacheReleaseMemory</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<function_decl><type><name>void</name></type> <name>sqlite3PcacheStats</name><parameter_list>(<param><decl><type><name>int</name>*</type></decl></param>,<param><decl><type><name>int</name>*</type></decl></param>,<param><decl><type><name>int</name>*</type></decl></param>,<param><decl><type><name>int</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<function_decl><type><name>void</name></type> <name>sqlite3PCacheSetDefault</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* _PCACHE_H_ */</comment>
+</unit>

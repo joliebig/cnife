@@ -1,0 +1,1312 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="vdbeapi.c" filename=""><comment type="block">/*
+** 2004 May 26
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains code use to implement APIs that are part of the
+** VDBE.
+**
+** $Id: vdbeapi.c,v 1.150 2008/12/10 18:03:47 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"vdbeInt.h"</cpp:file></cpp:include>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>0 &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_ENABLE_MEMORY_MANAGEMENT</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<comment type="block">/*
+** The following structure contains pointers to the end points of a
+** doubly-linked list of all compiled SQL statements that may be holding
+** buffers eligible for release when the sqlite3_release_memory() interface is
+** invoked. Access to this list is protected by the SQLITE_MUTEX_STATIC_LRU2
+** mutex.
+**
+** Statements are added to the end of this list when sqlite3_reset() is
+** called. They are removed either when sqlite3_step() or sqlite3_finalize()
+** is called. When statements are added to this list, the associated 
+** register array (p-&gt;aMem[1..p-&gt;nMem]) may contain dynamic buffers that
+** can be freed using sqlite3VdbeReleaseMemory().
+**
+** When statements are added or removed from this list, the mutex
+** associated with the Vdbe being added or removed (Vdbe.db-&gt;mutex) is
+** already held. The LRU2 mutex is then obtained, blocking if necessary,
+** the linked-list pointers manipulated and the LRU2 mutex relinquished.
+*/</comment>
+struct StatementLruList {
+  Vdbe *pFirst;
+  Vdbe *pLast;
+};
+static struct StatementLruList sqlite3LruStatements;
+
+<comment type="block">/*
+** Check that the list looks to be internally consistent. This is used
+** as part of an assert() statement as follows:
+**
+**   assert( stmtLruCheck() );
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NDEBUG</name></cpp:ifndef>
+static int stmtLruCheck(){
+  Vdbe *p;
+  for(p=sqlite3LruStatements.pFirst; p; p=p-&gt;pLruNext){
+    assert(p-&gt;pLruNext || p==sqlite3LruStatements.pLast);
+    assert(!p-&gt;pLruNext || p-&gt;pLruNext-&gt;pLruPrev==p);
+    assert(p-&gt;pLruPrev || p==sqlite3LruStatements.pFirst);
+    assert(!p-&gt;pLruPrev || p-&gt;pLruPrev-&gt;pLruNext==p);
+  }
+  return 1;
+}
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Add vdbe p to the end of the statement lru list. It is assumed that
+** p is not already part of the list when this is called. The lru list
+** is protected by the SQLITE_MUTEX_STATIC_LRU mutex.
+*/</comment>
+static void stmtLruAdd(Vdbe *p){
+  sqlite3_mutex_enter(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+
+  if( p-&gt;pLruPrev || p-&gt;pLruNext || sqlite3LruStatements.pFirst==p ){
+    sqlite3_mutex_leave(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+    return;
+  }
+
+  assert( stmtLruCheck() );
+
+  if( !sqlite3LruStatements.pFirst ){
+    assert( !sqlite3LruStatements.pLast );
+    sqlite3LruStatements.pFirst = p;
+    sqlite3LruStatements.pLast = p;
+  }else{
+    assert( !sqlite3LruStatements.pLast-&gt;pLruNext );
+    p-&gt;pLruPrev = sqlite3LruStatements.pLast;
+    sqlite3LruStatements.pLast-&gt;pLruNext = p;
+    sqlite3LruStatements.pLast = p;
+  }
+
+  assert( stmtLruCheck() );
+
+  sqlite3_mutex_leave(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+}
+
+<comment type="block">/*
+** Assuming the SQLITE_MUTEX_STATIC_LRU2 mutext is already held, remove
+** statement p from the least-recently-used statement list. If the 
+** statement is not currently part of the list, this call is a no-op.
+*/</comment>
+static void stmtLruRemoveNomutex(Vdbe *p){
+  if( p-&gt;pLruPrev || p-&gt;pLruNext || p==sqlite3LruStatements.pFirst ){
+    assert( stmtLruCheck() );
+    if( p-&gt;pLruNext ){
+      p-&gt;pLruNext-&gt;pLruPrev = p-&gt;pLruPrev;
+    }else{
+      sqlite3LruStatements.pLast = p-&gt;pLruPrev;
+    }
+    if( p-&gt;pLruPrev ){
+      p-&gt;pLruPrev-&gt;pLruNext = p-&gt;pLruNext;
+    }else{
+      sqlite3LruStatements.pFirst = p-&gt;pLruNext;
+    }
+    p-&gt;pLruNext = 0;
+    p-&gt;pLruPrev = 0;
+    assert( stmtLruCheck() );
+  }
+}
+
+<comment type="block">/*
+** Assuming the SQLITE_MUTEX_STATIC_LRU2 mutext is not held, remove
+** statement p from the least-recently-used statement list. If the 
+** statement is not currently part of the list, this call is a no-op.
+*/</comment>
+static void stmtLruRemove(Vdbe *p){
+  sqlite3_mutex_enter(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+  stmtLruRemoveNomutex(p);
+  sqlite3_mutex_leave(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+}
+
+<comment type="block">/*
+** Try to release n bytes of memory by freeing buffers associated 
+** with the memory registers of currently unused vdbes.
+*/</comment>
+int sqlite3VdbeReleaseMemory(int n){
+  Vdbe *p;
+  Vdbe *pNext;
+  int nFree = 0;
+
+  sqlite3_mutex_enter(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+  for(p=sqlite3LruStatements.pFirst; p &amp;&amp; nFree&lt;n; p=pNext){
+    pNext = p-&gt;pLruNext;
+
+    <comment type="block">/* For each statement handle in the lru list, attempt to obtain the
+    ** associated database mutex. If it cannot be obtained, continue
+    ** to the next statement handle. It is not possible to block on
+    ** the database mutex - that could cause deadlock.
+    */</comment>
+    if( SQLITE_OK==sqlite3_mutex_try(p-&gt;db-&gt;mutex) ){
+      nFree += sqlite3VdbeReleaseBuffers(p);
+      stmtLruRemoveNomutex(p);
+      sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+    }
+  }
+  sqlite3_mutex_leave(sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_LRU2));
+
+  return nFree;
+}
+
+<comment type="block">/*
+** Call sqlite3Reprepare() on the statement. Remove it from the
+** lru list before doing so, as Reprepare() will free all the
+** memory register buffers anyway.
+*/</comment>
+int vdbeReprepare(Vdbe *p){
+  stmtLruRemove(p);
+  return sqlite3Reprepare(p);
+}
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>       <comment type="block">/* !SQLITE_ENABLE_MEMORY_MANAGEMENT */</comment>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>stmtLruRemove</name>(x)</cpp:define>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>stmtLruAdd</name>(x)</cpp:define>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>vdbeReprepare</name>(x) sqlite3Reprepare(x)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DEPRECATED</name></cpp:ifndef>
+<comment type="block">/*
+** Return TRUE (non-zero) of the statement supplied as an argument needs
+** to be recompiled.  A statement needs to be recompiled whenever the
+** execution environment changes in a way that would alter the program
+** that sqlite3_prepare() generates.  For example, if new functions or
+** collating sequences are registered or if an authorizer function is
+** added or changed.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_expired</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>p</name> =<init> <expr>(<name>Vdbe</name>*)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>p</name>==0 || <name>p</name>-&gt;<name>expired</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The following routine destroys a virtual machine that is created by
+** the sqlite3_compile() routine. The integer returned is an SQLITE_
+** success/failure code that describes the result of executing the virtual
+** machine.
+**
+** This routine sets the error code and string returned by
+** sqlite3_errcode(), sqlite3_errmsg() and sqlite3_errmsg16().
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_finalize</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pStmt</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr>(<name>Vdbe</name>*)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+    <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name> =<init> <expr><name>v</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>stmtLruRemove</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeFinalize</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Terminate the current execution of an SQL statement and reset it
+** back to its starting state so that it can be reused. A success code from
+** the prior execution is returned.
+**
+** This routine sets the error code and string returned by
+** sqlite3_errcode(), sqlite3_errmsg() and sqlite3_errmsg16().
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_reset</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pStmt</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr>(<name>Vdbe</name>*)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>v</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeReset</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>stmtLruAdd</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeMakeReady</name><argument_list>(<argument><expr><name>v</name></expr></argument>, <argument><expr>-1</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>rc</name> &amp; (<name>v</name>-&gt;<name>db</name>-&gt;<name>errMask</name>))==<name>rc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>v</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Set all the parameters in the compiled SQL statement to NULL.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_clear_bindings</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>p</name> =<init> <expr>(<name>Vdbe</name>*)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>mutex</name> =<init> <expr>((<name>Vdbe</name>*)<name>pStmt</name>)-&gt;<name>db</name>-&gt;<name>mutex</name></expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>p</name>-&gt;<name>nVar</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeMemRelease</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name><name>aVar</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name><name>aVar</name><index>[<expr><name>i</name></expr>]</index></name>.<name>flags</name> = <name>MEM_Null</name></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/**************************** sqlite3_value_  *******************************
+** The following routines extract information from a Mem or sqlite3_value
+** structure.
+*/</comment>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_value_blob</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem</name> *</type><name>p</name> =<init> <expr>(<name>Mem</name>*)<name>pVal</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>flags</name> &amp; (<name>MEM_Blob</name>|<name>MEM_Str</name>)</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeMemExpandBlob</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>flags</name> &amp;= ~<name>MEM_Str</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>flags</name> |= <name>MEM_Blob</name></expr>;</expr_stmt>
+    <return>return <expr><name>p</name>-&gt;<name>z</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <return>return <expr><call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>)</argument_list></call></expr>;</return>
+  }</block></else></if>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_value_bytes</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3ValueBytes</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_value_bytes16</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3ValueBytes</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>double</name></type> <name>sqlite3_value_double</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3VdbeRealValue</name><argument_list>(<argument><expr>(<name>Mem</name>*)<name>pVal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_value_int</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name>int</name>)<call><name>sqlite3VdbeIntValue</name><argument_list>(<argument><expr>(<name>Mem</name>*)<name>pVal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>sqlite_int64</name></type> <name>sqlite3_value_int64</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3VdbeIntValue</name><argument_list>(<argument><expr>(<name>Mem</name>*)<name>pVal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>sqlite3_value_text</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name>const</name> <name>unsigned</name> <name>char</name> *)<call><name>sqlite3ValueText</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_value_text16</name><parameter_list>(<param><decl><type><name>sqlite3_value</name>*</type> <name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3ValueText</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_value_text16be</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3ValueText</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF16BE</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_value_text16le</name><parameter_list>(<param><decl><type><name>sqlite3_value</name> *</type><name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>sqlite3ValueText</name><argument_list>(<argument><expr><name>pVal</name></expr></argument>, <argument><expr><name>SQLITE_UTF16LE</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+<function><type><name>int</name></type> <name>sqlite3_value_type</name><parameter_list>(<param><decl><type><name>sqlite3_value</name>*</type> <name>pVal</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>pVal</name>-&gt;<name>type</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/**************************** sqlite3_result_  *******************************
+** The following routines are used by user-defined functions to specify
+** the function result.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3_result_blob</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>, 
+  <param><function_decl><type><name>void</name></type> (*<name>xDel</name>)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>xDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_double</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>double</name></type> <name>rVal</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetDouble</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>rVal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_error</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>isError</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<function><type><name>void</name></type> <name>sqlite3_result_error16</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>isError</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>, <argument><expr><name>SQLITE_TRANSIENT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<function><type><name>void</name></type> <name>sqlite3_result_int</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>int</name></type> <name>iVal</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetInt64</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr>(<name>i64</name>)<name>iVal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_int64</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>i64</name></type> <name>iVal</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetInt64</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>iVal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_null</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetNull</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_text</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>,
+  <param><function_decl><type><name>void</name></type> (*<name>xDel</name>)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>xDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<function><type><name>void</name></type> <name>sqlite3_result_text16</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>, 
+  <param><function_decl><type><name>void</name></type> (*<name>xDel</name>)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>, <argument><expr><name>xDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_text16be</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>, 
+  <param><function_decl><type><name>void</name></type> (*<name>xDel</name>)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF16BE</name></expr></argument>, <argument><expr><name>xDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_text16le</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>n</name></decl></param>, 
+  <param><function_decl><type><name>void</name></type> (*<name>xDel</name>)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>SQLITE_UTF16LE</name></expr></argument>, <argument><expr><name>xDel</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+<function><type><name>void</name></type> <name>sqlite3_result_value</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>sqlite3_value</name> *</type><name>pValue</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemCopy</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>pValue</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_zeroblob</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetZeroBlob</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>void</name></type> <name>sqlite3_result_error_code</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>int</name></type> <name>errCode</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>isError</name> = <name>errCode</name></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/* Force an SQLITE_TOOBIG error. */</comment>
+<function><type><name>void</name></type> <name>sqlite3_result_error_toobig</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>isError</name> = <name>SQLITE_TOOBIG</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>, <argument><expr>"string or blob too big"</expr></argument>, <argument><expr>-1</expr></argument>, 
+                       <argument><expr><name>SQLITE_UTF8</name></expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/* An SQLITE_NOMEM error. */</comment>
+<function><type><name>void</name></type> <name>sqlite3_result_error_nomem</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetNull</name><argument_list>(<argument><expr>&amp;<name>pCtx</name>-&gt;<name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>isError</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mallocFailed</name> = 1</expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Execute the statement pStmt, either until a row of data is ready, the
+** statement is completely executed or an error occurs.
+**
+** This routine implements the bulk of the logic behind the sqlite_step()
+** API.  The only thing omitted is the automatic recompile if a 
+** schema change has occurred.  That detail is handled by the
+** outer sqlite3_step() wrapper procedure.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>sqlite3Step</name><parameter_list>(<param><decl><type><name>Vdbe</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>magic</name>!=<name>VDBE_MAGIC_RUN</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+
+  <comment type="block">/* Assert that malloc() has not failed */</comment>
+  <expr_stmt><expr><name>db</name> = <name>p</name>-&gt;<name>db</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>pc</name>&lt;=0 &amp;&amp; <name>p</name>-&gt;<name>expired</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>rc</name> = <name>SQLITE_SCHEMA</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_ERROR</name></expr>;</expr_stmt>
+    <goto>goto <name>end_of_step</name>;</goto>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3SafetyOn</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>rc</name> = <name>SQLITE_MISUSE</name></expr>;</expr_stmt>
+    <return>return <expr><name>SQLITE_MISUSE</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>pc</name>&lt;0</expr> )</condition><then><block>{
+    <comment type="block">/* If there are no other statements currently running, then
+    ** reset the interrupt flag.  This prevents a call to sqlite3_interrupt
+    ** from interrupting a statement that has not yet started.
+    */</comment>
+    <if>if<condition>( <expr><name>db</name>-&gt;<name>activeVdbeCnt</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>db</name>-&gt;<name>u1</name>.<name>isInterrupted</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TRACE</name></cpp:ifndef>
+    <if>if<condition>( <expr><name>db</name>-&gt;<name>xProfile</name> &amp;&amp; !<name>db</name>-&gt;<name>init</name>.<name>busy</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>double</name></type> <name>rNow</name></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>sqlite3OsCurrentTime</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pVfs</name></expr></argument>, <argument><expr>&amp;<name>rNow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>p</name>-&gt;<name>startTime</name> = (<name>u64</name>)((<name>rNow</name> - (<name>int</name>)<name>rNow</name>)*3600.0*24.0*1000000000.0)</expr>;</expr_stmt>
+    }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+    <expr_stmt><expr><name>db</name>-&gt;<name>activeVdbeCnt</name>++</expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>readOnly</name>==0</expr> )</condition><then> <expr_stmt><expr><name>db</name>-&gt;<name>writeVdbeCnt</name>++</expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><name>p</name>-&gt;<name>pc</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>stmtLruRemove</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_EXPLAIN</name></cpp:ifndef>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>explain</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeList</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_EXPLAIN */</comment>
+  <block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeExec</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <if>if<condition>( <expr><call><name>sqlite3SafetyOff</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>SQLITE_MISUSE</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_TRACE</name></cpp:ifndef>
+  <comment type="block">/* Invoke the profile callback if there is one
+  */</comment>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_ROW</name> &amp;&amp; <name>db</name>-&gt;<name>xProfile</name> &amp;&amp; !<name>db</name>-&gt;<name>init</name>.<name>busy</name> &amp;&amp; <name>p</name>-&gt;<name>nOp</name>&gt;0
+           &amp;&amp; <name>p</name>-&gt;<name><name>aOp</name><index>[<expr>0</expr>]</index></name>.<name>opcode</name>==<name>OP_Trace</name> &amp;&amp; <name>p</name>-&gt;<name><name>aOp</name><index>[<expr>0</expr>]</index></name>.<name>p4</name>.<name>z</name>!=0</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>double</name></type> <name>rNow</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u64</name></type> <name>elapseTime</name></decl>;</decl_stmt>
+
+    <expr_stmt><expr><call><name>sqlite3OsCurrentTime</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pVfs</name></expr></argument>, <argument><expr>&amp;<name>rNow</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>elapseTime</name> = (<name>u64</name>)((<name>rNow</name> - (<name>int</name>)<name>rNow</name>)*3600.0*24.0*1000000000.0)</expr>;</expr_stmt>
+    <expr_stmt><expr><name>elapseTime</name> -= <name>p</name>-&gt;<name>startTime</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>db</name>-&gt;<call><name>xProfile</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pProfileArg</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name><name>aOp</name><index>[<expr>0</expr>]</index></name>.<name>p4</name>.<name>z</name></expr></argument>, <argument><expr><name>elapseTime</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><name>db</name>-&gt;<name>errCode</name> = <name>rc</name></expr>;</expr_stmt>
+  <comment type="block">/*sqlite3Error(p-&gt;db, rc, 0);*/</comment>
+  <expr_stmt><expr><name>p</name>-&gt;<name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<label><name>end_of_step</name>:</label>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>rc</name>&amp;0xff)==<name>rc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>zSql</name> &amp;&amp; (<name>rc</name>&amp;0xff)&lt;<name>SQLITE_ROW</name></expr> )</condition><then><block>{
+    <comment type="block">/* This behavior occurs if sqlite3_prepare_v2() was used to build
+    ** the prepared statement.  Return error codes directly */</comment>
+    <expr_stmt><expr><name>p</name>-&gt;<name>db</name>-&gt;<name>errCode</name> = <name>p</name>-&gt;<name>rc</name></expr>;</expr_stmt>
+    <comment type="block">/* sqlite3Error(p-&gt;db, p-&gt;rc, 0); */</comment>
+    <return>return <expr><name>p</name>-&gt;<name>rc</name></expr>;</return>
+  }</block></then><else>else<block>{
+    <comment type="block">/* This is for legacy sqlite3_prepare() builds and when the code
+    ** is SQLITE_ROW or SQLITE_DONE */</comment>
+    <return>return <expr><name>rc</name></expr>;</return>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/*
+** This is the top-level implementation of sqlite3_step().  Call
+** sqlite3Step() to do most of the work.  If a schema error occurs,
+** call sqlite3Reprepare() and try again.
+*/</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_PARSER</name></cpp:ifdef>
+<function><type><name>int</name></type> <name>sqlite3_step</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_MISUSE</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pStmt</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>v</name> = (<name>Vdbe</name>*)<name>pStmt</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>v</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3Step</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>v</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<function><type><name>int</name></type> <name>sqlite3_step</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_MISUSE</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pStmt</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Vdbe</name> *</type><name>v</name> =<init> <expr>(<name>Vdbe</name>*)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name> =<init> <expr><name>v</name>-&gt;<name>db</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <while>while<condition>( <expr>(<name>rc</name> = <call><name>sqlite3Step</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call>)==<name>SQLITE_SCHEMA</name>
+           &amp;&amp; <name>cnt</name>++ &lt; 5
+           &amp;&amp; <call><name>vdbeReprepare</name><argument_list>(<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+      <expr_stmt><expr><call><name>sqlite3_reset</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>v</name>-&gt;<name>expired</name> = 0</expr>;</expr_stmt>
+    }</block></while>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_SCHEMA</name> &amp;&amp; <name>v</name>-&gt;<name>zSql</name> &amp;&amp; <name>db</name>-&gt;<name>pErr</name></expr> )</condition><then><block>{
+      <comment type="block">/* This case occurs after failing to recompile an sql statement. 
+      ** The error message from the SQL compiler has already been loaded 
+      ** into the database handle. This block copies the error message 
+      ** from the database handle into the statement and sets the statement
+      ** program counter to 0 to ensure that when the statement is 
+      ** finalized or reset the parser error message is available via
+      ** sqlite3_errmsg() and sqlite3_errcode().
+      */</comment>
+      <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zErr</name> =<init> <expr>(<name>const</name> <name>char</name> *)<call><name>sqlite3_value_text</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>pErr</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt> 
+      <expr_stmt><expr><call><name>sqlite3DbFree</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>v</name>-&gt;<name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr>!<name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>v</name>-&gt;<name>zErrMsg</name> = <call><name>sqlite3DbStrDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then> <else>else <block>{
+        <expr_stmt><expr><name>v</name>-&gt;<name>zErrMsg</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>v</name>-&gt;<name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></then></if>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Extract the user data from a sqlite3_context structure and return a
+** pointer to it.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3_user_data</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name>-&gt;<name>pFunc</name>-&gt;<name>pUserData</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Extract the user data from a sqlite3_context structure and return a
+** pointer to it.
+*/</comment>
+<function><type><name>sqlite3</name> *</type><name>sqlite3_context_db_handle</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name>-&gt;<name>s</name>.<name>db</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The following is the implementation of an SQL function that always
+** fails with an error message stating that the function is used in the
+** wrong context.  The sqlite3_overload_function() API might construct
+** SQL function that use this routine so that the functions will exist
+** for name resolution but are actually overloaded by the xFindFunction
+** method of virtual tables.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3InvalidFunction</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>context</name></decl></param>,  <comment type="block">/* The function calling context */</comment>
+  <param><decl><type><name>int</name></type> <name>NotUsed</name></decl></param>,               <comment type="block">/* Number of arguments to the function */</comment>
+  <param><decl><type><name>sqlite3_value</name> **</type><name>NotUsed2</name></decl></param>   <comment type="block">/* Value of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name> =<init> <expr><name>context</name>-&gt;<name>pFunc</name>-&gt;<name>zName</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zErr</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>UNUSED_PARAMETER2</name><argument_list>(<argument><expr><name>NotUsed</name></expr></argument>, <argument><expr><name>NotUsed2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zErr</name> = <call><name>sqlite3MPrintf</name><argument_list>(<argument><expr>0</expr></argument>,
+      <argument><expr>"unable to use function %s in the requested context"</expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_result_error</name><argument_list>(<argument><expr><name>context</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Allocate or return the aggregate context for a user function.  A new
+** context is allocated on the first call.  Subsequent calls return the
+** same context that was returned on prior calls.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3_aggregate_context</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>p</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem</name> *</type><name>pMem</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name>-&gt;<name>xStep</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name> = <name>p</name>-&gt;<name>pMem</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr>(<name>pMem</name>-&gt;<name>flags</name> &amp; <name>MEM_Agg</name>)==0</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>nByte</name>==0</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeMemReleaseExternal</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>flags</name> = <name>MEM_Null</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>z</name> = 0</expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>sqlite3VdbeMemGrow</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>flags</name> = <name>MEM_Agg</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>u</name>.<name>pDef</name> = <name>p</name>-&gt;<name>pFunc</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pMem</name>-&gt;<name>z</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pMem</name>-&gt;<name>z</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></else></if>
+  }</block></then></if>
+  <return>return <expr>(<name>void</name>*)<name>pMem</name>-&gt;<name>z</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the auxilary data pointer, if any, for the iArg'th argument to
+** the user-function defined by pCtx.
+*/</comment>
+<function><type><name>void</name> *</type><name>sqlite3_get_auxdata</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, <param><decl><type><name>int</name></type> <name>iArg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>VdbeFunc</name> *</type><name>pVdbeFunc</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pVdbeFunc</name> = <name>pCtx</name>-&gt;<name>pVdbeFunc</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>pVdbeFunc</name> || <name>iArg</name>&gt;=<name>pVdbeFunc</name>-&gt;<name>nAux</name> || <name>iArg</name>&lt;0</expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>pVdbeFunc</name>-&gt;<name><name>apAux</name><index>[<expr><name>iArg</name></expr>]</index></name>.<name>pAux</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Set the auxilary data pointer and delete function, for the iArg'th
+** argument to the user-function defined by pCtx. Any previous value is
+** deleted by calling the delete function specified when it was set.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3_set_auxdata</name><parameter_list>(
+  <param><decl><type><name>sqlite3_context</name> *</type><name>pCtx</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>iArg</name></decl></param>, 
+  <param><decl><type><name>void</name> *</type><name>pAux</name></decl></param>, 
+  <param><function_decl><type><name>void</name></type> (*<name>xDelete</name>)<parameter_list>(<param><decl><type><name>void</name>*</type></decl></param>)</parameter_list></function_decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type>struct <name>AuxData</name> *</type><name>pAuxData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>VdbeFunc</name> *</type><name>pVdbeFunc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>iArg</name>&lt;0</expr> )</condition><then> <goto>goto <name>failed</name>;</goto></then></if>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pVdbeFunc</name> = <name>pCtx</name>-&gt;<name>pVdbeFunc</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>pVdbeFunc</name> || <name>pVdbeFunc</name>-&gt;<name>nAux</name>&lt;=<name>iArg</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>nAux</name> =<init> <expr>(<name>pVdbeFunc</name> ? <name>pVdbeFunc</name>-&gt;<name>nAux</name> : 0)</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>nMalloc</name> =<init> <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>VdbeFunc</name></expr></argument>)</argument_list></call> + <call><name>sizeof</name><argument_list>(<argument><expr>struct <name>AuxData</name></expr></argument>)</argument_list></call>*<name>iArg</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pVdbeFunc</name> = <call><name>sqlite3DbRealloc</name><argument_list>(<argument><expr><name>pCtx</name>-&gt;<name>s</name>.<name>db</name></expr></argument>, <argument><expr><name>pVdbeFunc</name></expr></argument>, <argument><expr><name>nMalloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>!<name>pVdbeFunc</name></expr> )</condition><then><block>{
+      <goto>goto <name>failed</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr><name>pCtx</name>-&gt;<name>pVdbeFunc</name> = <name>pVdbeFunc</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>pVdbeFunc</name>-&gt;<name><name>apAux</name><index>[<expr><name>nAux</name></expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr>struct <name>AuxData</name></expr></argument>)</argument_list></call>*(<name>iArg</name>+1-<name>nAux</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVdbeFunc</name>-&gt;<name>nAux</name> = <name>iArg</name>+1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>pVdbeFunc</name>-&gt;<name>pFunc</name> = <name>pCtx</name>-&gt;<name>pFunc</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>pAuxData</name> = &amp;<name>pVdbeFunc</name>-&gt;<name><name>apAux</name><index>[<expr><name>iArg</name></expr>]</index></name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pAuxData</name>-&gt;<name>pAux</name> &amp;&amp; <name>pAuxData</name>-&gt;<name>xDelete</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pAuxData</name>-&gt;<call><name>xDelete</name><argument_list>(<argument><expr><name>pAuxData</name>-&gt;<name>pAux</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>pAuxData</name>-&gt;<name>pAux</name> = <name>pAux</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pAuxData</name>-&gt;<name>xDelete</name> = <name>xDelete</name></expr>;</expr_stmt>
+  <return>return;</return>
+
+<label><name>failed</name>:</label>
+  <if>if<condition>( <expr><name>xDelete</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>xDelete</name><argument_list>(<argument><expr><name>pAux</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_DEPRECATED</name></cpp:ifndef>
+<comment type="block">/*
+** Return the number of times the Step function of a aggregate has been 
+** called.
+**
+** This function is deprecated.  Do not use it for new code.  It is
+** provide only to avoid breaking legacy code.  New aggregate function
+** implementations should keep their own counts within their aggregate
+** context.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_aggregate_count</name><parameter_list>(<param><decl><type><name>sqlite3_context</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>p</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name> &amp;&amp; <name>p</name>-&gt;<name>pFunc</name>-&gt;<name>xStep</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>p</name>-&gt;<name>pMem</name>-&gt;<name>n</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Return the number of columns in the result set for the statement pStmt.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_column_count</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>pVm</name> =<init> <expr>(<name>Vdbe</name> *)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVm</name> ? <name>pVm</name>-&gt;<name>nResColumn</name> : 0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the number of values available from the current row of the
+** currently executing statement pStmt.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3_data_count</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>pVm</name> =<init> <expr>(<name>Vdbe</name> *)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pVm</name>==0 || <name>pVm</name>-&gt;<name>pResultSet</name>==0</expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+  <return>return <expr><name>pVm</name>-&gt;<name>nResColumn</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Check to see if column iCol of the given statement is valid.  If
+** it is, return a pointer to the Mem for the value of that column.
+** If iCol is not valid, return a pointer to a Mem which has a value
+** of NULL.
+*/</comment>
+<function><type><name>static</name> <name>Mem</name> *</type><name>columnMem</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>pVm</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>vals</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Mem</name> *</type><name>pOut</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>pVm</name> = (<name>Vdbe</name> *)<name>pStmt</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pVm</name> &amp;&amp; <name>pVm</name>-&gt;<name>pResultSet</name>!=0 &amp;&amp; <name>i</name>&lt;<name>pVm</name>-&gt;<name>nResColumn</name> &amp;&amp; <name>i</name>&gt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>pVm</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>vals</name> = <call><name>sqlite3_data_count</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pOut</name> = &amp;<name>pVm</name>-&gt;<name><name>pResultSet</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>static</name> <name>const</name> <name>Mem</name></type> <name>nullMem</name> =<init> <expr><block>{<expr><block>{<expr>0</expr>}</block></expr>, <expr>0.0</expr>, <expr>0</expr>, <expr>""</expr>, <expr>0</expr>, <expr><name>MEM_Null</name></expr>, <expr><name>SQLITE_NULL</name></expr>, <expr>0</expr>, <expr>0</expr>, <expr>0</expr> }</block></expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>pVm</name>-&gt;<name>db</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>pVm</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3Error</name><argument_list>(<argument><expr><name>pVm</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>SQLITE_RANGE</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>pOut</name> = (<name>Mem</name>*)&amp;<name>nullMem</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>pOut</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This function is called after invoking an sqlite3_value_XXX function on a 
+** column value (i.e. a value returned by evaluating an SQL expression in the
+** select list of a SELECT statement) that may cause a malloc() failure. If 
+** malloc() has failed, the threads mallocFailed flag is cleared and the result
+** code of statement pStmt set to SQLITE_NOMEM.
+**
+** Specifically, this is called from within:
+**
+**     sqlite3_column_int()
+**     sqlite3_column_int64()
+**     sqlite3_column_text()
+**     sqlite3_column_text16()
+**     sqlite3_column_real()
+**     sqlite3_column_bytes()
+**     sqlite3_column_bytes16()
+**
+** But not for sqlite3_column_blob(), which never calls malloc().
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>columnMallocFailure</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>)</parameter_list>
+<block>{
+  <comment type="block">/* If malloc() failed during an encoding conversion within an
+  ** sqlite3_column_XXX API, then set the return code of the statement to
+  ** SQLITE_NOMEM. The next call to _step() (if any) will return SQLITE_ERROR
+  ** and _finalize() will return NOMEM.
+  */</comment>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>p</name> =<init> <expr>(<name>Vdbe</name> *)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>rc</name> = <call><name>sqlite3ApiExit</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/**************************** sqlite3_column_  *******************************
+** The following routines are used to access elements of the current row
+** in the result set.
+*/</comment>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_column_blob</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>void</name> *</type><name>val</name></decl>;</decl_stmt>
+  <expr_stmt><expr><name>val</name> = <call><name>sqlite3_value_blob</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <comment type="block">/* Even though there is no encoding conversion, value_blob() might
+  ** need to call malloc() to expand the result of a zeroblob() 
+  ** expression. 
+  */</comment>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_column_bytes</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>val</name> =<init> <expr><call><name>sqlite3_value_bytes</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_column_bytes16</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>val</name> =<init> <expr><call><name>sqlite3_value_bytes16</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>double</name></type> <name>sqlite3_column_double</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>double</name></type> <name>val</name> =<init> <expr><call><name>sqlite3_value_double</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>int</name></type> <name>sqlite3_column_int</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>val</name> =<init> <expr><call><name>sqlite3_value_int</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>sqlite_int64</name></type> <name>sqlite3_column_int64</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite_int64</name></type> <name>val</name> =<init> <expr><call><name>sqlite3_value_int64</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>sqlite3_column_text</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>val</name> =<init> <expr><call><name>sqlite3_value_text</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<function><type><name>sqlite3_value</name> *</type><name>sqlite3_column_value</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem</name> *</type><name>pOut</name> =<init> <expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pOut</name>-&gt;<name>flags</name>&amp;<name>MEM_Static</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pOut</name>-&gt;<name>flags</name> &amp;= ~<name>MEM_Static</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pOut</name>-&gt;<name>flags</name> |= <name>MEM_Ephem</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(<name>sqlite3_value</name> *)<name>pOut</name></expr>;</return>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_column_text16</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>void</name> *</type><name>val</name> =<init> <expr><call><name>sqlite3_value_text16</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>val</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+<function><type><name>int</name></type> <name>sqlite3_column_type</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>i</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iType</name> =<init> <expr><call><name>sqlite3_value_type</name><argument_list>( <argument><expr><call><name>columnMem</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>,<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>columnMallocFailure</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>iType</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* The following function is experimental and subject to change or
+** removal */</comment>
+<comment type="block">/*int sqlite3_column_numeric_type(sqlite3_stmt *pStmt, int i){
+**  return sqlite3_value_numeric_type( columnMem(pStmt,i) );
+**}
+*/</comment>
+
+<comment type="block">/*
+** Convert the N-th element of pStmt-&gt;pColName[] into a string using
+** xFunc() then return that string.  If N is out of range, return 0.
+**
+** There are up to 5 names for each column.  useType determines which
+** name is returned.  Here are the names:
+**
+**    0      The column name as it should be displayed for output
+**    1      The datatype name for the column
+**    2      The name of the database that the column derives from
+**    3      The name of the table that the column derives from
+**    4      The name of the table column that the result column derives from
+**
+** If the result is not a simple column reference (if it is an expression
+** or a constant) then useTypes 2, 3, and 4 return NULL.
+*/</comment>
+<function><type><name>static</name> <name>const</name> <name>void</name> *</type><name>columnName</name><parameter_list>(
+  <param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>N</name></decl></param>,
+  <param><function_decl><type><name>const</name> <name>void</name> *</type>(*<name>xFunc</name>)<parameter_list>(<param><decl><type><name>Mem</name>*</type></decl></param>)</parameter_list>,
+  <param><decl><type><name>int</name></type> <name>useType</name></decl></param></function_decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>void</name> *</type><name>ret</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Vdbe</name> *</type><name>p</name> =<init> <expr>(<name>Vdbe</name> *)<name>pStmt</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  
+
+  <if>if<condition>( <expr><name>p</name>!=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>n</name> = <call><name>sqlite3_column_count</name><argument_list>(<argument><expr><name>pStmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>N</name>&lt;<name>n</name> &amp;&amp; <name>N</name>&gt;=0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>N</name> += <name>useType</name>*<name>n</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>ret</name> = <call><name>xFunc</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name><name>aColName</name><index>[<expr><name>N</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+      <comment type="block">/* A malloc may have failed inside of the xFunc() call. If this
+      ** is the case, clear the mallocFailed flag and return NULL.
+      */</comment>
+      <if>if<condition>( <expr><name>p</name>-&gt;<name>db</name> &amp;&amp; <name>p</name>-&gt;<name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>db</name>-&gt;<name>mallocFailed</name> = 0</expr>;</expr_stmt>
+        <expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>ret</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the name of the Nth column of the result set returned by SQL
+** statement pStmt.
+*/</comment>
+<function><type><name>const</name> <name>char</name> *</type><name>sqlite3_column_name</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list><block>{
+  <return>return <macro><name>columnName</name><argument_list>(
+      <argument>pStmt</argument>, <argument>N</argument>, <argument>(const void*(*)(Mem*))sqlite3_value_text</argument>, <argument>COLNAME_NAME</argument>)</argument_list></macro>;</return>
+}</block></function>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<function><type><name>const</name> <name>void</name> *</type><name>sqlite3_column_name16</name><parameter_list>(<param><decl><type><name>sqlite3_stmt</name> *</type><name>pStmt</name></decl></param>, <param><decl><type><name>int</name></type> <name>N</name></decl></param>)</parameter_list><block>{
+  <return>return <macro><name>columnName</name><argument_list>(
+      <argument>pStmt</argument>, <argument>N</argument>, <argument>(const void*(*)(Mem*))sqlite3_value_text16</argument>, <argument>COLNAME_NAME</argument>)</argument_list></macro>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** Constraint:  If you have ENABLE_COLUMN_METADATA then you must
+** not define OMIT_DECLTYPE.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_DECLTYPE</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_ENABLE_COLUMN_METADATA</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:error># <cpp:directive>error</cpp:directive> "Must not define both SQLITE_OMIT_DECLTYPE \</cpp:error>
+         <decl_stmt><decl><type><name>and</name></type> <name>SQLITE_ENABLE_COLUMN_METADATA</name>"
+#endif
+
+#ifndef SQLITE_OMIT_DECLTYPE
+/*
+** Return the column declaration type (if applicable) of the 'i'th column
+** of the result set of SQL statement pStmt.
+*/
+const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text, COLNAME_DECLTYPE);
+}
+#ifndef SQLITE_OMIT_UTF16
+const void *sqlite3_column_decltype16(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text16, COLNAME_DECLTYPE);
+}
+#endif /* SQLITE_OMIT_UTF16 */
+#endif /* SQLITE_OMIT_DECLTYPE */
+
+#ifdef SQLITE_ENABLE_COLUMN_METADATA
+/*
+** Return the name of the database from which a result column derives.
+** NULL is returned if the result column is an expression or constant or
+** anything else which is not an unabiguous reference to a database column.
+*/
+const char *sqlite3_column_database_name(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text, COLNAME_DATABASE);
+}
+#ifndef SQLITE_OMIT_UTF16
+const void *sqlite3_column_database_name16(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text16, COLNAME_DATABASE);
+}
+#endif /* SQLITE_OMIT_UTF16 */
+
+/*
+** Return the name of the table from which a result column derives.
+** NULL is returned if the result column is an expression or constant or
+** anything else which is not an unabiguous reference to a database column.
+*/
+const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text, COLNAME_TABLE);
+}
+#ifndef SQLITE_OMIT_UTF16
+const void *sqlite3_column_table_name16(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text16, COLNAME_TABLE);
+}
+#endif /* SQLITE_OMIT_UTF16 */
+
+/*
+** Return the name of the table column from which a result column derives.
+** NULL is returned if the result column is an expression or constant or
+** anything else which is not an unabiguous reference to a database column.
+*/
+const char *sqlite3_column_origin_name(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text, COLNAME_COLUMN);
+}
+#ifndef SQLITE_OMIT_UTF16
+const void *sqlite3_column_origin_name16(sqlite3_stmt *pStmt, int N){
+  return columnName(
+      pStmt, N, (const void*(*)(Mem*))sqlite3_value_text16, COLNAME_COLUMN);
+}
+#endif /* SQLITE_OMIT_UTF16 */
+#endif /* SQLITE_ENABLE_COLUMN_METADATA */
+
+
+/******************************* sqlite3_bind_  ***************************
+** 
+** Routines used to attach values to wildcards in a compiled SQL statement.
+*/
+/*
+** Unbind the value bound to variable i in virtual machine p. This is the 
+** the same as binding a NULL value to the column. If the "<name>i</name>"</decl></decl_stmt> parameter is
+** out of range, then SQLITE_RANGE is returned. Othewise SQLITE_OK.
+**
+** A successful evaluation of this routine acquires the mutex on p.
+** the mutex is released if any kind of error occurs.
+**
+** The error code stored in database p-&gt;db is overwritten with the return
+** value in any case.
+*/
+static int vdbeUnbind(Vdbe *p, int i){
+  Mem *pVar;
+  if( p==0 ) return SQLITE_MISUSE;
+  sqlite3_mutex_enter(p-&gt;db-&gt;mutex);
+  if( p-&gt;magic!=VDBE_MAGIC_RUN || p-&gt;pc&gt;=0 ){
+    sqlite3Error(p-&gt;db, SQLITE_MISUSE, 0);
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+    return SQLITE_MISUSE;
+  }
+  if( i&lt;1 || i&gt;p-&gt;nVar ){
+    sqlite3Error(p-&gt;db, SQLITE_RANGE, 0);
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+    return SQLITE_RANGE;
+  }
+  i--;
+  pVar = &amp;p-&gt;aVar[i];
+  sqlite3VdbeMemRelease(pVar);
+  pVar-&gt;flags = MEM_Null;
+  sqlite3Error(p-&gt;db, SQLITE_OK, 0);
+  return SQLITE_OK;
+}
+
+/*
+** Bind a text or BLOB value.
+*/
+static int bindText(
+  sqlite3_stmt *pStmt,   /* The statement to bind against */
+  int i,                 /* Index of the parameter to bind */
+  const void *zData,     /* Pointer to the data to be bound */
+  int nData,             /* Number of bytes of data to be bound */
+  void (*xDel)(void*),   /* Destructor for the data */
+  u8 encoding            /* Encoding for the data */
+){
+  Vdbe *p = (Vdbe *)pStmt;
+  Mem *pVar;
+  int rc;
+
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    if( zData!=0 ){
+      pVar = &amp;p-&gt;aVar[i-1];
+      rc = sqlite3VdbeMemSetStr(pVar, zData, nData, encoding, xDel);
+      if( rc==SQLITE_OK &amp;&amp; encoding!=0 ){
+        rc = sqlite3VdbeChangeEncoding(pVar, ENC(p-&gt;db));
+      }
+      sqlite3Error(p-&gt;db, rc, 0);
+      rc = sqlite3ApiExit(p-&gt;db, rc);
+    }
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  return rc;
+}
+
+
+/*
+** Bind a blob value to an SQL statement variable.
+*/
+int sqlite3_bind_blob(
+  sqlite3_stmt *pStmt, 
+  int i, 
+  const void *zData, 
+  int nData, 
+  void (*xDel)(void*)
+){
+  return bindText(pStmt, i, zData, nData, xDel, 0);
+}
+int sqlite3_bind_double(sqlite3_stmt *pStmt, int i, double rValue){
+  int rc;
+  Vdbe *p = (Vdbe *)pStmt;
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    sqlite3VdbeMemSetDouble(&amp;p-&gt;aVar[i-1], rValue);
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  return rc;
+}
+int sqlite3_bind_int(sqlite3_stmt *p, int i, int iValue){
+  return sqlite3_bind_int64(p, i, (i64)iValue);
+}
+int sqlite3_bind_int64(sqlite3_stmt *pStmt, int i, sqlite_int64 iValue){
+  int rc;
+  Vdbe *p = (Vdbe *)pStmt;
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    sqlite3VdbeMemSetInt64(&amp;p-&gt;aVar[i-1], iValue);
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  return rc;
+}
+int sqlite3_bind_null(sqlite3_stmt *pStmt, int i){
+  int rc;
+  Vdbe *p = (Vdbe*)pStmt;
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  return rc;
+}
+int sqlite3_bind_text( 
+  sqlite3_stmt *pStmt, 
+  int i, 
+  const char *zData, 
+  int nData, 
+  void (*xDel)(void*)
+){
+  return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
+}
+#ifndef SQLITE_OMIT_UTF16
+int sqlite3_bind_text16(
+  sqlite3_stmt *pStmt, 
+  int i, 
+  const void *zData, 
+  int nData, 
+  void (*xDel)(void*)
+){
+  return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF16NATIVE);
+}
+#endif /* SQLITE_OMIT_UTF16 */
+int sqlite3_bind_value(sqlite3_stmt *pStmt, int i, const sqlite3_value *pValue){
+  int rc;
+  Vdbe *p = (Vdbe *)pStmt;
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    rc = sqlite3VdbeMemCopy(&amp;p-&gt;aVar[i-1], pValue);
+    if( rc==SQLITE_OK ){
+      rc = sqlite3VdbeChangeEncoding(&amp;p-&gt;aVar[i-1], ENC(p-&gt;db));
+    }
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  rc = sqlite3ApiExit(p-&gt;db, rc);
+  return rc;
+}
+int sqlite3_bind_zeroblob(sqlite3_stmt *pStmt, int i, int n){
+  int rc;
+  Vdbe *p = (Vdbe *)pStmt;
+  rc = vdbeUnbind(p, i);
+  if( rc==SQLITE_OK ){
+    sqlite3VdbeMemSetZeroBlob(&amp;p-&gt;aVar[i-1], n);
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+  return rc;
+}
+
+/*
+** Return the number of wildcards that can be potentially bound to.
+** This routine is added to support DBD::SQLite.  
+*/
+int sqlite3_bind_parameter_count(sqlite3_stmt *pStmt){
+  Vdbe *p = (Vdbe*)pStmt;
+  return p ? p-&gt;nVar : 0;
+}
+
+/*
+** Create a mapping from variable numbers to variable names
+** in the Vdbe.azVar[] array, if such a mapping does not already
+** exist.
+*/
+static void createVarMap(Vdbe *p){
+  if( !p-&gt;okVar ){
+    sqlite3_mutex_enter(p-&gt;db-&gt;mutex);
+    if( !p-&gt;okVar ){
+      int j;
+      Op *pOp;
+      for(j=0, pOp=p-&gt;aOp; j&lt;p-&gt;nOp; j++, pOp++){
+        if( pOp-&gt;opcode==OP_Variable ){
+          assert( pOp-&gt;p1&gt;0 &amp;&amp; pOp-&gt;p1&lt;=p-&gt;nVar );
+          p-&gt;azVar[pOp-&gt;p1-1] = pOp-&gt;p4.z;
+        }
+      }
+      p-&gt;okVar = 1;
+    }
+    sqlite3_mutex_leave(p-&gt;db-&gt;mutex);
+  }
+}
+
+/*
+** Return the name of a wildcard parameter.  Return NULL if the index
+** is out of range or if the wildcard is unnamed.
+**
+** The result is always UTF-8.
+*/
+const char *sqlite3_bind_parameter_name(sqlite3_stmt *pStmt, int i){
+  Vdbe *p = (Vdbe*)pStmt;
+  if( p==0 || i&lt;1 || i&gt;p-&gt;nVar ){
+    return 0;
+  }
+  createVarMap(p);
+  return p-&gt;azVar[i-1];
+}
+
+/*
+** Given a wildcard parameter name, return the index of the variable
+** with that name.  If there is no variable with the given name,
+** return 0.
+*/
+int sqlite3_bind_parameter_index(sqlite3_stmt *pStmt, const char *zName){
+  Vdbe *p = (Vdbe*)pStmt;
+  int i;
+  if( p==0 ){
+    return 0;
+  }
+  createVarMap(p); 
+  if( zName ){
+    for(i=0; i&lt;p-&gt;nVar; i++){
+      const char *z = p-&gt;azVar[i];
+      if( z &amp;&amp; strcmp(z,zName)==0 ){
+        return i+1;
+      }
+    }
+  }
+  return 0;
+}
+
+/*
+** Transfer all bindings from the first statement over to the second.
+** If the two statements contain a different number of bindings, then
+** an SQLITE_ERROR is returned.
+*/
+int sqlite3TransferBindings(sqlite3_stmt *pFromStmt, sqlite3_stmt *pToStmt){
+  Vdbe *pFrom = (Vdbe*)pFromStmt;
+  Vdbe *pTo = (Vdbe*)pToStmt;
+  int i, rc = SQLITE_OK;
+  if( (pFrom-&gt;magic!=VDBE_MAGIC_RUN &amp;&amp; pFrom-&gt;magic!=VDBE_MAGIC_HALT)
+    || (pTo-&gt;magic!=VDBE_MAGIC_RUN &amp;&amp; pTo-&gt;magic!=VDBE_MAGIC_HALT)
+    || pTo-&gt;db!=pFrom-&gt;db ){
+    return SQLITE_MISUSE;
+  }
+  if( pFrom-&gt;nVar!=pTo-&gt;nVar ){
+    return SQLITE_ERROR;
+  }
+  sqlite3_mutex_enter(pTo-&gt;db-&gt;mutex);
+  for(i=0; rc==SQLITE_OK &amp;&amp; i&lt;pFrom-&gt;nVar; i++){
+    sqlite3VdbeMemMove(&amp;pTo-&gt;aVar[i], &amp;pFrom-&gt;aVar[i]);
+  }
+  sqlite3_mutex_leave(pTo-&gt;db-&gt;mutex);
+  assert( rc==SQLITE_OK || rc==SQLITE_NOMEM );
+  return rc;
+}
+
+#ifndef SQLITE_OMIT_DEPRECATED
+/*
+** Deprecated external interface.  Internal/core SQLite code
+** should call sqlite3TransferBindings.
+*/
+int sqlite3_transfer_bindings(sqlite3_stmt *pFromStmt, sqlite3_stmt *pToStmt){
+  return sqlite3TransferBindings(pFromStmt, pToStmt);
+}
+#endif
+
+/*
+** Return the sqlite3* database handle to which the prepared statement given
+** in the argument belongs.  This is the same database handle that was
+** the first argument to the sqlite3_prepare() that was used to create
+** the statement in the first place.
+*/
+sqlite3 *sqlite3_db_handle(sqlite3_stmt *pStmt){
+  return pStmt ? ((Vdbe*)pStmt)-&gt;db : 0;
+}
+
+/*
+** Return a pointer to the next prepared statement after pStmt associated
+** with database connection pDb.  If pStmt is NULL, return the first
+** prepared statement for the database connection.  Return NULL if there
+** are no more.
+*/
+sqlite3_stmt *sqlite3_next_stmt(sqlite3 *pDb, sqlite3_stmt *pStmt){
+  sqlite3_stmt *pNext;
+  sqlite3_mutex_enter(pDb-&gt;mutex);
+  if( pStmt==0 ){
+    pNext = (sqlite3_stmt*)pDb-&gt;pVdbe;
+  }else{
+    pNext = (sqlite3_stmt*)((Vdbe*)pStmt)-&gt;pNext;
+  }
+  sqlite3_mutex_leave(pDb-&gt;mutex);
+  return pNext;
+}
+
+/*
+** Return the value of a status counter for a prepared statement
+*/
+int sqlite3_stmt_status(sqlite3_stmt *pStmt, int op, int resetFlag){
+  Vdbe *pVdbe = (Vdbe*)pStmt;
+  int v = pVdbe-&gt;aCounter[op-1];
+  if( resetFlag ) pVdbe-&gt;aCounter[op-1] = 0;
+  return v;
+}
+</unit>

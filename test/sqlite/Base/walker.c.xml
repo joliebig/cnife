@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="walker.c" filename=""><comment type="block">/*
+** 2008 August 16
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains routines used for walking the parser tree for
+** an SQL statement.
+**
+** $Id: walker.c,v 1.1 2008/08/20 16:35:10 drh Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+
+<comment type="block">/*
+** Walk an expression tree.  Invoke the callback once for each node
+** of the expression, while decending.  (In other words, the callback
+** is invoked before visiting children.)
+**
+** The return value from the callback should be one of the WRC_*
+** constants to specify how to proceed with the walk.
+**
+**    WRC_Continue      Continue descending down the tree.
+**
+**    WRC_Prune         Do not descend into child nodes.  But allow
+**                      the walk to continue with sibling nodes.
+**
+**    WRC_Abort         Do no more callbacks.  Unwind the stack and
+**                      return the top-level walk call.
+**
+** The return value from this routine is WRC_Abort to abandon the tree walk
+** and WRC_Continue to continue.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3WalkExpr</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Expr</name> *</type><name>pExpr</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>pExpr</name>==0</expr> )</condition><then> <return>return <expr><name>WRC_Continue</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <name>pWalker</name>-&gt;<call><name>xExprCallback</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>WRC_Continue</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pLeft</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pRight</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3WalkExprList</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pList</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3WalkSelect</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pExpr</name>-&gt;<name>pSelect</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>WRC_Abort</name></expr>;</return>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>rc</name> &amp; <name>WRC_Abort</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Call sqlite3WalkExpr() for every expression in list p or until
+** an abort request is seen.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3WalkExprList</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>ExprList</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>rc</name> =<init> <expr><name>WRC_Continue</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>ExprList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>i</name>=<name>p</name>-&gt;<name>nExpr</name></expr>, <expr><name>pItem</name>=<name>p</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&gt;0</expr>;</condition> <incr><expr><name>i</name>--</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pItem</name>-&gt;<name>pExpr</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    }</block></for>
+  }</block></then></if>
+  <return>return <expr><name>rc</name> &amp; <name>WRC_Continue</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Walk all expressions associated with SELECT statement p.  Do
+** not invoke the SELECT callback on p, but do (of course) invoke
+** any expr callbacks and SELECT callbacks that come from subqueries.
+** Return WRC_Abort or WRC_Continue.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3WalkSelectExpr</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Select</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><call><name>sqlite3WalkExprList</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pEList</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pWhere</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExprList</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pGroupBy</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pHaving</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExprList</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pOrderBy</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pLimit</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>sqlite3WalkExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>pOffset</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+  <return>return <expr><name>WRC_Continue</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Walk the parse trees associated with all subqueries in the
+** FROM clause of SELECT statement p.  Do not invoke the select
+** callback on p, but do invoke it on each FROM clause subquery
+** and on any subqueries further down in the tree.  Return 
+** WRC_Abort or WRC_Continue;
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3WalkSelectFrom</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Select</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>SrcList</name> *</type><name>pSrc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>SrcList_item</name> *</type><name>pItem</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><name>pSrc</name> = <name>p</name>-&gt;<name>pSrc</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pSrc</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>i</name>=<name>pSrc</name>-&gt;<name>nSrc</name></expr>, <expr><name>pItem</name>=<name>pSrc</name>-&gt;<name>a</name></expr>;</init> <condition><expr><name>i</name>&gt;0</expr>;</condition> <incr><expr><name>i</name>--</expr>, <expr><name>pItem</name>++</expr></incr>)<block>{
+      <if>if<condition>( <expr><call><name>sqlite3WalkSelect</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>pItem</name>-&gt;<name>pSelect</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <return>return <expr><name>WRC_Abort</name></expr>;</return>
+      }</block></then></if>
+    }</block></for>
+  }</block></then></if>
+  <return>return <expr><name>WRC_Continue</name></expr>;</return>
+}</block></function> 
+
+<comment type="block">/*
+** Call sqlite3WalkExpr() for every expression in Select statement p.
+** Invoke sqlite3WalkSelect() for subqueries in the FROM clause and
+** on the compound select chain, p-&gt;pPrior.
+**
+** Return WRC_Continue under normal conditions.  Return WRC_Abort if
+** there is an abort request.
+**
+** If the Walker does not have an xSelectCallback() then this routine
+** is a no-op returning WRC_Continue.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3WalkSelect</name><parameter_list>(<param><decl><type><name>Walker</name> *</type><name>pWalker</name></decl></param>, <param><decl><type><name>Select</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>==0 || <name>pWalker</name>-&gt;<name>xSelectCallback</name>==0</expr> )</condition><then> <return>return <expr><name>WRC_Continue</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <name>WRC_Continue</name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>p</name></expr>  )</condition><block>{
+    <expr_stmt><expr><name>rc</name> = <name>pWalker</name>-&gt;<call><name>xSelectCallback</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name></expr> )</condition><then> <break>break;</break></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3WalkSelectExpr</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    <if>if<condition>( <expr><call><name>sqlite3WalkSelectFrom</name><argument_list>(<argument><expr><name>pWalker</name></expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>WRC_Abort</name></expr>;</return></then></if>
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pPrior</name></expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>rc</name> &amp; <name>WRC_Abort</name></expr>;</return>
+}</block></function>
+</unit>

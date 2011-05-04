@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="pager.h"><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This header file defines the interface that the sqlite page cache
+** subsystem.  The page cache subsystem reads and writes a file a page
+** at a time and provides a journal for rollback.
+**
+** @(#) $Id: pager.h,v 1.93 2009/01/07 15:18:21 danielk1977 Exp $
+*/</comment>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_PAGER_H_</name></cpp:ifndef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>_PAGER_H_</name></cpp:define>
+
+<comment type="block">/*
+** If defined as non-zero, auto-vacuum is enabled by default. Otherwise
+** it must be turned on for each database using "PRAGMA auto_vacuum = 1".
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_DEFAULT_JOURNAL_SIZE_LIMIT</name></cpp:ifndef>
+  <cpp:define>#<cpp:directive>define</cpp:directive> <name>SQLITE_DEFAULT_JOURNAL_SIZE_LIMIT</name> -1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** The type used to represent a page number.  The first page in a file
+** is called page 1.  0 is used to represent "not a page".
+*/</comment>
+<typedef>typedef <type><name>u32</name></type> <name>Pgno</name>;</typedef>
+
+<comment type="block">/*
+** Each open file is managed by a separate instance of the "Pager" structure.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>Pager</name> Pager;</struct></type></typedef>
+
+<comment type="block">/*
+** Handle type for pages.
+*/</comment>
+<typedef>typedef <type><struct>struct <name>PgHdr</name> DbPage;</struct></type></typedef>
+
+<comment type="block">/*
+** Allowed values for the flags parameter to sqlite3PagerOpen().
+**
+** NOTE: This values must match the corresponding BTREE_ values in btree.h.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_OMIT_JOURNAL</name>  0x0001</cpp:define>    <comment type="block">/* Do not use a rollback journal */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_NO_READLOCK</name>   0x0002</cpp:define>    <comment type="block">/* Omit readlocks on readonly files */</comment>
+
+<comment type="block">/*
+** Valid values for the second argument to sqlite3PagerLockingMode().
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_LOCKINGMODE_QUERY</name>      -1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_LOCKINGMODE_NORMAL</name>      0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_LOCKINGMODE_EXCLUSIVE</name>   1</cpp:define>
+
+<comment type="block">/*
+** Valid values for the second argument to sqlite3PagerJournalMode().
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_QUERY</name>      -1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_DELETE</name>      0</cpp:define>   <comment type="block">/* Commit by deleting journal file */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_PERSIST</name>     1</cpp:define>   <comment type="block">/* Commit by zeroing journal header */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_OFF</name>         2</cpp:define>   <comment type="block">/* Journal omitted.  */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_TRUNCATE</name>    3</cpp:define>   <comment type="block">/* Commit by truncating journal */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>PAGER_JOURNALMODE_MEMORY</name>      4</cpp:define>   <comment type="block">/* In-memory journal file */</comment>
+
+<comment type="block">/*
+** See source code comments for a detailed description of the following
+** routines:
+*/</comment>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type></decl></param>, <param><decl><type><name>Pager</name> **</type><name>ppPager</name></decl></param>, <param><decl><type><name>const</name> <name>char</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PagerSetBusyhandler</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><function_decl><type><name>int</name></type>(*)<parameter_list>(<param><decl><type><name>void</name> *</type></decl></param>)</parameter_list>, <param><decl><type><name>void</name> *</type></decl></param></function_decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PagerSetReiniter</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><function_decl><type><name>void</name></type>(*)<parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list></function_decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerSetPagesize</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><decl><type><name>u16</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerMaxPageCount</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerReadFileheader</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>, <param><decl><type><name>unsigned</name> <name>char</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PagerSetCachesize</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerClose</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerAcquire</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>, <param><decl><type><name>Pgno</name></type> <name>pgno</name></decl></param>, <param><decl><type><name>DbPage</name> **</type><name>ppPage</name></decl></param>, <param><decl><type><name>int</name></type> <name>clrFlag</name></decl></param>)</parameter_list>;</function_decl>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>sqlite3PagerGet</name>(A,B,C) sqlite3PagerAcquire(A,B,C,0)</cpp:define>
+<function_decl><type><name>DbPage</name> *</type><name>sqlite3PagerLookup</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>, <param><decl><type><name>Pgno</name></type> <name>pgno</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerPageRefcount</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerRef</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerUnref</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerWrite</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerPagecount</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>, <param><decl><type><name>int</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerBegin</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>, <param><decl><type><name>int</name></type> <name>exFlag</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerCommitPhaseOne</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>zMaster</name></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerCommitPhaseTwo</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerRollback</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>u8</name></type> <name>sqlite3PagerIsreadonly</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PagerDontRollback</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerDontWrite</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerRefcount</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>sqlite3PagerSetSafetyLevel</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>,<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>const</name> <name>char</name> *</type><name>sqlite3PagerFilename</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>const</name> <name>sqlite3_vfs</name> *</type><name>sqlite3PagerVfs</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>sqlite3_file</name> *</type><name>sqlite3PagerFile</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>const</name> <name>char</name> *</type><name>sqlite3PagerDirname</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>const</name> <name>char</name> *</type><name>sqlite3PagerJournalname</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerNosync</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerMovepage</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>,<param><decl><type><name>DbPage</name>*</type></decl></param>,<param><decl><type><name>Pgno</name></type></decl></param>,<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name> *</type><name>sqlite3PagerGetData</name><parameter_list>(<param><decl><type><name>DbPage</name> *</type></decl></param>)</parameter_list>;</function_decl> 
+<function_decl><type><name>void</name> *</type><name>sqlite3PagerGetExtra</name><parameter_list>(<param><decl><type><name>DbPage</name> *</type></decl></param>)</parameter_list>;</function_decl> 
+<function_decl><type><name>int</name></type> <name>sqlite3PagerLockingMode</name><parameter_list>(<param><decl><type><name>Pager</name> *</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerJournalMode</name><parameter_list>(<param><decl><type><name>Pager</name> *</type></decl></param>, <param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>i64</name></type> <name>sqlite3PagerJournalSizeLimit</name><parameter_list>(<param><decl><type><name>Pager</name> *</type></decl></param>, <param><decl><type><name>i64</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name> *</type><name>sqlite3PagerTempSpace</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerSync</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>)</parameter_list>;</function_decl>
+
+<function_decl><type><name>int</name></type> <name>sqlite3PagerOpenSavepoint</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>, <param><decl><type><name>int</name></type> <name>n</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>int</name></type> <name>sqlite3PagerSavepoint</name><parameter_list>(<param><decl><type><name>Pager</name> *</type><name>pPager</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>int</name></type> <name>iSavepoint</name></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_AUTOVACUUM</name></cpp:ifndef>
+  <function_decl><type><name>void</name></type> <name>sqlite3PagerTruncateImage</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>,<param><decl><type><name>Pgno</name></type></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>Pgno</name></type> <name>sqlite3PagerImageSize</name><parameter_list>(<param><decl><type><name>Pager</name> *</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_HAS_CODEC</name></cpp:ifdef>
+  <decl_stmt><decl><type><name>void</name></type> <name>sqlite3PagerSetCodec</name><argument_list>(<argument><expr><name>Pager</name>*</expr></argument>,<argument><expr><name>void</name>*<call>(*)<argument_list>(<argument><expr><name>void</name>*</expr></argument>,<argument><expr><name>void</name>*</expr></argument>,<argument><expr><name>Pgno</name></expr></argument>,<argument><expr><name>int</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>void</name>*</expr></argument>)</argument_list></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>NDEBUG</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <function_decl><type><name>Pgno</name></type> <name>sqlite3PagerPagenumber</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>sqlite3PagerIswriteable</name><parameter_list>(<param><decl><type><name>DbPage</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+  <function_decl><type><name>int</name> *</type><name>sqlite3PagerStats</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>void</name></type> <name>sqlite3PagerRefdump</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>sqlite3PagerIsMemdb</name><parameter_list>(<param><decl><type><name>Pager</name>*</type></decl></param>)</parameter_list>;</function_decl>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_TEST</name></cpp:ifdef>
+<function_decl><type><name>void</name></type> <name>disable_simulated_io_errors</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>void</name></type> <name>enable_simulated_io_errors</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list>;</function_decl>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>disable_simulated_io_errors</name>()</cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>enable_simulated_io_errors</name>()</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* _PAGER_H_ */</comment>
+</unit>

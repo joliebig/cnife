@@ -1,0 +1,1796 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_async.c" filename=""><comment type="block">/*
+** 2005 December 14
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** $Id: test_async.c,v 1.48 2008/09/26 20:02:50 drh Exp $
+**
+** This file contains an example implementation of an asynchronous IO 
+** backend for SQLite.
+**
+** WHAT IS ASYNCHRONOUS I/O?
+**
+** With asynchronous I/O, write requests are handled by a separate thread
+** running in the background.  This means that the thread that initiates
+** a database write does not have to wait for (sometimes slow) disk I/O
+** to occur.  The write seems to happen very quickly, though in reality
+** it is happening at its usual slow pace in the background.
+**
+** Asynchronous I/O appears to give better responsiveness, but at a price.
+** You lose the Durable property.  With the default I/O backend of SQLite,
+** once a write completes, you know that the information you wrote is
+** safely on disk.  With the asynchronous I/O, this is not the case.  If
+** your program crashes or if a power loss occurs after the database
+** write but before the asynchronous write thread has completed, then the
+** database change might never make it to disk and the next user of the
+** database might not see your change.
+**
+** You lose Durability with asynchronous I/O, but you still retain the
+** other parts of ACID:  Atomic,  Consistent, and Isolated.  Many
+** appliations get along fine without the Durablity.
+**
+** HOW IT WORKS
+**
+** Asynchronous I/O works by creating a special SQLite "vfs" structure
+** and registering it with sqlite3_vfs_register(). When files opened via 
+** this vfs are written to (using sqlite3OsWrite()), the data is not 
+** written directly to disk, but is placed in the "write-queue" to be
+** handled by the background thread.
+**
+** When files opened with the asynchronous vfs are read from 
+** (using sqlite3OsRead()), the data is read from the file on 
+** disk and the write-queue, so that from the point of view of
+** the vfs reader the OsWrite() appears to have already completed.
+**
+** The special vfs is registered (and unregistered) by calls to 
+** function asyncEnable() (see below).
+**
+** LIMITATIONS
+**
+** This demonstration code is deliberately kept simple in order to keep
+** the main ideas clear and easy to understand.  Real applications that
+** want to do asynchronous I/O might want to add additional capabilities.
+** For example, in this demonstration if writes are happening at a steady
+** stream that exceeds the I/O capability of the background writer thread,
+** the queue of pending write operations will grow without bound until we
+** run out of memory.  Users of this technique may want to keep track of
+** the quantity of pending writes and stop accepting new write requests
+** when the buffer gets to be too big.
+**
+** LOCKING + CONCURRENCY
+**
+** Multiple connections from within a single process that use this
+** implementation of asynchronous IO may access a single database
+** file concurrently. From the point of view of the user, if all
+** connections are from within a single process, there is no difference
+** between the concurrency offered by "normal" SQLite and SQLite
+** using the asynchronous backend.
+**
+** If connections from within multiple database files may access the
+** database file, the ENABLE_FILE_LOCKING symbol (see below) must be
+** defined. If it is not defined, then no locks are established on 
+** the database file. In this case, if multiple processes access 
+** the database file, corruption will quickly result.
+**
+** If ENABLE_FILE_LOCKING is defined (the default), then connections 
+** from within multiple processes may access a single database file 
+** without risking corruption. However concurrency is reduced as
+** follows:
+**
+**   * When a connection using asynchronous IO begins a database
+**     transaction, the database is locked immediately. However the
+**     lock is not released until after all relevant operations
+**     in the write-queue have been flushed to disk. This means
+**     (for example) that the database may remain locked for some 
+**     time after a "COMMIT" or "ROLLBACK" is issued.
+**
+**   * If an application using asynchronous IO executes transactions
+**     in quick succession, other database users may be effectively
+**     locked out of the database. This is because when a BEGIN
+**     is executed, a database lock is established immediately. But
+**     when the corresponding COMMIT or ROLLBACK occurs, the lock
+**     is not released until the relevant part of the write-queue 
+**     has been flushed through. As a result, if a COMMIT is followed
+**     by a BEGIN before the write-queue is flushed through, the database 
+**     is never unlocked,preventing other processes from accessing 
+**     the database.
+**
+** Defining ENABLE_FILE_LOCKING when using an NFS or other remote 
+** file-system may slow things down, as synchronous round-trips to the 
+** server may be required to establish database file locks.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ENABLE_FILE_LOCKING</name></cpp:define>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_AMALGAMATION</name></cpp:ifndef>
+<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>"sqlite3.h"</cpp:file></cpp:include>
+<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;tcl.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** This test uses pthreads and hence only works on unix and with
+** a threadsafe build of SQLite.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_UNIX</name> &amp;&amp; <name>SQLITE_THREADSAFE</name></expr></cpp:if>
+
+<comment type="block">/*
+** This demo uses pthreads.  If you do not have a pthreads implementation
+** for your operating system, you will need to recode the threading 
+** logic.
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;pthread.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sched.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/* Useful macros used in several places */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MIN</name>(x,y) ((x)&lt;(y)?(x):(y))</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>MAX</name>(x,y) ((x)&gt;(y)?(x):(y))</cpp:define>
+
+<comment type="block">/* Forward references */</comment>
+<typedef>typedef <type><struct>struct <name>AsyncWrite</name> AsyncWrite;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>AsyncFile</name> AsyncFile;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>AsyncFileData</name> AsyncFileData;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>AsyncFileLock</name> AsyncFileLock;</struct></type></typedef>
+<typedef>typedef <type><struct>struct <name>AsyncLock</name> AsyncLock;</struct></type></typedef>
+
+<comment type="block">/* Enable for debugging */</comment>
+<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>sqlite3async_trace</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>ASYNC_TRACE</name>(X) if( sqlite3async_trace ) asyncTrace X</cpp:define>
+<function><type><name>static</name> <name>void</name></type> <name>asyncTrace</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zFormat</name></decl></param>, <param>...</param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>va_list</name></type> <name>ap</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>va_start</name><argument_list>(<argument><expr><name>ap</name></expr></argument>, <argument><expr><name>zFormat</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>z</name> = <call><name>sqlite3_vmprintf</name><argument_list>(<argument><expr><name>zFormat</name></expr></argument>, <argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>va_end</name><argument_list>(<argument><expr><name>ap</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"[%d] %s"</expr></argument>, <argument><expr>(<name>int</name>)<call><name>pthread_self</name><argument_list>()</argument_list></call></expr></argument>, <argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** THREAD SAFETY NOTES
+**
+** Basic rules:
+**
+**     * Both read and write access to the global write-op queue must be 
+**       protected by the async.queueMutex. As are the async.ioError and
+**       async.nFile variables.
+**
+**     * The async.pLock list and all AsyncLock and AsyncFileLock
+**       structures must be protected by the async.lockMutex mutex.
+**
+**     * The file handles from the underlying system are not assumed to 
+**       be thread safe.
+**
+**     * See the last two paragraphs under "The Writer Thread" for
+**       an assumption to do with file-handle synchronization by the Os.
+**
+** Deadlock prevention:
+**
+**     There are three mutex used by the system: the "writer" mutex, 
+**     the "queue" mutex and the "lock" mutex. Rules are:
+**
+**     * It is illegal to block on the writer mutex when any other mutex
+**       are held, and 
+**
+**     * It is illegal to block on the queue mutex when the lock mutex
+**       is held.
+**
+**     i.e. mutex's must be grabbed in the order "writer", "queue", "lock".
+**
+** File system operations (invoked by SQLite thread):
+**
+**     xOpen
+**     xDelete
+**     xFileExists
+**
+** File handle operations (invoked by SQLite thread):
+**
+**         asyncWrite, asyncClose, asyncTruncate, asyncSync 
+**    
+**     The operations above add an entry to the global write-op list. They
+**     prepare the entry, acquire the async.queueMutex momentarily while
+**     list pointers are  manipulated to insert the new entry, then release
+**     the mutex and signal the writer thread to wake up in case it happens
+**     to be asleep.
+**
+**    
+**         asyncRead, asyncFileSize.
+**
+**     Read operations. Both of these read from both the underlying file
+**     first then adjust their result based on pending writes in the 
+**     write-op queue.   So async.queueMutex is held for the duration
+**     of these operations to prevent other threads from changing the
+**     queue in mid operation.
+**    
+**
+**         asyncLock, asyncUnlock, asyncCheckReservedLock
+**    
+**     These primitives implement in-process locking using a hash table
+**     on the file name.  Files are locked correctly for connections coming
+**     from the same process.  But other processes cannot see these locks
+**     and will therefore not honor them.
+**
+**
+** The writer thread:
+**
+**     The async.writerMutex is used to make sure only there is only
+**     a single writer thread running at a time.
+**
+**     Inside the writer thread is a loop that works like this:
+**
+**         WHILE (write-op list is not empty)
+**             Do IO operation at head of write-op list
+**             Remove entry from head of write-op list
+**         END WHILE
+**
+**     The async.queueMutex is always held during the &lt;write-op list is 
+**     not empty&gt; test, and when the entry is removed from the head
+**     of the write-op list. Sometimes it is held for the interim
+**     period (while the IO is performed), and sometimes it is
+**     relinquished. It is relinquished if (a) the IO op is an
+**     ASYNC_CLOSE or (b) when the file handle was opened, two of
+**     the underlying systems handles were opened on the same
+**     file-system entry.
+**
+**     If condition (b) above is true, then one file-handle 
+**     (AsyncFile.pBaseRead) is used exclusively by sqlite threads to read the
+**     file, the other (AsyncFile.pBaseWrite) by sqlite3_async_flush() 
+**     threads to perform write() operations. This means that read 
+**     operations are not blocked by asynchronous writes (although 
+**     asynchronous writes may still be blocked by reads).
+**
+**     This assumes that the OS keeps two handles open on the same file
+**     properly in sync. That is, any read operation that starts after a
+**     write operation on the same file system entry has completed returns
+**     data consistent with the write. We also assume that if one thread 
+**     reads a file while another is writing it all bytes other than the
+**     ones actually being written contain valid data.
+**
+**     If the above assumptions are not true, set the preprocessor symbol
+**     SQLITE_ASYNC_TWO_FILEHANDLES to 0.
+*/</comment>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_ASYNC_TWO_FILEHANDLES</name></cpp:ifndef>
+<comment type="block">/* #define SQLITE_ASYNC_TWO_FILEHANDLES 0 */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>SQLITE_ASYNC_TWO_FILEHANDLES</name> 1</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<comment type="block">/*
+** State information is held in the static variable "async" defined
+** as the following structure.
+**
+** Both async.ioError and async.nFile are protected by async.queueMutex.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> struct</type> <name>TestAsyncStaticData</name> <block>{
+  <decl_stmt><decl><type><name>pthread_mutex_t</name></type> <name>lockMutex</name></decl>;</decl_stmt>   <comment type="block">/* For access to aLock hash table */</comment>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name></type> <name>queueMutex</name></decl>;</decl_stmt>  <comment type="block">/* Mutex for access to write operation queue */</comment>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name></type> <name>writerMutex</name></decl>;</decl_stmt> <comment type="block">/* Prevents multiple writer threads */</comment>
+  <decl_stmt><decl><type><name>pthread_cond_t</name></type> <name>queueSignal</name></decl>;</decl_stmt>  <comment type="block">/* For waking up sleeping writer thread */</comment>
+  <decl_stmt><decl><type><name>pthread_cond_t</name></type> <name>emptySignal</name></decl>;</decl_stmt>  <comment type="block">/* Notify when the write queue is empty */</comment>
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>pQueueFirst</name></decl>;</decl_stmt>     <comment type="block">/* Next write operation to be processed */</comment>
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>pQueueLast</name></decl>;</decl_stmt>      <comment type="block">/* Last write operation on the list */</comment>
+  <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pLock</name></decl>;</decl_stmt>            <comment type="block">/* Linked list of all AsyncLock structures */</comment>
+  <decl_stmt><decl><type><name>volatile</name> <name>int</name></type> <name>ioDelay</name></decl>;</decl_stmt>             <comment type="block">/* Extra delay between write operations */</comment>
+  <decl_stmt><decl><type><name>volatile</name> <name>int</name></type> <name>writerHaltWhenIdle</name></decl>;</decl_stmt>  <comment type="block">/* Writer thread halts when queue empty */</comment>
+  <decl_stmt><decl><type><name>volatile</name> <name>int</name></type> <name>writerHaltNow</name></decl>;</decl_stmt>       <comment type="block">/* Writer thread halts after next op */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>ioError</name></decl>;</decl_stmt>                 <comment type="block">/* True if an IO error has occured */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nFile</name></decl>;</decl_stmt>                   <comment type="block">/* Number of open files (from sqlite pov) */</comment>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>async</name> = <block>{
+  <expr><name>PTHREAD_MUTEX_INITIALIZER</name></expr>,
+  <expr><name>PTHREAD_MUTEX_INITIALIZER</name></expr>,
+  <expr><name>PTHREAD_MUTEX_INITIALIZER</name></expr>,
+  <expr><name>PTHREAD_COND_INITIALIZER</name></expr>,
+  <expr><name>PTHREAD_COND_INITIALIZER</name></expr>,
+}</block></expr>;</expr_stmt>
+
+<comment type="block">/* Possible values of AsyncWrite.op */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_NOOP</name>          0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_WRITE</name>         1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_SYNC</name>          2</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_TRUNCATE</name>      3</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_CLOSE</name>         4</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_DELETE</name>        5</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_OPENEXCLUSIVE</name> 6</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASYNC_UNLOCK</name>        7</cpp:define>
+
+<comment type="block">/* Names of opcodes.  Used for debugging only.
+** Make sure these stay in sync with the macros above!
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name> *</type><name><name>azOpcodeName</name><index>[]</index></name> =<init> <expr><block>{
+  <expr>"NOOP"</expr>, <expr>"WRITE"</expr>, <expr>"SYNC"</expr>, <expr>"TRUNCATE"</expr>, <expr>"CLOSE"</expr>, <expr>"DELETE"</expr>, <expr>"OPENEX"</expr>, <expr>"UNLOCK"</expr>
+}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** Entries on the write-op queue are instances of the AsyncWrite
+** structure, defined here.
+**
+** The interpretation of the iOffset and nByte variables varies depending 
+** on the value of AsyncWrite.op:
+**
+** ASYNC_NOOP:
+**     No values used.
+**
+** ASYNC_WRITE:
+**     iOffset -&gt; Offset in file to write to.
+**     nByte   -&gt; Number of bytes of data to write (pointed to by zBuf).
+**
+** ASYNC_SYNC:
+**     nByte   -&gt; flags to pass to sqlite3OsSync().
+**
+** ASYNC_TRUNCATE:
+**     iOffset -&gt; Size to truncate file to.
+**     nByte   -&gt; Unused.
+**
+** ASYNC_CLOSE:
+**     iOffset -&gt; Unused.
+**     nByte   -&gt; Unused.
+**
+** ASYNC_DELETE:
+**     iOffset -&gt; Contains the "syncDir" flag.
+**     nByte   -&gt; Number of bytes of zBuf points to (file name).
+**
+** ASYNC_OPENEXCLUSIVE:
+**     iOffset -&gt; Value of "delflag".
+**     nByte   -&gt; Number of bytes of zBuf points to (file name).
+**
+** ASYNC_UNLOCK:
+**     nByte   -&gt; Argument to sqlite3OsUnlock().
+**
+**
+** For an ASYNC_WRITE operation, zBuf points to the data to write to the file. 
+** This space is sqlite3_malloc()d along with the AsyncWrite structure in a
+** single blob, so is deleted when sqlite3_free() is called on the parent 
+** structure.
+*/</comment>
+<struct>struct <name>AsyncWrite</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pFileData</name></decl>;</decl_stmt>    <comment type="block">/* File to write data to or sync */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>op</name></decl>;</decl_stmt>                      <comment type="block">/* One of ASYNC_xxx etc. */</comment>
+  <decl_stmt><decl><type><name>sqlite_int64</name></type> <name>iOffset</name></decl>;</decl_stmt>        <comment type="block">/* See above */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>          <comment type="block">/* See above */</comment>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt>         <comment type="block">/* Data to write to file (or NULL if op!=ASYNC_WRITE) */</comment>
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>pNext</name></decl>;</decl_stmt>  <comment type="block">/* Next write operation (to any file) */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** An instance of this structure is created for each distinct open file 
+** (i.e. if two handles are opened on the one file, only one of these
+** structures is allocated) and stored in the async.aLock hash table. The
+** keys for async.aLock are the full pathnames of the opened files.
+**
+** AsyncLock.pList points to the head of a linked list of AsyncFileLock
+** structures, one for each handle currently open on the file.
+**
+** If the opened file is not a main-database (the SQLITE_OPEN_MAIN_DB is
+** not passed to the sqlite3OsOpen() call), or if ENABLE_FILE_LOCKING is 
+** not defined at compile time, variables AsyncLock.pFile and 
+** AsyncLock.eLock are never used. Otherwise, pFile is a file handle
+** opened on the file in question and used to obtain the file-system 
+** locks required by database connections within this process.
+**
+** See comments above the asyncLock() function for more details on 
+** the implementation of database locking used by this backend.
+*/</comment>
+<struct>struct <name>AsyncLock</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>char</name> *</type><name>zFile</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nFile</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>eLock</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pList</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pNext</name></decl>;</decl_stmt>           <comment type="block">/* Next in linked list headed by async.pLock */</comment>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** An instance of the following structure is allocated along with each
+** AsyncFileData structure (see AsyncFileData.lock), but is only used if the
+** file was opened with the SQLITE_OPEN_MAIN_DB.
+*/</comment>
+<struct>struct <name>AsyncFileLock</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>int</name></type> <name>eLock</name></decl>;</decl_stmt>                <comment type="block">/* Internally visible lock state (sqlite pov) */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>eAsyncLock</name></decl>;</decl_stmt>           <comment type="block">/* Lock-state with write-queue unlock */</comment>
+  <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pNext</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/* 
+** The AsyncFile structure is a subclass of sqlite3_file used for 
+** asynchronous IO. 
+**
+** All of the actual data for the structure is stored in the structure
+** pointed to by AsyncFile.pData, which is allocated as part of the
+** sqlite3OsOpen() using sqlite3_malloc(). The reason for this is that the
+** lifetime of the AsyncFile structure is ended by the caller after OsClose()
+** is called, but the data in AsyncFileData may be required by the
+** writer thread after that point.
+*/</comment>
+<struct>struct <name>AsyncFile</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_io_methods</name> *</type><name>pMethod</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pData</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+<struct>struct <name>AsyncFileData</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>               <comment type="block">/* Underlying OS filename - used for debugging */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>nName</name></decl>;</decl_stmt>                 <comment type="block">/* Number of characters in zName */</comment>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pBaseRead</name></decl>;</decl_stmt>   <comment type="block">/* Read handle to the underlying Os file */</comment>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pBaseWrite</name></decl>;</decl_stmt>  <comment type="block">/* Write handle to the underlying Os file */</comment>
+  <decl_stmt><decl><type><name>AsyncFileLock</name></type> <name>lock</name></decl>;</decl_stmt>        <comment type="block">/* Lock state for this handle */</comment>
+  <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pLock</name></decl>;</decl_stmt>          <comment type="block">/* AsyncLock object for this file system entry */</comment>
+  <decl_stmt><decl><type><name>AsyncWrite</name></type> <name>close</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/*
+** The following async_XXX functions are debugging wrappers around the
+** corresponding pthread_XXX functions:
+**
+**     pthread_mutex_lock();
+**     pthread_mutex_unlock();
+**     pthread_mutex_trylock();
+**     pthread_cond_wait();
+**
+** It is illegal to pass any mutex other than those stored in the
+** following global variables of these functions.
+**
+**     async.queueMutex
+**     async.writerMutex
+**     async.lockMutex
+**
+** If NDEBUG is defined, these wrappers do nothing except call the 
+** corresponding pthreads function. If NDEBUG is not defined, then the
+** following variables are used to store the thread-id (as returned
+** by pthread_self()) currently holding the mutex, or 0 otherwise:
+**
+**     asyncdebug.queueMutexHolder
+**     asyncdebug.writerMutexHolder
+**     asyncdebug.lockMutexHolder
+**
+** These variables are used by some assert() statements that verify
+** the statements made in the "Deadlock Prevention" notes earlier
+** in this file.
+*/</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NDEBUG</name></cpp:ifndef>
+
+<decl_stmt><decl><type><name>static</name> struct</type> <name>TestAsyncDebugData</name> <block>{
+  <decl_stmt><decl><type><name>pthread_t</name></type> <name>lockMutexHolder</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name></type> <name>queueMutexHolder</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name></type> <name>writerMutexHolder</name></decl>;</decl_stmt>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>asyncdebug</name> = <block>{<expr>0</expr>, <expr>0</expr>, <expr>0</expr>}</block></expr>;</expr_stmt>
+
+<comment type="block">/*
+** Wrapper around pthread_mutex_lock(). Checks that we have not violated
+** the anti-deadlock rules (see "Deadlock prevention" above).
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>async_mutex_lock</name><parameter_list>(<param><decl><type><name>pthread_mutex_t</name> *</type><name>pMutex</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdx</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name> *</type><name>aMutex</name> =<init> <expr>(<name>pthread_mutex_t</name> *)(&amp;<name>async</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name> *</type><name>aHolder</name> =<init> <expr>(<name>pthread_t</name> *)(&amp;<name>asyncdebug</name>)</expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* The code in this 'ifndef NDEBUG' block depends on a certain alignment
+   * of the variables in TestAsyncStaticData and TestAsyncDebugData. The
+   * following assert() statements check that this has not been changed.
+   *
+   * Really, these only need to be run once at startup time.
+   */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aMutex</name><index>[<expr>0</expr>]</index></name>)==&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aMutex</name><index>[<expr>1</expr>]</index></name>)==&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aMutex</name><index>[<expr>2</expr>]</index></name>)==&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aHolder</name><index>[<expr>0</expr>]</index></name>)==&amp;<name>asyncdebug</name>.<name>lockMutexHolder</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aHolder</name><index>[<expr>1</expr>]</index></name>)==&amp;<name>asyncdebug</name>.<name>queueMutexHolder</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>&amp;(<name><name>aHolder</name><index>[<expr>2</expr>]</index></name>)==&amp;<name>asyncdebug</name>.<name>writerMutexHolder</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>pthread_self</name><argument_list>()</argument_list></call>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <for>for(<init><expr><name>iIdx</name>=0</expr>;</init> <condition><expr><name>iIdx</name>&lt;3</expr>;</condition> <incr><expr><name>iIdx</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pMutex</name>==&amp;<name><name>aMutex</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr> )</condition><then> <break>break;</break></then></if>
+
+    <comment type="block">/* This is the key assert(). Here we are checking that if the caller
+     * is trying to block on async.writerMutex, neither of the other two
+     * mutex are held. If the caller is trying to block on async.queueMutex,
+     * lockMutex is not held.
+     */</comment>
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>!<call><name>pthread_equal</name><argument_list>(<argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr></argument>, <argument><expr><call><name>pthread_self</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iIdx</name>&lt;3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>pthread_mutex_lock</name><argument_list>(<argument><expr><name>pMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Wrapper around pthread_mutex_unlock().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>async_mutex_unlock</name><parameter_list>(<param><decl><type><name>pthread_mutex_t</name> *</type><name>pMutex</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdx</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name> *</type><name>aMutex</name> =<init> <expr>(<name>pthread_mutex_t</name> *)(&amp;<name>async</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name> *</type><name>aHolder</name> =<init> <expr>(<name>pthread_t</name> *)(&amp;<name>asyncdebug</name>)</expr></init></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>iIdx</name>=0</expr>;</init> <condition><expr><name>iIdx</name>&lt;3</expr>;</condition> <incr><expr><name>iIdx</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pMutex</name>==&amp;<name><name>aMutex</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr> )</condition><then> <break>break;</break></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iIdx</name>&lt;3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><call><name>pthread_equal</name><argument_list>(<argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr></argument>, <argument><expr><call><name>pthread_self</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr><name>pMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>rc</name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Wrapper around pthread_mutex_trylock().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>async_mutex_trylock</name><parameter_list>(<param><decl><type><name>pthread_mutex_t</name> *</type><name>pMutex</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdx</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name> *</type><name>aMutex</name> =<init> <expr>(<name>pthread_mutex_t</name> *)(&amp;<name>async</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name> *</type><name>aHolder</name> =<init> <expr>(<name>pthread_t</name> *)(&amp;<name>asyncdebug</name>)</expr></init></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>iIdx</name>=0</expr>;</init> <condition><expr><name>iIdx</name>&lt;3</expr>;</condition> <incr><expr><name>iIdx</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pMutex</name>==&amp;<name><name>aMutex</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr> )</condition><then> <break>break;</break></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iIdx</name>&lt;3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>pthread_mutex_trylock</name><argument_list>(<argument><expr><name>pMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Wrapper around pthread_cond_wait().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>async_cond_wait</name><parameter_list>(<param><decl><type><name>pthread_cond_t</name> *</type><name>pCond</name></decl></param>, <param><decl><type><name>pthread_mutex_t</name> *</type><name>pMutex</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdx</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name> *</type><name>aMutex</name> =<init> <expr>(<name>pthread_mutex_t</name> *)(&amp;<name>async</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name> *</type><name>aHolder</name> =<init> <expr>(<name>pthread_t</name> *)(&amp;<name>asyncdebug</name>)</expr></init></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>iIdx</name>=0</expr>;</init> <condition><expr><name>iIdx</name>&lt;3</expr>;</condition> <incr><expr><name>iIdx</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pMutex</name>==&amp;<name><name>aMutex</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr> )</condition><then> <break>break;</break></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iIdx</name>&lt;3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><call><name>pthread_equal</name><argument_list>(<argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr></argument>,<argument><expr><call><name>pthread_self</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>pthread_cond_wait</name><argument_list>(<argument><expr><name>pCond</name></expr></argument>, <argument><expr><name>pMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Assert that the mutex is held by the current thread.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>assert_mutex_is_held</name><parameter_list>(<param><decl><type><name>pthread_mutex_t</name> *</type><name>pMutex</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>iIdx</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_mutex_t</name> *</type><name>aMutex</name> =<init> <expr>(<name>pthread_mutex_t</name> *)(&amp;<name>async</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>pthread_t</name> *</type><name>aHolder</name> =<init> <expr>(<name>pthread_t</name> *)(&amp;<name>asyncdebug</name>)</expr></init></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>iIdx</name>=0</expr>;</init> <condition><expr><name>iIdx</name>&lt;3</expr>;</condition> <incr><expr><name>iIdx</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pMutex</name>==&amp;<name><name>aMutex</name><index>[<expr><name>iIdx</name></expr>]</index></name></expr> )</condition><then> <break>break;</break></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>iIdx</name>&lt;3</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name><name>aHolder</name><index>[<expr><name>iIdx</name></expr>]</index></name>==<call><name>pthread_self</name><argument_list>()</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/* Call our async_XX wrappers instead of selected pthread_XX functions */</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>pthread_mutex_lock</name>    <name>async_mutex_lock</name></cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>pthread_mutex_unlock</name>  <name>async_mutex_unlock</name></cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>pthread_mutex_trylock</name> <name>async_mutex_trylock</name></cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>pthread_cond_wait</name>     <name>async_cond_wait</name></cpp:define>
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>    <comment type="block">/* if defined(NDEBUG) */</comment>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>assert_mutex_is_held</name>(X)</cpp:define>    <comment type="block">/* A no-op when not debugging */</comment>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>   <comment type="block">/* !defined(NDEBUG) */</comment>
+
+<comment type="block">/*
+** Add an entry to the end of the global write-op list. pWrite should point 
+** to an AsyncWrite structure allocated using sqlite3_malloc().  The writer
+** thread will call sqlite3_free() to free the structure after the specified
+** operation has been completed.
+**
+** Once an AsyncWrite structure has been added to the list, it becomes the
+** property of the writer thread and must not be read or modified by the
+** caller.  
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>addAsyncWrite</name><parameter_list>(<param><decl><type><name>AsyncWrite</name> *</type><name>pWrite</name></decl></param>)</parameter_list><block>{
+  <comment type="block">/* We must hold the queue mutex in order to modify the queue pointers */</comment>
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Add the record to the end of the write-op queue */</comment>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>!<name>pWrite</name>-&gt;<name>pNext</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>async</name>.<name>pQueueLast</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>async</name>.<name>pQueueFirst</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>async</name>.<name>pQueueLast</name>-&gt;<name>pNext</name> = <name>pWrite</name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>async</name>.<name>pQueueFirst</name> = <name>pWrite</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>async</name>.<name>pQueueLast</name> = <name>pWrite</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("PUSH %p (%s %s %d)\n", <name>pWrite</name>, <name><name>azOpcodeName</name><index>[<expr><name>pWrite</name>-&gt;<name>op</name></expr>]</index></name>,
+         <name>pWrite</name>-&gt;<name>pFileData</name> ? <name>pWrite</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name> : "-", <name>pWrite</name>-&gt;<name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>pWrite</name>-&gt;<name>op</name>==<name>ASYNC_CLOSE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>async</name>.<name>nFile</name>--</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <comment type="block">/* Drop the queue mutex */</comment>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* The writer thread might have been idle because there was nothing
+  ** on the write-op queue for it to do.  So wake it up. */</comment>
+  <expr_stmt><expr><call><name>pthread_cond_signal</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueSignal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Increment async.nFile in a thread-safe manner.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>incrOpenFileCount</name><parameter_list>()</parameter_list><block>{
+  <comment type="block">/* We must hold the queue mutex in order to modify async.nFile */</comment>
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>async</name>.<name>nFile</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>async</name>.<name>ioError</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>async</name>.<name>nFile</name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** This is a utility function to allocate and populate a new AsyncWrite
+** structure and insert it (via addAsyncWrite() ) into the global list.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>addNewAsyncWrite</name><parameter_list>(
+  <param><decl><type><name>AsyncFileData</name> *</type><name>pFileData</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>op</name></decl></param>, 
+  <param><decl><type><name>sqlite3_int64</name></type> <name>iOffset</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>,
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zByte</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>p</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>op</name>!=<name>ASYNC_CLOSE</name> &amp;&amp; <name>async</name>.<name>ioError</name></expr> )</condition><then><block>{
+    <return>return <expr><name>async</name>.<name>ioError</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>p</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>AsyncWrite</name></expr></argument>)</argument_list></call> + (<name>zByte</name>?<name>nByte</name>:0)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>p</name></expr> )</condition><then><block>{
+    <comment type="block">/* The upper layer does not expect operations like OsWrite() to
+    ** return SQLITE_NOMEM. This is partly because under normal conditions
+    ** SQLite is required to do rollback without calling malloc(). So
+    ** if malloc() fails here, treat it as an I/O error. The above
+    ** layer knows how to handle that.
+    */</comment>
+    <return>return <expr><name>SQLITE_IOERR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>p</name>-&gt;<name>op</name> = <name>op</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>iOffset</name> = <name>iOffset</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>nByte</name> = <name>nByte</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pFileData</name> = <name>pFileData</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>pNext</name> = 0</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zByte</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>zBuf</name> = (<name>char</name> *)&amp;<name><name>p</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zBuf</name></expr></argument>, <argument><expr><name>zByte</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>zBuf</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>addAsyncWrite</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Close the file. This just adds an entry to the write-op list, the file is
+** not actually closed.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncClose</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* Unlock the file, if it is locked */</comment>
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>p</name>-&gt;<name>lock</name>.<name>eLock</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>addAsyncWrite</name><argument_list>(<argument><expr>&amp;<name>p</name>-&gt;<name>close</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Implementation of sqlite3OsWrite() for asynchronous files. Instead of 
+** writing to the underlying file, this function adds an entry to the end of
+** the global AsyncWrite list. Either SQLITE_OK or SQLITE_NOMEM may be
+** returned.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncWrite</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>void</name> *</type><name>pBuf</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>amt</name></decl></param>, 
+  <param><decl><type><name>sqlite3_int64</name></type> <name>iOff</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>addNewAsyncWrite</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>ASYNC_WRITE</name></expr></argument>, <argument><expr><name>iOff</name></expr></argument>, <argument><expr><name>amt</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read data from the file. First we read from the filesystem, then adjust 
+** the contents of the buffer based on ASYNC_WRITE operations in the 
+** write-op queue.
+**
+** This method holds the mutex from start to finish.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncRead</name><parameter_list>(
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, 
+  <param><decl><type><name>void</name> *</type><name>zOut</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>iAmt</name></decl></param>, 
+  <param><decl><type><name>sqlite3_int64</name></type> <name>iOffset</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>filesize</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRead</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pBase</name> =<init> <expr><name>p</name>-&gt;<name>pBaseRead</name></expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* Grab the write queue mutex for the duration of the call */</comment>
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* If an I/O error has previously occurred in this virtual file 
+  ** system, then all subsequent operations fail.
+  */</comment>
+  <if>if<condition>( <expr><name>async</name>.<name>ioError</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>async</name>.<name>ioError</name></expr>;</expr_stmt>
+    <goto>goto <name>asyncread_out</name>;</goto>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>pBase</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xFileSize</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr>&amp;<name>filesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <goto>goto <name>asyncread_out</name>;</goto>
+    }</block></then></if>
+    <expr_stmt><expr><name>nRead</name> = <call><name>MIN</name><argument_list>(<argument><expr><name>filesize</name> - <name>iOffset</name></expr></argument>, <argument><expr><name>iAmt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>nRead</name>&gt;0</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xRead</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr><name>zOut</name></expr></argument>, <argument><expr><name>nRead</name></expr></argument>, <argument><expr><name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("READ %s %d bytes at %d\n", <name>p</name>-&gt;<name>zName</name>, <name>nRead</name>, <name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>pWrite</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zName</name> =<init> <expr><name>p</name>-&gt;<name>zName</name></expr></init></decl>;</decl_stmt>
+
+    <for>for(<init><expr><name>pWrite</name>=<name>async</name>.<name>pQueueFirst</name></expr>;</init> <condition><expr><name>pWrite</name></expr>;</condition> <incr><expr><name>pWrite</name> = <name>pWrite</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+      <if>if<condition>( <expr><name>pWrite</name>-&gt;<name>op</name>==<name>ASYNC_WRITE</name> &amp;&amp; (
+        (<name>pWrite</name>-&gt;<name>pFileData</name>==<name>p</name>) ||
+        (<name>zName</name> &amp;&amp; <name>pWrite</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>==<name>zName</name>)
+      )</expr>)</condition><then><block>{
+        <decl_stmt><decl><type><name>int</name></type> <name>iBeginOut</name> =<init> <expr>(<name>pWrite</name>-&gt;<name>iOffset</name>-<name>iOffset</name>)</expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>iBeginIn</name> =<init> <expr>-<name>iBeginOut</name></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>nCopy</name></decl>;</decl_stmt>
+
+        <if>if<condition>( <expr><name>iBeginIn</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>iBeginIn</name> = 0</expr>;</expr_stmt></then></if>
+        <if>if<condition>( <expr><name>iBeginOut</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>iBeginOut</name> = 0</expr>;</expr_stmt></then></if>
+        <expr_stmt><expr><name>nCopy</name> = <call><name>MIN</name><argument_list>(<argument><expr><name>pWrite</name>-&gt;<name>nByte</name>-<name>iBeginIn</name></expr></argument>, <argument><expr><name>iAmt</name>-<name>iBeginOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+        <if>if<condition>( <expr><name>nCopy</name>&gt;0</expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;((<name>char</name> *)<name>zOut</name>)[<name>iBeginOut</name>]</expr></argument>, <argument><expr>&amp;<name>pWrite</name>-&gt;<name><name>zBuf</name><index>[<expr><name>iBeginIn</name></expr>]</index></name></expr></argument>, <argument><expr><name>nCopy</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("OVERREAD %d bytes at %d\n", <name>nCopy</name>, <name>iBeginOut</name>+<name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then></if>
+    }</block></for>
+  }</block></then></if>
+
+<label><name>asyncread_out</name>:</label>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Truncate the file to nByte bytes in length. This just adds an entry to 
+** the write-op list, no IO actually takes place.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncTruncate</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>sqlite3_int64</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>addNewAsyncWrite</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>ASYNC_TRUNCATE</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Sync the file. This just adds an entry to the write-op list, the 
+** sync() is done later by sqlite3_async_flush().
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncSync</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><call><name>addNewAsyncWrite</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>ASYNC_SYNC</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Read the size of the file. First we read the size of the file system 
+** entry, then adjust for any ASYNC_WRITE or ASYNC_TRUNCATE operations 
+** currently in the write-op list. 
+**
+** This method holds the mutex from start to finish.
+*/</comment>
+<function><type><name>int</name></type> <name>asyncFileSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>sqlite3_int64</name> *</type><name>piSize</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_int64</name></type> <name>s</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pBase</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Read the filesystem size from the base file. If pBaseRead is NULL, this
+  ** means the file hasn't been opened yet. In this case all relevant data 
+  ** must be in the write-op queue anyway, so we can omit reading from the
+  ** file-system.
+  */</comment>
+  <expr_stmt><expr><name>pBase</name> = <name>p</name>-&gt;<name>pBaseRead</name></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>pBase</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xFileSize</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr>&amp;<name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>pWrite</name></decl>;</decl_stmt>
+    <for>for(<init><expr><name>pWrite</name>=<name>async</name>.<name>pQueueFirst</name></expr>;</init> <condition><expr><name>pWrite</name></expr>;</condition> <incr><expr><name>pWrite</name> = <name>pWrite</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+      <if>if<condition>( <expr><name>pWrite</name>-&gt;<name>op</name>==<name>ASYNC_DELETE</name> 
+       &amp;&amp; <name>p</name>-&gt;<name>zName</name> 
+       &amp;&amp; <call><name>strcmp</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>pWrite</name>-&gt;<name>zBuf</name></expr></argument>)</argument_list></call>==0</expr> 
+      )</condition><then><block>{
+        <expr_stmt><expr><name>s</name> = 0</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>pWrite</name>-&gt;<name>pFileData</name> &amp;&amp; (
+          (<name>pWrite</name>-&gt;<name>pFileData</name>==<name>p</name>) 
+       || (<name>p</name>-&gt;<name>zName</name> &amp;&amp; <name>pWrite</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>==<name>p</name>-&gt;<name>zName</name>) 
+      )</expr>)</condition><then><block>{
+        <switch>switch<condition>( <expr><name>pWrite</name>-&gt;<name>op</name></expr> )</condition><block>{
+          <case>case <expr><name>ASYNC_WRITE</name></expr>:
+            <expr_stmt><expr><name>s</name> = <call><name>MAX</name><argument_list>(<argument><expr><name>pWrite</name>-&gt;<name>iOffset</name> + (<name>sqlite3_int64</name>)(<name>pWrite</name>-&gt;<name>nByte</name>)</expr></argument>, <argument><expr><name>s</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <break>break;</break>
+          </case><case>case <expr><name>ASYNC_TRUNCATE</name></expr>:
+            <expr_stmt><expr><name>s</name> = <call><name>MIN</name><argument_list>(<argument><expr><name>s</name></expr></argument>, <argument><expr><name>pWrite</name>-&gt;<name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <break>break;</break>
+        </case>}</block></switch>
+      }</block></then></if></else></if>
+    }</block></for>
+    <expr_stmt><expr>*<name>piSize</name> = <name>s</name></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Lock or unlock the actual file-system entry.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>getFileLock</name><parameter_list>(<param><decl><type><name>AsyncLock</name> *</type><name>pLock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pIter</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>eRequired</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pLock</name>-&gt;<name>pFile</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>pIter</name>=<name>pLock</name>-&gt;<name>pList</name></expr>;</init> <condition><expr><name>pIter</name></expr>;</condition> <incr><expr><name>pIter</name>=<name>pIter</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pIter</name>-&gt;<name>eAsyncLock</name>&gt;=<name>pIter</name>-&gt;<name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pIter</name>-&gt;<name>eAsyncLock</name>&gt;<name>eRequired</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>eRequired</name> = <name>pIter</name>-&gt;<name>eAsyncLock</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>eRequired</name>&gt;=0 &amp;&amp; <name>eRequired</name>&lt;=<name>SQLITE_LOCK_EXCLUSIVE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></for>
+
+    <if>if<condition>( <expr><name>eRequired</name>&gt;<name>pLock</name>-&gt;<name>eLock</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <name>pLock</name>-&gt;<name>pFile</name>-&gt;<name>pMethods</name>-&gt;<call><name>xLock</name><argument_list>(<argument><expr><name>pLock</name>-&gt;<name>pFile</name></expr></argument>, <argument><expr><name>eRequired</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pLock</name>-&gt;<name>eLock</name> = <name>eRequired</name></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then>
+    <else>else <if>if<condition>( <expr><name>eRequired</name>&lt;<name>pLock</name>-&gt;<name>eLock</name> &amp;&amp; <name>eRequired</name>&lt;=<name>SQLITE_LOCK_SHARED</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <name>pLock</name>-&gt;<name>pFile</name>-&gt;<name>pMethods</name>-&gt;<call><name>xUnlock</name><argument_list>(<argument><expr><name>pLock</name>-&gt;<name>pFile</name></expr></argument>, <argument><expr><name>eRequired</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pLock</name>-&gt;<name>eLock</name> = <name>eRequired</name></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then></if></else></if>
+  }</block></then></if>
+
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Return the AsyncLock structure from the global async.pLock list 
+** associated with the file-system entry identified by path zName 
+** (a string of nName bytes). If no such structure exists, return 0.
+*/</comment>
+<function><type><name>static</name> <name>AsyncLock</name> *</type><name>findLock</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, <param><decl><type><name>int</name></type> <name>nName</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>p</name> =<init> <expr><name>async</name>.<name>pLock</name></expr></init></decl>;</decl_stmt>
+  <while>while<condition>( <expr><name>p</name> &amp;&amp; (<name>p</name>-&gt;<name>nFile</name>!=<name>nName</name> || <call><name>memcmp</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zFile</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call>)</expr> )</condition><block>{
+    <expr_stmt><expr><name>p</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>p</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The following two methods - asyncLock() and asyncUnlock() - are used
+** to obtain and release locks on database files opened with the
+** asynchronous backend.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>eLock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>zName</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>lock</name>.<name>eLock</name>&lt;<name>eLock</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pLock</name> =<init> <expr><name>p</name>-&gt;<name>pLock</name></expr></init></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pIter</name></decl>;</decl_stmt>
+      <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pLock</name> &amp;&amp; <name>pLock</name>-&gt;<name>pList</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <for>for(<init><expr><name>pIter</name>=<name>pLock</name>-&gt;<name>pList</name></expr>;</init> <condition><expr><name>pIter</name></expr>;</condition> <incr><expr><name>pIter</name>=<name>pIter</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+        <if>if<condition>( <expr><name>pIter</name>!=&amp;<name>p</name>-&gt;<name>lock</name> &amp;&amp; (
+          (<name>eLock</name>==<name>SQLITE_LOCK_EXCLUSIVE</name> &amp;&amp; <name>pIter</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_SHARED</name>) ||
+          (<name>eLock</name>==<name>SQLITE_LOCK_PENDING</name> &amp;&amp; <name>pIter</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_RESERVED</name>) ||
+          (<name>eLock</name>==<name>SQLITE_LOCK_RESERVED</name> &amp;&amp; <name>pIter</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_RESERVED</name>) ||
+          (<name>eLock</name>==<name>SQLITE_LOCK_SHARED</name> &amp;&amp; <name>pIter</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_PENDING</name>)
+        )</expr>)</condition><then><block>{
+          <expr_stmt><expr><name>rc</name> = <name>SQLITE_BUSY</name></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></for>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>p</name>-&gt;<name>lock</name>.<name>eLock</name> = <name>eLock</name></expr>;</expr_stmt>
+        <expr_stmt><expr><name>p</name>-&gt;<name>lock</name>.<name>eAsyncLock</name> = <call><name>MAX</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>lock</name>.<name>eAsyncLock</name></expr></argument>, <argument><expr><name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>lock</name>.<name>eAsyncLock</name>&gt;=<name>p</name>-&gt;<name>lock</name>.<name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>rc</name> = <call><name>getFileLock</name><argument_list>(<argument><expr><name>pLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("LOCK %d (%s) rc=%d\n", <name>eLock</name>, <name>p</name>-&gt;<name>zName</name>, <name>rc</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>asyncUnlock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name></type> <name>eLock</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>zName</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pLock</name> =<init> <expr>&amp;<name>p</name>-&gt;<name>lock</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pLock</name>-&gt;<name>eLock</name> = <call><name>MIN</name><argument_list>(<argument><expr><name>pLock</name>-&gt;<name>eLock</name></expr></argument>, <argument><expr><name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>addNewAsyncWrite</name><argument_list>(<argument><expr><name>p</name></expr></argument>, <argument><expr><name>ASYNC_UNLOCK</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>eLock</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This function is called when the pager layer first opens a database file
+** and is checking for a hot-journal.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncCheckReservedLock</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>, <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>ret</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileLock</name> *</type><name>pIter</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>p</name> =<init> <expr>((<name>AsyncFile</name> *)<name>pFile</name>)-&gt;<name>pData</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>pIter</name>=<name>p</name>-&gt;<name>pLock</name>-&gt;<name>pList</name></expr>;</init> <condition><expr><name>pIter</name></expr>;</condition> <incr><expr><name>pIter</name>=<name>pIter</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+    <if>if<condition>( <expr><name>pIter</name>-&gt;<name>eLock</name>&gt;=<name>SQLITE_LOCK_RESERVED</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>ret</name> = 1</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></for>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("CHECK-LOCK %d (%s)\n", <name>ret</name>, <name>p</name>-&gt;<name>zName</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pResOut</name> = <name>ret</name></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* 
+** sqlite3_file_control() implementation.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncFileControl</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>id</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pArg</name></decl></param>)</parameter_list><block>{
+  <switch>switch<condition>( <expr><name>op</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_FCNTL_LOCKSTATE</name></expr>: <block>{
+      <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr>*(<name>int</name>*)<name>pArg</name> = ((<name>AsyncFile</name>*)<name>id</name>)-&gt;<name>pData</name>-&gt;<name>lock</name>.<name>eLock</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+    }</block>
+  </case>}</block></switch>
+  <return>return <expr><name>SQLITE_ERROR</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* 
+** Return the device characteristics and sector-size of the device. It
+** is not tricky to implement these correctly, as this backend might 
+** not have an open file handle at this point.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncSectorSize</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>512</expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>asyncDeviceCharacteristics</name><parameter_list>(<param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>unlinkAsyncFile</name><parameter_list>(<param><decl><type><name>AsyncFileData</name> *</type><name>pData</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>AsyncFileLock</name> **</type><name>ppIter</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pData</name>-&gt;<name>zName</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pLock</name> =<init> <expr><name>pData</name>-&gt;<name>pLock</name></expr></init></decl>;</decl_stmt>
+    <for>for(<init><expr><name>ppIter</name>=&amp;<name>pLock</name>-&gt;<name>pList</name></expr>;</init> <condition><expr>*<name>ppIter</name></expr>;</condition> <incr><expr><name>ppIter</name>=&amp;((*<name>ppIter</name>)-&gt;<name>pNext</name>)</expr></incr>)<block>{
+      <if>if<condition>( <expr>(*<name>ppIter</name>)==&amp;<name>pData</name>-&gt;<name>lock</name></expr> )</condition><then><block>{
+        <expr_stmt><expr>*<name>ppIter</name> = <name>pData</name>-&gt;<name>lock</name>.<name>pNext</name></expr>;</expr_stmt>
+        <break>break;</break>
+      }</block></then></if>
+    }</block></for>
+    <if>if<condition>( <expr>!<name>pLock</name>-&gt;<name>pList</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>AsyncLock</name> **</type><name>pp</name></decl>;</decl_stmt>
+      <if>if<condition>( <expr><name>pLock</name>-&gt;<name>pFile</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pLock</name>-&gt;<name>pFile</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pLock</name>-&gt;<name>pFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <for>for(<init><expr><name>pp</name>=&amp;<name>async</name>.<name>pLock</name></expr>;</init> <condition><expr>*<name>pp</name>!=<name>pLock</name></expr>;</condition> <incr><expr><name>pp</name>=&amp;((*<name>pp</name>)-&gt;<name>pNext</name>)</expr></incr>)<empty_stmt>;</empty_stmt></for>
+      <expr_stmt><expr>*<name>pp</name> = <name>pLock</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><name>rc</name> = <call><name>getFileLock</name><argument_list>(<argument><expr><name>pLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Open a file.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncOpen</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>,
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>,
+  <param><decl><type><name>sqlite3_file</name> *</type><name>pFile</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,
+  <param><decl><type><name>int</name> *</type><name>pOutFlags</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <name>sqlite3_io_methods</name></type> <name>async_methods</name> =<init> <expr><block>{
+    <expr>1</expr>,                               <comment type="block">/* iVersion */</comment>
+    <expr><name>asyncClose</name></expr>,                      <comment type="block">/* xClose */</comment>
+    <expr><name>asyncRead</name></expr>,                       <comment type="block">/* xRead */</comment>
+    <expr><name>asyncWrite</name></expr>,                      <comment type="block">/* xWrite */</comment>
+    <expr><name>asyncTruncate</name></expr>,                   <comment type="block">/* xTruncate */</comment>
+    <expr><name>asyncSync</name></expr>,                       <comment type="block">/* xSync */</comment>
+    <expr><name>asyncFileSize</name></expr>,                   <comment type="block">/* xFileSize */</comment>
+    <expr><name>asyncLock</name></expr>,                       <comment type="block">/* xLock */</comment>
+    <expr><name>asyncUnlock</name></expr>,                     <comment type="block">/* xUnlock */</comment>
+    <expr><name>asyncCheckReservedLock</name></expr>,          <comment type="block">/* xCheckReservedLock */</comment>
+    <expr><name>asyncFileControl</name></expr>,                <comment type="block">/* xFileControl */</comment>
+    <expr><name>asyncSectorSize</name></expr>,                 <comment type="block">/* xSectorSize */</comment>
+    <expr><name>asyncDeviceCharacteristics</name></expr>       <comment type="block">/* xDeviceCharacteristics */</comment>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFile</name> *</type><name>p</name> =<init> <expr>(<name>AsyncFile</name> *)<name>pFile</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nName</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nByte</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncLock</name> *</type><name>pLock</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>isExclusive</name> =<init> <expr>(<name>flags</name>&amp;<name>SQLITE_OPEN_EXCLUSIVE</name>)</expr></init></decl>;</decl_stmt>
+
+  <comment type="block">/* If zName is NULL, then the upper layer is requesting an anonymous file */</comment>
+  <if>if<condition>( <expr><name>zName</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>nName</name> = <call><name>strlen</name><argument_list>(<argument><expr><name>zName</name></expr></argument>)</argument_list></call>+1</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>nByte</name> = (
+    <call><name>sizeof</name><argument_list>(<argument><expr><name>AsyncFileData</name></expr></argument>)</argument_list></call> +        <comment type="block">/* AsyncFileData structure */</comment>
+    2 * <name>pVfs</name>-&gt;<name>szOsFile</name> +           <comment type="block">/* AsyncFileData.pBaseRead and pBaseWrite */</comment>
+    <name>nName</name>                          <comment type="block">/* AsyncFileData.zName */</comment>
+  )</expr>;</expr_stmt> 
+  <expr_stmt><expr><name>z</name> = <call><name>sqlite3_malloc</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>z</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pData</name> = (<name>AsyncFileData</name>*)<name>z</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>z</name> += <call><name>sizeof</name><argument_list>(<argument><expr><name><name>pData</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseRead</name> = (<name>sqlite3_file</name>*)<name>z</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>z</name> += <name>pVfs</name>-&gt;<name>szOsFile</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseWrite</name> = (<name>sqlite3_file</name>*)<name>z</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pData</name>-&gt;<name>close</name>.<name>pFileData</name> = <name>pData</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pData</name>-&gt;<name>close</name>.<name>op</name> = <name>ASYNC_CLOSE</name></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>zName</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>z</name> += <name>pVfs</name>-&gt;<name>szOsFile</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pData</name>-&gt;<name>zName</name> = <name>z</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pData</name>-&gt;<name>nName</name> = <name>nName</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr>!<name>isExclusive</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>pBaseRead</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>pOutFlags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; ((*<name>pOutFlags</name>)&amp;<name>SQLITE_OPEN_READWRITE</name>)</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>pBaseWrite</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>zName</name> &amp;&amp; <name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pLock</name> = <call><name>findLock</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>nName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr>!<name>pLock</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>int</name></type> <name>nByte</name> =<init> <expr><name>pVfs</name>-&gt;<name>szOsFile</name> + <call><name>sizeof</name><argument_list>(<argument><expr><name>AsyncLock</name></expr></argument>)</argument_list></call> + <name>pData</name>-&gt;<name>nName</name> + 1</expr></init></decl>;</decl_stmt> 
+      <expr_stmt><expr><name>pLock</name> = (<name>AsyncLock</name> *)<call><name>sqlite3_malloc</name><argument_list>(<argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>pLock</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pLock</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>ENABLE_FILE_LOCKING</name></cpp:ifdef>
+        <if>if<condition>( <expr><name>flags</name>&amp;<name>SQLITE_OPEN_MAIN_DB</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pLock</name>-&gt;<name>pFile</name> = (<name>sqlite3_file</name> *)&amp;<name><name>pLock</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>pLock</name>-&gt;<name>pFile</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+            <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+            <expr_stmt><expr><name>pLock</name> = 0</expr>;</expr_stmt>
+          }</block></then></if>
+        }</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+        <if>if<condition>( <expr><name>pLock</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pLock</name>-&gt;<name>nFile</name> = <name>pData</name>-&gt;<name>nName</name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pLock</name>-&gt;<name>zFile</name> = &amp;((<name>char</name> *)(&amp;<name><name>pLock</name><index>[<expr>1</expr>]</index></name>))[<name>pVfs</name>-&gt;<name>szOsFile</name>]</expr>;</expr_stmt>
+          <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>pLock</name>-&gt;<name>zFile</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>pLock</name>-&gt;<name>nFile</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>pLock</name>-&gt;<name>pNext</name> = <name>async</name>.<name>pLock</name></expr>;</expr_stmt>
+          <expr_stmt><expr><name>async</name>.<name>pLock</name> = <name>pLock</name></expr>;</expr_stmt>
+        }</block></then></if>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><name>rc</name> = <name>SQLITE_NOMEM</name></expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></then></if>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>p</name>-&gt;<name>pMethod</name> = &amp;<name>async_methods</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>p</name>-&gt;<name>pData</name> = <name>pData</name></expr>;</expr_stmt>
+
+    <comment type="block">/* Link AsyncFileData.lock into the linked list of 
+    ** AsyncFileLock structures for this file.
+    */</comment>
+    <if>if<condition>( <expr><name>zName</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pData</name>-&gt;<name>lock</name>.<name>pNext</name> = <name>pLock</name>-&gt;<name>pList</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pLock</name>-&gt;<name>pList</name> = &amp;<name>pData</name>-&gt;<name>lock</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pData</name>-&gt;<name>zName</name> = <name>pLock</name>-&gt;<name>zFile</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <if>if<condition>( <expr><name>pData</name>-&gt;<name>pBaseRead</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseRead</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pBaseRead</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>pData</name>-&gt;<name>pBaseWrite</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseWrite</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pBaseWrite</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>incrOpenFileCount</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pData</name>-&gt;<name>pLock</name> = <name>pLock</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>isExclusive</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>addNewAsyncWrite</name><argument_list>(<argument><expr><name>pData</name></expr></argument>, <argument><expr><name>ASYNC_OPENEXCLUSIVE</name></expr></argument>, <argument><expr>(<name>sqlite3_int64</name>)<name>flags</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <if>if<condition>( <expr><name>pOutFlags</name></expr> )</condition><then> <expr_stmt><expr>*<name>pOutFlags</name> = <name>flags</name></expr>;</expr_stmt></then></if>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>unlinkAsyncFile</name><argument_list>(<argument><expr><name>pData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Implementation of sqlite3OsDelete. Add an entry to the end of the 
+** write-op queue to perform the delete.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncDelete</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>syncDir</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><call><name>addNewAsyncWrite</name><argument_list>(<argument><expr>0</expr></argument>, <argument><expr><name>ASYNC_DELETE</name></expr></argument>, <argument><expr><name>syncDir</name></expr></argument>, <argument><expr><call><name>strlen</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call>+1</expr></argument>, <argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Implementation of sqlite3OsAccess. This method holds the mutex from
+** start to finish.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncAccess</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>flags</name></decl></param>,
+  <param><decl><type><name>int</name> *</type><name>pResOut</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>p</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>flags</name>==<name>SQLITE_ACCESS_READWRITE</name> 
+      || <name>flags</name>==<name>SQLITE_ACCESS_READ</name> 
+      || <name>flags</name>==<name>SQLITE_ACCESS_EXISTS</name></expr></argument> 
+  )</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xAccess</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>&amp;<name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name> &amp;&amp; <name>flags</name>==<name>SQLITE_ACCESS_EXISTS</name></expr> )</condition><then><block>{
+    <for>for(<init><expr><name>p</name>=<name>async</name>.<name>pQueueFirst</name></expr>;</init> <condition><expr><name>p</name></expr>;</condition> <incr><expr><name>p</name> = <name>p</name>-&gt;<name>pNext</name></expr></incr>)<block>{
+      <if>if<condition>( <expr><name>p</name>-&gt;<name>op</name>==<name>ASYNC_DELETE</name> &amp;&amp; 0==<call><name>strcmp</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>zBuf</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+      }</block></then><else>else <if>if<condition>( <expr><name>p</name>-&gt;<name>op</name>==<name>ASYNC_OPENEXCLUSIVE</name> 
+             &amp;&amp; <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>
+             &amp;&amp; 0==<call><name>strcmp</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>zName</name></expr></argument>)</argument_list></call></expr> 
+      )</condition><then><block>{
+        <expr_stmt><expr><name>ret</name> = 1</expr>;</expr_stmt>
+      }</block></then></if></else></if>
+    }</block></for>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("ACCESS(%s): %s = %d\n", 
+    <name>flags</name>==<name>SQLITE_ACCESS_READWRITE</name>?"read-write":
+    <name>flags</name>==<name>SQLITE_ACCESS_READ</name>?"read":"exists"
+    , <name>zName</name>, <name>ret</name>)</expr></argument>
+  )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pResOut</name> = <name>ret</name></expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Fill in zPathOut with the full path to the file identified by zPath.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>asyncFullPathname</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>, 
+  <param><decl><type><name>int</name></type> <name>nPathOut</name></decl></param>,
+  <param><decl><type><name>char</name> *</type><name>zPathOut</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xFullPathname</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>, <argument><expr><name>nPathOut</name></expr></argument>, <argument><expr><name>zPathOut</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Because of the way intra-process file locking works, this backend
+  ** needs to return a canonical path. The following block assumes the
+  ** file-system uses unix style paths. 
+  */</comment>
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>iIn</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>iOut</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>nPathOut</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>zPathOut</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+    <for>for(<init><expr><name>iIn</name>=0</expr>;</init> <condition><expr><name>iIn</name>&lt;<name>nPathOut</name></expr>;</condition> <incr><expr><name>iIn</name>++</expr></incr>)<block>{
+
+      <comment type="block">/* Replace any occurences of "//" with "/" */</comment>
+      <if>if<condition>( <expr><name>iIn</name>&lt;=(<name>nPathOut</name>-2) &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name></expr>]</index></name>=='/' &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+1</expr>]</index></name>=='/'</expr>
+      )</condition><then><block>{
+        <continue>continue;</continue>
+      }</block></then></if>
+
+      <comment type="block">/* Replace any occurences of "/./" with "/" */</comment>
+      <if>if<condition>( <expr><name>iIn</name>&lt;=(<name>nPathOut</name>-3) 
+       &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name></expr>]</index></name>=='/' &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+1</expr>]</index></name>=='.' &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+2</expr>]</index></name>=='/'</expr>
+      )</condition><then><block>{
+        <expr_stmt><expr><name>iIn</name>++</expr>;</expr_stmt>
+        <continue>continue;</continue>
+      }</block></then></if>
+
+      <comment type="block">/* Replace any occurences of "&lt;path-component&gt;/../" with "" */</comment>
+      <if>if<condition>( <expr><name>iOut</name>&gt;0 &amp;&amp; <name>iIn</name>&lt;=(<name>nPathOut</name>-4) 
+       &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name></expr>]</index></name>=='/' &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+1</expr>]</index></name>=='.' 
+       &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+2</expr>]</index></name>=='.' &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iIn</name>+3</expr>]</index></name>=='/'</expr>
+      )</condition><then><block>{
+        <expr_stmt><expr><name>iIn</name> += 3</expr>;</expr_stmt>
+        <expr_stmt><expr><name>iOut</name>--</expr>;</expr_stmt>
+        <for>for( <init>;</init> <condition><expr><name>iOut</name>&gt;0 &amp;&amp; <name><name>zPathOut</name><index>[<expr><name>iOut</name>-1</expr>]</index></name>!='/'</expr>;</condition> <incr><expr><name>iOut</name>--</expr></incr>)<empty_stmt>;</empty_stmt></for>
+        <continue>continue;</continue>
+      }</block></then></if>
+
+      <expr_stmt><expr><name><name>zPathOut</name><index>[<expr><name>iOut</name>++</expr>]</index></name> = <name><name>zPathOut</name><index>[<expr><name>iIn</name></expr>]</index></name></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><name><name>zPathOut</name><index>[<expr><name>iOut</name></expr>]</index></name> = '\0'</expr>;</expr_stmt>
+  }</block></then></if>
+
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>void</name> *</type><name>asyncDlOpen</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>zPath</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xDlOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>zPath</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>asyncDlError</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zErrMsg</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pVfs</name>-&gt;<call><name>xDlError</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zErrMsg</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>void</name> *</type><name>asyncDlSym</name><parameter_list>(
+  <param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, 
+  <param><decl><type><name>void</name> *</type><name>pHandle</name></decl></param>, 
+  <param><decl><type><name>const</name> <name>char</name> *</type><name>zSymbol</name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xDlSym</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pHandle</name></expr></argument>, <argument><expr><name>zSymbol</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>void</name></type> <name>asyncDlClose</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pHandle</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>pVfs</name>-&gt;<call><name>xDlClose</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pHandle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>asyncRandomness</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>, <param><decl><type><name>char</name> *</type><name>zBufOut</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xRandomness</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>zBufOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>asyncSleep</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>int</name></type> <name>nMicro</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xSleep</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>nMicro</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+<function><type><name>static</name> <name>int</name></type> <name>asyncCurrentTime</name><parameter_list>(<param><decl><type><name>sqlite3_vfs</name> *</type><name>pAsyncVfs</name></decl></param>, <param><decl><type><name>double</name> *</type><name>pTimeOut</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)<name>pAsyncVfs</name>-&gt;<name>pAppData</name></expr></init></decl>;</decl_stmt>
+  <return>return <expr><name>pVfs</name>-&gt;<call><name>xCurrentTime</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pTimeOut</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<decl_stmt><decl><type><name>static</name> <name>sqlite3_vfs</name></type> <name>async_vfs</name> =<init> <expr><block>{
+  <expr>1</expr>,                    <comment type="block">/* iVersion */</comment>
+  <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>AsyncFile</name></expr></argument>)</argument_list></call></expr>,    <comment type="block">/* szOsFile */</comment>
+  <expr>0</expr>,                    <comment type="block">/* mxPathname */</comment>
+  <expr>0</expr>,                    <comment type="block">/* pNext */</comment>
+  <expr>"async"</expr>,              <comment type="block">/* zName */</comment>
+  <expr>0</expr>,                    <comment type="block">/* pAppData */</comment>
+  <expr><name>asyncOpen</name></expr>,            <comment type="block">/* xOpen */</comment>
+  <expr><name>asyncDelete</name></expr>,          <comment type="block">/* xDelete */</comment>
+  <expr><name>asyncAccess</name></expr>,          <comment type="block">/* xAccess */</comment>
+  <expr><name>asyncFullPathname</name></expr>,    <comment type="block">/* xFullPathname */</comment>
+  <expr><name>asyncDlOpen</name></expr>,          <comment type="block">/* xDlOpen */</comment>
+  <expr><name>asyncDlError</name></expr>,         <comment type="block">/* xDlError */</comment>
+  <expr><name>asyncDlSym</name></expr>,           <comment type="block">/* xDlSym */</comment>
+  <expr><name>asyncDlClose</name></expr>,         <comment type="block">/* xDlClose */</comment>
+  <expr><name>asyncRandomness</name></expr>,      <comment type="block">/* xDlError */</comment>
+  <expr><name>asyncSleep</name></expr>,           <comment type="block">/* xDlSym */</comment>
+  <expr><name>asyncCurrentTime</name></expr>      <comment type="block">/* xDlClose */</comment>
+}</block></expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** Call this routine to enable or disable the
+** asynchronous IO features implemented in this file. 
+**
+** This routine is not even remotely threadsafe.  Do not call
+** this routine while any SQLite database connections are open.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>asyncEnable</name><parameter_list>(<param><decl><type><name>int</name></type> <name>enable</name></decl></param>)</parameter_list><block>{
+  <if>if<condition>( <expr><name>enable</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr>!<name>async_vfs</name>.<name>pAppData</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>async_vfs</name>.<name>pAppData</name> = (<name>void</name> *)<call><name>sqlite3_vfs_find</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>async_vfs</name>.<name>mxPathname</name> = ((<name>sqlite3_vfs</name> *)<name>async_vfs</name>.<name>pAppData</name>)-&gt;<name>mxPathname</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_vfs_register</name><argument_list>(<argument><expr>&amp;<name>async_vfs</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <if>if<condition>( <expr><name>async_vfs</name>.<name>pAppData</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_vfs_unregister</name><argument_list>(<argument><expr>&amp;<name>async_vfs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>async_vfs</name>.<name>pAppData</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></else></if>
+}</block></function>
+
+<comment type="block">/* 
+** This procedure runs in a separate thread, reading messages off of the
+** write queue and processing them one by one.  
+**
+** If async.writerHaltNow is true, then this procedure exits
+** after processing a single message.
+**
+** If async.writerHaltWhenIdle is true, then this procedure exits when
+** the write queue is empty.
+**
+** If both of the above variables are false, this procedure runs
+** indefinately, waiting for operations to be added to the write queue
+** and processing them in the order in which they arrive.
+**
+** An artifical delay of async.ioDelay milliseconds is inserted before
+** each write operation in order to simulate the effect of a slow disk.
+**
+** Only one instance of this procedure may be running at a time.
+*/</comment>
+<function><type><name>static</name> <name>void</name> *</type><name>asyncWriterThread</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pIsStarted</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_vfs</name> *</type><name>pVfs</name> =<init> <expr>(<name>sqlite3_vfs</name> *)(<name>async_vfs</name>.<name>pAppData</name>)</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>AsyncWrite</name> *</type><name>p</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>holdingMutex</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><call><name>pthread_mutex_trylock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr>(*(<name>int</name> *)<name>pIsStarted</name>) = 1</expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>async</name>.<name>writerHaltNow</name>==0</expr> )</condition><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>doNotFree</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>sqlite3_file</name> *</type><name>pBase</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+    <if>if<condition>( <expr>!<name>holdingMutex</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <while>while<condition>( <expr>(<name>p</name> = <name>async</name>.<name>pQueueFirst</name>)==0</expr> )</condition><block>{
+      <expr_stmt><expr><call><name>pthread_cond_broadcast</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>emptySignal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>async</name>.<name>writerHaltWhenIdle</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("IDLE\n")</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>pthread_cond_wait</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueSignal</name></expr></argument>, <argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("WAKEUP\n")</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></while>
+    <if>if<condition>( <expr><name>p</name>==0</expr> )</condition><then> <break>break;</break></then></if>
+    <expr_stmt><expr><name>holdingMutex</name> = 1</expr>;</expr_stmt>
+
+    <comment type="block">/* Right now this thread is holding the mutex on the write-op queue.
+    ** Variable 'p' points to the first entry in the write-op queue. In
+    ** the general case, we hold on to the mutex for the entire body of
+    ** the loop. 
+    **
+    ** However in the cases enumerated below, we relinquish the mutex,
+    ** perform the IO, and then re-request the mutex before removing 'p' from
+    ** the head of the write-op queue. The idea is to increase concurrency with
+    ** sqlite threads.
+    **
+    **     * An ASYNC_CLOSE operation.
+    **     * An ASYNC_OPENEXCLUSIVE operation. For this one, we relinquish 
+    **       the mutex, call the underlying xOpenExclusive() function, then
+    **       re-aquire the mutex before seting the AsyncFile.pBaseRead 
+    **       variable.
+    **     * ASYNC_SYNC and ASYNC_WRITE operations, if 
+    **       SQLITE_ASYNC_TWO_FILEHANDLES was set at compile time and two
+    **       file-handles are open for the particular file being "synced".
+    */</comment>
+    <if>if<condition>( <expr><name>async</name>.<name>ioError</name>!=<name>SQLITE_OK</name> &amp;&amp; <name>p</name>-&gt;<name>op</name>!=<name>ASYNC_CLOSE</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>p</name>-&gt;<name>op</name> = <name>ASYNC_NOOP</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>p</name>-&gt;<name>pFileData</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pBase</name> = <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>pBaseWrite</name></expr>;</expr_stmt>
+      <if>if<condition>( 
+        <expr><name>p</name>-&gt;<name>op</name>==<name>ASYNC_CLOSE</name> || 
+        <name>p</name>-&gt;<name>op</name>==<name>ASYNC_OPENEXCLUSIVE</name> ||
+        (<name>pBase</name>-&gt;<name>pMethods</name> &amp;&amp; (<name>p</name>-&gt;<name>op</name>==<name>ASYNC_SYNC</name> || <name>p</name>-&gt;<name>op</name>==<name>ASYNC_WRITE</name>) )</expr> 
+      )</condition><then><block>{
+        <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>holdingMutex</name> = 0</expr>;</expr_stmt>
+      }</block></then></if>
+      <if>if<condition>( <expr>!<name>pBase</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pBase</name> = <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>pBaseRead</name></expr>;</expr_stmt>
+      }</block></then></if>
+    }</block></then></if>
+
+    <switch>switch<condition>( <expr><name>p</name>-&gt;<name>op</name></expr> )</condition><block>{
+      <case>case <expr><name>ASYNC_NOOP</name></expr>:
+        <break>break;</break>
+
+      </case><case>case <expr><name>ASYNC_WRITE</name></expr>:
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pBase</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("WRITE %s %d bytes at %d\n",
+                <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>, <name>p</name>-&gt;<name>nByte</name>, <name>p</name>-&gt;<name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xWrite</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr>(<name>void</name> *)(<name>p</name>-&gt;<name>zBuf</name>)</expr></argument>, <argument><expr><name>p</name>-&gt;<name>nByte</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+
+      </case><case>case <expr><name>ASYNC_SYNC</name></expr>:
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pBase</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("SYNC %s\n", <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xSync</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>nByte</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+
+      </case><case>case <expr><name>ASYNC_TRUNCATE</name></expr>:
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pBase</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("TRUNCATE %s to %d bytes\n", 
+                <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>, <name>p</name>-&gt;<name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>pBase</name>-&gt;<name>pMethods</name>-&gt;<call><name>xTruncate</name><argument_list>(<argument><expr><name>pBase</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+
+      </case><case>case <expr><name>ASYNC_CLOSE</name></expr>: <block>{
+        <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pData</name> =<init> <expr><name>p</name>-&gt;<name>pFileData</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("CLOSE %s\n", <name>p</name>-&gt;<name>pFileData</name>-&gt;<name>zName</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <if>if<condition>( <expr><name>pData</name>-&gt;<name>pBaseWrite</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseWrite</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pBaseWrite</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+        <if>if<condition>( <expr><name>pData</name>-&gt;<name>pBaseRead</name>-&gt;<name>pMethods</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><name>pData</name>-&gt;<name>pBaseRead</name>-&gt;<name>pMethods</name>-&gt;<call><name>xClose</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pBaseRead</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        }</block></then></if>
+
+        <comment type="block">/* Unlink AsyncFileData.lock from the linked list of AsyncFileLock 
+        ** structures for this file. Obtain the async.lockMutex mutex 
+        ** before doing so.
+        */</comment>
+        <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <call><name>unlinkAsyncFile</name><argument_list>(<argument><expr><name>pData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+        <if>if<condition>( <expr>!<name>holdingMutex</name></expr> )</condition><then><block>{
+          <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+          <expr_stmt><expr><name>holdingMutex</name> = 1</expr>;</expr_stmt>
+        }</block></then></if>
+        <expr_stmt><expr><call><name>assert_mutex_is_held</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>async</name>.<name>pQueueFirst</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>pData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>doNotFree</name> = 1</expr>;</expr_stmt>
+        <break>break;</break>
+      }</block>
+
+      </case><case>case <expr><name>ASYNC_UNLOCK</name></expr>: <block>{
+        <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pData</name> =<init> <expr><name>p</name>-&gt;<name>pFileData</name></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>int</name></type> <name>eLock</name> =<init> <expr><name>p</name>-&gt;<name>nByte</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>pData</name>-&gt;<name>lock</name>.<name>eAsyncLock</name> = <call><name>MIN</name><argument_list>(
+            <argument><expr><name>pData</name>-&gt;<name>lock</name>.<name>eAsyncLock</name></expr></argument>, <argument><expr><call><name>MAX</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>lock</name>.<name>eLock</name></expr></argument>, <argument><expr><name>eLock</name></expr></argument>)</argument_list></call></expr></argument>
+        )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>lock</name>.<name>eAsyncLock</name>&gt;=<name>pData</name>-&gt;<name>lock</name>.<name>eLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <call><name>getFileLock</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pLock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+      }</block>
+
+      </case><case>case <expr><name>ASYNC_DELETE</name></expr>:
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("DELETE %s\n", <name>p</name>-&gt;<name>zBuf</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xDelete</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>p</name>-&gt;<name>zBuf</name></expr></argument>, <argument><expr>(<name>int</name>)<name>p</name>-&gt;<name>iOffset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <break>break;</break>
+
+      </case><case>case <expr><name>ASYNC_OPENEXCLUSIVE</name></expr>: <block>{
+        <decl_stmt><decl><type><name>int</name></type> <name>flags</name> =<init> <expr>(<name>int</name>)<name>p</name>-&gt;<name>iOffset</name></expr></init></decl>;</decl_stmt>
+        <decl_stmt><decl><type><name>AsyncFileData</name> *</type><name>pData</name> =<init> <expr><name>p</name>-&gt;<name>pFileData</name></expr></init></decl>;</decl_stmt>
+        <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("OPEN %s flags=%d\n", <name>p</name>-&gt;<name>zBuf</name>, (<name>int</name>)<name>p</name>-&gt;<name>iOffset</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>pData</name>-&gt;<name>pBaseRead</name>-&gt;<name>pMethods</name>==0 &amp;&amp; <name>pData</name>-&gt;<name>pBaseWrite</name>-&gt;<name>pMethods</name>==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>rc</name> = <name>pVfs</name>-&gt;<call><name>xOpen</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>zName</name></expr></argument>, <argument><expr><name>pData</name>-&gt;<name>pBaseRead</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>holdingMutex</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>holdingMutex</name> = 1</expr>;</expr_stmt>
+        <break>break;</break>
+      }</block>
+
+      </case><default>default: <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr>!"Illegal value for AsyncWrite.op"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    </default>}</block></switch>
+
+    <comment type="block">/* If we didn't hang on to the mutex during the IO op, obtain it now
+    ** so that the AsyncWrite structure can be safely removed from the 
+    ** global write-op queue.
+    */</comment>
+    <if>if<condition>( <expr>!<name>holdingMutex</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>holdingMutex</name> = 1</expr>;</expr_stmt>
+    }</block></then></if>
+    <comment type="block">/* ASYNC_TRACE(("UNLINK %p\n", p)); */</comment>
+    <if>if<condition>( <expr><name>p</name>==<name>async</name>.<name>pQueueLast</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>async</name>.<name>pQueueLast</name> = 0</expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if<condition>( <expr>!<name>doNotFree</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>assert_mutex_is_held</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>async</name>.<name>pQueueFirst</name> = <name>p</name>-&gt;<name>pNext</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>holdingMutex</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+    <comment type="block">/* An IO error has occured. We cannot report the error back to the
+    ** connection that requested the I/O since the error happened 
+    ** asynchronously.  The connection has already moved on.  There 
+    ** really is nobody to report the error to.
+    **
+    ** The file for which the error occured may have been a database or
+    ** journal file. Regardless, none of the currently queued operations
+    ** associated with the same database should now be performed. Nor should
+    ** any subsequently requested IO on either a database or journal file 
+    ** handle for the same database be accepted until the main database
+    ** file handle has been closed and reopened.
+    **
+    ** Furthermore, no further IO should be queued or performed on any file
+    ** handle associated with a database that may have been part of a 
+    ** multi-file transaction that included the database associated with 
+    ** the IO error (i.e. a database ATTACHed to the same handle at some 
+    ** point in time).
+    */</comment>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>async</name>.<name>ioError</name> = <name>rc</name></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <if>if<condition>( <expr><name>async</name>.<name>ioError</name> &amp;&amp; !<name>async</name>.<name>pQueueFirst</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <if>if<condition>( <expr>0==<name>async</name>.<name>pLock</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><name>async</name>.<name>ioError</name> = <name>SQLITE_OK</name></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>lockMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+
+    <comment type="block">/* Drop the queue mutex before continuing to the next write operation
+    ** in order to give other threads a chance to work with the write queue.
+    */</comment>
+    <if>if<condition>( <expr>!<name>async</name>.<name>pQueueFirst</name> || !<name>async</name>.<name>ioError</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>holdingMutex</name> = 0</expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>async</name>.<name>ioDelay</name>&gt;0</expr> )</condition><then><block>{
+        <expr_stmt><expr><name>pVfs</name>-&gt;<call><name>xSleep</name><argument_list>(<argument><expr><name>pVfs</name></expr></argument>, <argument><expr><name>async</name>.<name>ioDelay</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then><else>else<block>{
+        <expr_stmt><expr><call><name>sched_yield</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></then></if>
+  }</block></while>
+  
+  <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/**************************************************************************
+** The remaining code defines a Tcl interface for testing the asynchronous
+** IO implementation in this file.
+**
+** To adapt the code to a non-TCL environment, delete or comment out
+** the code that follows.
+*/</comment>
+
+<comment type="block">/*
+** sqlite3async_enable ?YES/NO?
+**
+** Enable or disable the asynchronous I/O backend.  This command is
+** not thread-safe.  Do not call it while any database connections
+** are open.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testAsyncEnable</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <if>if<condition>( <expr><name>objc</name>!=1 &amp;&amp; <name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"?YES/NO?"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>==1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewBooleanObj</name><argument_list>(<argument><expr><name>async_vfs</name>.<name>pAppData</name>!=0</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>en</name></decl>;</decl_stmt>
+    <if>if<condition>( <expr><call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>en</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+    <expr_stmt><expr><call><name>asyncEnable</name><argument_list>(<argument><expr><name>en</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3async_halt  "now"|"idle"|"never"
+**
+** Set the conditions at which the writer thread will halt.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testAsyncHalt</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zCond</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"\"now\"|\"idle\"|\"never\""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>zCond</name> = <call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>zCond</name></expr></argument>, <argument><expr>"now"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>async</name>.<name>writerHaltNow</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_cond_broadcast</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueSignal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>zCond</name></expr></argument>, <argument><expr>"idle"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>async</name>.<name>writerHaltWhenIdle</name> = 1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>async</name>.<name>writerHaltNow</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_cond_broadcast</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueSignal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else <if>if<condition>( <expr><call><name>strcmp</name><argument_list>(<argument><expr><name>zCond</name></expr></argument>, <argument><expr>"never"</expr></argument>)</argument_list></call>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>async</name>.<name>writerHaltWhenIdle</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>async</name>.<name>writerHaltNow</name> = 0</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, 
+      <argument><expr>"should be one of: \"now\", \"idle\", or \"never\""</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></else></if></else></if></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3async_delay ?MS?
+**
+** Query or set the number of milliseconds of delay in the writer
+** thread after each write operation.  The default is 0.  By increasing
+** the memory delay we can simulate the effect of slow disk I/O.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testAsyncDelay</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <if>if<condition>( <expr><name>objc</name>!=1 &amp;&amp; <name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"?MS?"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>objc</name>==1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>async</name>.<name>ioDelay</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>ioDelay</name></decl>;</decl_stmt>
+    <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>ioDelay</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+    <expr_stmt><expr><name>async</name>.<name>ioDelay</name> = <name>ioDelay</name></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3async_start
+**
+** Start a new writer thread.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testAsyncStart</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>pthread_t</name></type> <name>x</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>volatile</name> <name>int</name></type> <name>isStarted</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>pthread_create</name><argument_list>(<argument><expr>&amp;<name>x</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>asyncWriterThread</name></expr></argument>, <argument><expr>(<name>void</name> *)&amp;<name>isStarted</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"failed to create the thread"</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>pthread_detach</name><argument_list>(<argument><expr><name>x</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>isStarted</name>==0</expr> )</condition><block>{
+    <expr_stmt><expr><call><name>sched_yield</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3async_wait
+**
+** Wait for the current writer thread to terminate.
+**
+** If the current writer thread is set to run forever then this
+** command would block forever.  To prevent that, an error is returned. 
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>testAsyncWait</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>cnt</name> =<init> <expr>10</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>async</name>.<name>writerHaltNow</name>==0 &amp;&amp; <name>async</name>.<name>writerHaltWhenIdle</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"would block forever"</expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <while>while<condition>( <expr><name>cnt</name>-- &amp;&amp; !<call><name>pthread_mutex_trylock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr> )</condition><block>{
+    <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sched_yield</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <if>if<condition>( <expr><name>cnt</name>&gt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("WAIT\n")</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_cond_broadcast</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueSignal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>queueMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_lock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>pthread_mutex_unlock</name><argument_list>(<argument><expr>&amp;<name>async</name>.<name>writerMutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>ASYNC_TRACE</name><argument_list>(<argument><expr>("NO-WAIT\n")</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>  <comment type="block">/* SQLITE_OS_UNIX and SQLITE_THREADSAFE */</comment>
+
+<comment type="block">/*
+** This routine registers the custom TCL commands defined in this
+** module.  This should be the only procedure visible from outside
+** of this module.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetestasync_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_UNIX</name> &amp;&amp; <name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite3async_enable"</expr></argument>,<argument><expr><name>testAsyncEnable</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite3async_halt"</expr></argument>,<argument><expr><name>testAsyncHalt</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite3async_delay"</expr></argument>,<argument><expr><name>testAsyncDelay</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite3async_start"</expr></argument>,<argument><expr><name>testAsyncStart</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite3async_wait"</expr></argument>,<argument><expr><name>testAsyncWait</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite3async_trace"</expr></argument>,
+      <argument><expr>(<name>char</name>*)&amp;<name>sqlite3async_trace</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>  <comment type="block">/* SQLITE_OS_UNIX and SQLITE_THREADSAFE */</comment>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

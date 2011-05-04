@@ -1,0 +1,1607 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test3.c" filename=""><comment type="block">/*
+** 2001 September 15
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** Code for testing the btree.c module in SQLite.  This code
+** is not included in the SQLite library.  It is used for automated
+** testing of the SQLite library.
+**
+** $Id: test3.c,v 1.102 2008/10/27 13:59:34 danielk1977 Exp $
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"btreeInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Interpret an SQLite error number
+*/</comment>
+<function><type><name>static</name> <name>char</name> *</type><name>errorName</name><parameter_list>(<param><decl><type><name>int</name></type> <name>rc</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+  <switch>switch<condition>( <expr><name>rc</name></expr> )</condition><block>{
+    <case>case <expr><name>SQLITE_OK</name></expr>:         <expr_stmt><expr><name>zName</name> = "SQLITE_OK"</expr>;</expr_stmt>          <break>break;</break>
+    </case><case>case <expr><name>SQLITE_ERROR</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_ERROR"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_PERM</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_PERM"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_ABORT</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_ABORT"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_BUSY</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_BUSY"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_NOMEM</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_NOMEM"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_READONLY</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_READONLY"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_INTERRUPT</name></expr>:  <expr_stmt><expr><name>zName</name> = "SQLITE_INTERRUPT"</expr>;</expr_stmt>   <break>break;</break>
+    </case><case>case <expr><name>SQLITE_IOERR</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_IOERR"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_CORRUPT</name></expr>:    <expr_stmt><expr><name>zName</name> = "SQLITE_CORRUPT"</expr>;</expr_stmt>     <break>break;</break>
+    </case><case>case <expr><name>SQLITE_FULL</name></expr>:       <expr_stmt><expr><name>zName</name> = "SQLITE_FULL"</expr>;</expr_stmt>        <break>break;</break>
+    </case><case>case <expr><name>SQLITE_CANTOPEN</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_CANTOPEN"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_PROTOCOL</name></expr>:   <expr_stmt><expr><name>zName</name> = "SQLITE_PROTOCOL"</expr>;</expr_stmt>    <break>break;</break>
+    </case><case>case <expr><name>SQLITE_EMPTY</name></expr>:      <expr_stmt><expr><name>zName</name> = "SQLITE_EMPTY"</expr>;</expr_stmt>       <break>break;</break>
+    </case><case>case <expr><name>SQLITE_LOCKED</name></expr>:     <expr_stmt><expr><name>zName</name> = "SQLITE_LOCKED"</expr>;</expr_stmt>      <break>break;</break>
+    </case><default>default:                <expr_stmt><expr><name>zName</name> = "SQLITE_Unknown"</expr>;</expr_stmt>     <break>break;</break>
+  </default>}</block></switch>
+  <return>return <expr><name>zName</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** A bogus sqlite3 connection structure for use in the btree
+** tests.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>sqlite3</name></type> <name>sDb</name></decl>;</decl_stmt>
+<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>nRefSqlite3</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+<comment type="block">/*
+** Usage:   btree_open FILENAME NCACHE FLAGS
+**
+** Open a new database
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_open</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name>, <name>nCache</name>, <name>flags</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=4</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" FILENAME NCACHE FLAGS\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nCache</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>flags</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>nRefSqlite3</name>++</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nRefSqlite3</name>==1</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>sDb</name>.<name>pVfs</name> = <call><name>sqlite3_vfs_find</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>sDb</name>.<name>mutex</name> = <call><name>sqlite3MutexAlloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_RECURSIVE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>sDb</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeOpen</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>sDb</name></expr></argument>, <argument><expr>&amp;<name>pBt</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>,
+     <argument><expr><name>SQLITE_OPEN_READWRITE</name> | <name>SQLITE_OPEN_CREATE</name> | <name>SQLITE_OPEN_MAIN_DB</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeSetCacheSize</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>nCache</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%p"</expr></argument>, <argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_close ID
+**
+** Close the given database.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_close</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeClose</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>nRefSqlite3</name>--</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>nRefSqlite3</name>==0</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>sDb</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_mutex_free</name><argument_list>(<argument><expr><name>sDb</name>.<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>sDb</name>.<name>mutex</name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>sDb</name>.<name>pVfs</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Usage:   btree_begin_transaction ID
+**
+** Start a new transaction
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_begin_transaction</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeBeginTrans</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_rollback ID
+**
+** Rollback changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_rollback</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeRollback</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_commit ID
+**
+** Commit all changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_commit</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCommit</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_begin_statement ID
+**
+** Start a new statement transaction
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_begin_statement</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeBeginStmt</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_rollback_statement ID
+**
+** Rollback changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_rollback_statement</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeRollbackStmt</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_commit_statement ID
+**
+** Commit all changes
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_commit_statement</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCommitStmt</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_create_table ID FLAGS
+**
+** Create a new table in the database
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_create_table</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name>, <name>iTable</name>, <name>flags</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>30</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID FLAGS\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>flags</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCreateTable</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr>&amp;<name>iTable</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><name>iTable</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_drop_table ID TABLENUM
+**
+** Delete an entire table from the database
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_drop_table</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iTable</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>notUsed1</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID TABLENUM\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iTable</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeDropTable</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>iTable</name></expr></argument>, <argument><expr>&amp;<name>notUsed1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_clear_table ID TABLENUM
+**
+** Remove all entries from the given table but keep the table around.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_clear_table</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iTable</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID TABLENUM\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iTable</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeClearTable</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>iTable</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_get_meta ID
+**
+** Return meta data
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_get_meta</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>SQLITE_N_BTREE_META</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>30</expr>]</index></name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u32</name></type> <name>v</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeGetMeta</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr>&amp;<name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>v</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_update_meta ID METADATA...
+**
+** Return meta data
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_update_meta</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>aMeta</name><index>[<expr><name>SQLITE_N_BTREE_META</name></expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2+<name>SQLITE_N_BTREE_META</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>30</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>SQLITE_N_BTREE_META</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID METADATA...\" (METADATA is "</expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>" integers)"</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><name>i</name>&lt;<name>SQLITE_N_BTREE_META</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr><name>i</name>+2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name><name>aMeta</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></for>
+  <for>for(<init><expr><name>i</name>=1</expr>;</init> <condition><expr><name>i</name>&lt;<name>SQLITE_N_BTREE_META</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeUpdateMeta</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name><name>aMeta</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_pager_stats ID
+**
+** Returns pager statistics
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_pager_stats</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name> *</type><name>a</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+ 
+  <comment type="block">/* Normally in this file, with a b-tree handle opened using the 
+  ** [btree_open] command it is safe to call sqlite3BtreeEnter() directly.
+  ** But this function is sometimes called with a btree handle obtained
+  ** from an open SQLite connection (using [btree_from_db]). In this case
+  ** we need to obtain the mutex for the controlling SQLite handle before
+  ** it is safe to call sqlite3BtreeEnter().
+  */</comment>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>a</name> = <call><name>sqlite3PagerStats</name><argument_list>(<argument><expr><call><name>sqlite3BtreePager</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;11</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>static</name> <name>char</name> *</type><name><name>zName</name><index>[]</index></name> =<init> <expr><block>{
+      <expr>"ref"</expr>, <expr>"page"</expr>, <expr>"max"</expr>, <expr>"size"</expr>, <expr>"state"</expr>, <expr>"err"</expr>,
+      <expr>"hit"</expr>, <expr>"miss"</expr>, <expr>"ovfl"</expr>, <expr>"read"</expr>, <expr>"write"</expr>
+    }</block></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>zName</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name><name>a</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <comment type="block">/* Release the mutex on the SQLite handle that controls this b-tree */</comment>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_integrity_check ID ROOT ...
+**
+** Look through every page of the given BTree file to verify correct
+** formatting and linkage.  Return a line of text for each problem found.
+** Return an empty string if everything worked.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_integrity_check</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nRoot</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name> *</type><name>aRoot</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nErr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zResult</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>&lt;3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID ROOT ...\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>nRoot</name> = <name>argc</name>-2</expr>;</expr_stmt>
+  <expr_stmt><expr><name>aRoot</name> = (<name>int</name>*)<call><name>sqlite3_malloc</name><argument_list>( <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>int</name></expr></argument>)</argument_list></call>*(<name>argc</name>-2)</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>argc</name>-2</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr><name>i</name>+2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name><name>aRoot</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></for>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_INTEGRITY_CHECK</name></cpp:ifndef>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zResult</name> = <call><name>sqlite3BtreeIntegrityCheck</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>aRoot</name></expr></argument>, <argument><expr><name>nRoot</name></expr></argument>, <argument><expr>10000</expr></argument>, <argument><expr>&amp;<name>nErr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><name>zResult</name> = 0</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr>(<name>void</name>*)<name>aRoot</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zResult</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zResult</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>zResult</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+  }</block></then></if>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_cursor_list ID
+**
+** Print information about all cursors to standard output for debugging.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_cursor_list</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeCursorList</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_cursor ID TABLENUM WRITEABLE
+**
+** Create a new cursor.  Return the ID for the cursor.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_cursor</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iTable</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>wrFlag</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>30</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=4</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID TABLENUM WRITEABLE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iTable</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetBoolean</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>wrFlag</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>pCur</name> = (<name>BtCursor</name> *)<call><name>ckalloc</name><argument_list>(<argument><expr><call><name>sqlite3BtreeCursorSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sqlite3BtreeCursorSize</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCursor</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>iTable</name></expr></argument>, <argument><expr><name>wrFlag</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>ckfree</name><argument_list>(<argument><expr>(<name>char</name> *)<name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%p"</expr></argument>, <argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_close_cursor ID
+**
+** Close a cursor opened using btree_cursor.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_close_cursor</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pBt</name> = <name>pCur</name>-&gt;<name>pBtree</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCloseCursor</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>ckfree</name><argument_list>(<argument><expr>(<name>char</name> *)<name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_move_to ID KEY
+**
+** Move the cursor to the entry with the given key.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_move_to</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>20</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID KEY\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3BtreeFlags</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call> &amp; <name>BTREE_INTKEY</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>iKey</name></decl>;</decl_stmt>
+    <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iKey</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeMovetoUnpacked</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iKey</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeMoveto</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr><call><name>strlen</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>  
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>res</name>&lt;0</expr> )</condition><then> <expr_stmt><expr><name>res</name> = -1</expr>;</expr_stmt></then></if>
+  <if>if<condition>( <expr><name>res</name>&gt;0</expr> )</condition><then> <expr_stmt><expr><name>res</name> = 1</expr>;</expr_stmt></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_delete ID
+**
+** Delete the entry that the cursor is pointing to
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_delete</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeDelete</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_insert ID KEY DATA ?NZERO?
+**
+** Create a new entry with the given key and data.  If an entry already
+** exists with the same key the old entry is overwritten.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_insert</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>nZero</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=4 &amp;&amp; <name>objc</name>!=5</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"ID KEY DATA ?NZERO?"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>objc</name>==5</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>4</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nZero</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>nZero</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3BtreeFlags</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call> &amp; <name>BTREE_INTKEY</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>i64</name></type> <name>iKey</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>len</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>pBuf</name></decl>;</decl_stmt>
+    <if>if<condition>( <expr><call><name>Tcl_GetWideIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>iKey</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>pBuf</name> = <call><name>Tcl_GetByteArrayFromObj</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>len</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeInsert</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>iKey</name></expr></argument>, <argument><expr><name>pBuf</name></expr></argument>, <argument><expr><name>len</name></expr></argument>, <argument><expr><name>nZero</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>keylen</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>dlen</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>pKBuf</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>pDBuf</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>pKBuf</name> = <call><name>Tcl_GetByteArrayFromObj</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>keylen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pDBuf</name> = <call><name>Tcl_GetByteArrayFromObj</name><argument_list>(<argument><expr><name><name>objv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>dlen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeInsert</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr><name>pKBuf</name></expr></argument>, <argument><expr><name>keylen</name></expr></argument>, <argument><expr><name>pDBuf</name></expr></argument>, <argument><expr><name>dlen</name></expr></argument>, <argument><expr><name>nZero</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_next ID
+**
+** Move the cursor to the next entry in the table.  Return 0 on success
+** or 1 if the cursor was already on the last entry in the table or if
+** the table is empty.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_next</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeNext</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_prev ID
+**
+** Move the cursor to the previous entry in the table.  Return 0 on
+** success and 1 if the cursor was already on the first entry in
+** the table or if the table was empty.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_prev</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreePrevious</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_first ID
+**
+** Move the cursor to the first entry in the table.  Return 0 if the
+** cursor was left point to something and 1 if the table is empty.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_first</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeFirst</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_last ID
+**
+** Move the cursor to the last entry in the table.  Return 0 if the
+** cursor was left point to something and 1 if the table is empty.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_last</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeLast</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>,<argument><expr>"%d"</expr></argument>,<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_eof ID
+**
+** Return TRUE if the given cursor is not pointing at a valid entry.
+** Return FALSE if the cursor does point to a valid entry.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_eof</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>50</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeEof</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_keysize ID
+**
+** Return the number of bytes of key.  For an INTKEY table, this
+** returns the key itself.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_keysize</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>50</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeKeySize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>(<name>i64</name>*)&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%llu"</expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_key ID
+**
+** Return the key for the entry at which the cursor is pointing.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_key</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeKeySize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>(<name>i64</name>*)&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3BtreeFlags</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call> &amp; <name>BTREE_INTKEY</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf2</name><index>[<expr>60</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf2</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf2</name></expr></argument>, <argument><expr>"%llu"</expr></argument>, <argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf2</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>zBuf</name> = <call><name>sqlite3_malloc</name><argument_list>( <argument><expr><name>n</name>+1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeKey</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_data ID ?N?
+**
+** Return the data for the entry at which the cursor is pointing.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_data</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2 &amp;&amp; <name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>argc</name>==2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3BtreeDataSize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>n</name> = <call><name>atoi</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>zBuf</name> = <call><name>sqlite3_malloc</name><argument_list>( <argument><expr><name>n</name>+1</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeData</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>n</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name><name>zBuf</name><index>[<expr><name>n</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_free</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_fetch_key ID AMT
+**
+** Use the sqlite3BtreeKeyFetch() routine to get AMT bytes of the key.
+** If sqlite3BtreeKeyFetch() fails, return an empty string.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_fetch_key</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>amt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>nKey</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zStatic</name><index>[<expr>1000</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID AMT\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeKeySize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>(<name>i64</name>*)&amp;<name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zBuf</name> = <call><name>sqlite3BtreeKeyFetch</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>amt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zBuf</name> &amp;&amp; <name>amt</name>&gt;=<name>n</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>nKey</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>zStatic</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>n</name>&gt;0</expr> )</condition><then> <expr_stmt><expr><name>nKey</name> = <name>n</name></expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>zStatic</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>(<name>int</name>)<name>nKey</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+    <expr_stmt><expr><name><name>zStatic</name><index>[<expr><name>nKey</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zStatic</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_fetch_data ID AMT
+**
+** Use the sqlite3BtreeDataFetch() routine to get AMT bytes of the key.
+** If sqlite3BtreeDataFetch() fails, return an empty string.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_fetch_data</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>amt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>nData</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zBuf</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zStatic</name><index>[<expr>1000</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID AMT\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>n</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeDataSize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>nData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zBuf</name> = <call><name>sqlite3BtreeDataFetch</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>&amp;<name>amt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>zBuf</name> &amp;&amp; <name>amt</name>&gt;=<name>n</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>nData</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>zStatic</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>n</name>&gt;0</expr> )</condition><then> <expr_stmt><expr><name>nData</name> = <name>n</name></expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr><name>zStatic</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>(<name>int</name>)<name>nData</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+    <expr_stmt><expr><name><name>zStatic</name><index>[<expr><name>nData</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zStatic</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_payload_size ID
+**
+** Return the number of bytes of payload
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_payload_size</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n2</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>n1</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>50</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>sqlite3BtreeFlags</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>)</argument_list></call> &amp; <name>BTREE_INTKEY</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>n1</name> = 0</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>sqlite3BtreeKeySize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>(<name>i64</name>*)&amp;<name>n1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeDataSize</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr>(<name>u32</name>*)&amp;<name>n2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr>(<name>int</name>)(<name>n1</name>+<name>n2</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_cursor_info ID ?UP-CNT?
+**
+** Return integers containing information about the entry the
+** cursor is pointing to:
+**
+**   aResult[0] =  The page number
+**   aResult[1] =  The entry number
+**   aResult[2] =  Total number of entries on this page
+**   aResult[3] =  Cell size (local payload + header)
+**   aResult[4] =  Number of free bytes on this page
+**   aResult[5] =  Number of free blocks on the page
+**   aResult[6] =  Total payload size (local + overflow)
+**   aResult[7] =  Header size in bytes
+**   aResult[8] =  Local payload size
+**   aResult[9] =  Parent page number
+**   aResult[10]=  Page number of the first overflow page
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_cursor_info</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>j</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>up</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>aResult</name><index>[<expr>11</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>400</expr>]</index></name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2 &amp;&amp; <name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID ?UP-CNT?\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>argc</name>==3</expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>up</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>up</name> = 0</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCursorInfo</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr><name>aResult</name></expr></argument>, <argument><expr><name>up</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>j</name> = 0</expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aResult</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aResult</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr>40</expr></argument>,<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>,<argument><expr>" %d"</expr></argument>, <argument><expr><name><name>aResult</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>j</name> += <call><name>strlen</name><argument_list>(<argument><expr>&amp;<name><name>zBuf</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pCur</name>-&gt;<name>pBtree</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>&amp;<name><name>zBuf</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Copied from btree.c:
+*/</comment>
+<function><type><name>static</name> <name>u32</name></type> <name>t4Get4byte</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>char</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr>(<name><name>p</name><index>[<expr>0</expr>]</index></name>&lt;&lt;24) | (<name><name>p</name><index>[<expr>1</expr>]</index></name>&lt;&lt;16) | (<name><name>p</name><index>[<expr>2</expr>]</index></name>&lt;&lt;8) | <name><name>p</name><index>[<expr>3</expr>]</index></name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+**   btree_ovfl_info  BTREE  CURSOR
+**
+** Given a cursor, return the sequence of pages number that form the
+** overflow pages for the data of the entry that the cursor is point
+** to.
+*/</comment> 
+<function><type><name>static</name> <name>int</name></type> <name>btree_ovfl_info</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>BtCursor</name> *</type><name>pCur</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Pager</name> *</type><name>pPager</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>dataSize</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>pgno</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>void</name> *</type><name>pPage</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>aResult</name><index>[<expr>11</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zElem</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_DString</name></type> <name>str</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>, 
+                    <argument><expr>" BTREE CURSOR"</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pCur</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>(*(<name>void</name>**)<name>pCur</name>) != (<name>void</name>*)<name>pBt</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"Cursor "</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>" does not belong to btree "</expr></argument>,
+       <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pPager</name> = <call><name>sqlite3BtreePager</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3BtreeCursorInfo</name><argument_list>(<argument><expr><name>pCur</name></expr></argument>, <argument><expr><name>aResult</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>rc</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>errorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>dataSize</name> = <name>pBt</name>-&gt;<name>pBt</name>-&gt;<name>usableSize</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_DStringInit</name><argument_list>(<argument><expr>&amp;<name>str</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>n</name> = <name><name>aResult</name><index>[<expr>6</expr>]</index></name> - <name><name>aResult</name><index>[<expr>8</expr>]</index></name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>n</name> = (<name>n</name> + <name>dataSize</name> - 1)/<name>dataSize</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pgno</name> = (<name>u32</name>)<name><name>aResult</name><index>[<expr>10</expr>]</index></name></expr>;</expr_stmt>
+  <while>while<condition>( <expr><name>pgno</name> &amp;&amp; <name>n</name>--</expr> )</condition><block>{
+    <decl_stmt><decl><type><name>DbPage</name> *</type><name>pDbPage</name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zElem</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_DStringAppendElement</name><argument_list>(<argument><expr>&amp;<name>str</name></expr></argument>, <argument><expr><name>zElem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><call><name>sqlite3PagerGet</name><argument_list>(<argument><expr><name>pPager</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr>&amp;<name>pDbPage</name></expr></argument>)</argument_list></call>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>Tcl_DStringFree</name><argument_list>(<argument><expr>&amp;<name>str</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"unable to get page "</expr></argument>, <argument><expr><name>zElem</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>pPage</name> = <call><name>sqlite3PagerGetData</name><argument_list>(<argument><expr><name>pDbPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>pgno</name> = <call><name>t4Get4byte</name><argument_list>(<argument><expr>(<name>unsigned</name> <name>char</name>*)<name>pPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>sqlite3PagerUnref</name><argument_list>(<argument><expr><name>pDbPage</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></while>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_DStringResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>&amp;<name>str</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** The command is provided for the purpose of setting breakpoints.
+** in regression test scripts.
+**
+** By setting a GDB breakpoint on this procedure and executing the
+** btree_breakpoint command in a test script, we can stop GDB at
+** the point in the script where the btree_breakpoint command is
+** inserted.  This is useful for debugging.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_breakpoint</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** usage:   varint_test  START  MULTIPLIER  COUNT  INCREMENT
+**
+** This command tests the putVarint() and getVarint()
+** routines, both for accuracy and for speed.
+**
+** An integer is written using putVarint() and read back with
+** getVarint() and varified to be unchanged.  This repeats COUNT
+** times.  The first integer is START*MULTIPLIER.  Each iteration
+** increases the integer by INCREMENT.
+**
+** This command returns nothing if it works.  It returns an error message
+** if something goes wrong.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_varint_test</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>u32</name></type> <name>start</name>, <name>mult</name>, <name>count</name>, <name>incr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u64</name></type> <name>in</name>, <name>out</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n1</name>, <name>n2</name>, <name>i</name>, <name>j</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>argc</name>!=5</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" START MULTIPLIER COUNT INCREMENT\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>(<name>int</name>*)&amp;<name>start</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>(<name>int</name>*)&amp;<name>mult</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>3</expr>]</index></name></expr></argument>, <argument><expr>(<name>int</name>*)&amp;<name>count</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>4</expr>]</index></name></expr></argument>, <argument><expr>(<name>int</name>*)&amp;<name>incr</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>in</name> = <name>start</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>in</name> *= <name>mult</name></expr>;</expr_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<name>count</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zErr</name><index>[<expr>200</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>n1</name> = <call><name>putVarint</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>in</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>n1</name>&gt;9 || <name>n1</name>&lt;1</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>, <argument><expr>"putVarint returned %d - should be between 1 and 9"</expr></argument>, <argument><expr><name>n1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>n2</name> = <call><name>getVarint</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>&amp;<name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>n1</name>!=<name>n2</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>, <argument><expr>"putVarint returned %d and getVarint returned %d"</expr></argument>, <argument><expr><name>n1</name></expr></argument>, <argument><expr><name>n2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>in</name>!=<name>out</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>, <argument><expr>"Wrote 0x%016llx and got back 0x%016llx"</expr></argument>, <argument><expr><name>in</name></expr></argument>, <argument><expr><name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+    <if>if<condition>( <expr>(<name>in</name> &amp; 0xffffffff)==<name>in</name></expr> )</condition><then><block>{
+      <decl_stmt><decl><type><name>u32</name></type> <name>out32</name></decl>;</decl_stmt>
+      <expr_stmt><expr><name>n2</name> = <call><name>getVarint32</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>out32</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>out</name> = <name>out32</name></expr>;</expr_stmt>
+      <if>if<condition>( <expr><name>n1</name>!=<name>n2</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>, <argument><expr>"putVarint returned %d and GetVarint32 returned %d"</expr></argument>, 
+                  <argument><expr><name>n1</name></expr></argument>, <argument><expr><name>n2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+      }</block></then></if>
+      <if>if<condition>( <expr><name>in</name>!=<name>out</name></expr> )</condition><then><block>{
+        <expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr><name>zErr</name></expr></argument>, <argument><expr>"Wrote 0x%016llx and got back 0x%016llx from GetVarint32"</expr></argument>,
+            <argument><expr><name>in</name></expr></argument>, <argument><expr><name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zErr</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+      }</block></then></if>
+    }</block></then></if>
+
+    <comment type="block">/* In order to get realistic timings, run getVarint 19 more times.
+    ** This is because getVarint is called about 20 times more often
+    ** than putVarint.
+    */</comment>
+    <for>for(<init><expr><name>j</name>=0</expr>;</init> <condition><expr><name>j</name>&lt;19</expr>;</condition> <incr><expr><name>j</name>++</expr></incr>)<block>{
+      <expr_stmt><expr><call><name>getVarint</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>, <argument><expr>&amp;<name>out</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></for>
+    <expr_stmt><expr><name>in</name> += <name>incr</name></expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** usage:   btree_from_db  DB-HANDLE
+**
+** This command returns the btree handle for the main database associated
+** with the database-handle passed as the argument. Example usage:
+**
+** sqlite3 db test.db
+** set bt [btree_from_db db]
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_from_db</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_CmdInfo</name></type> <name>info</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>iDb</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2 &amp;&amp; <name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" DB-HANDLE ?N?\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr>1!=<call><name>Tcl_GetCommandInfo</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>info</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"No such db-handle: \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>"\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>argc</name>==3</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>iDb</name> = <call><name>atoi</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>db</name> = *((<name>sqlite3</name> **)<name>info</name>.<name>objClientData</name>)</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>pBt</name> = <name>db</name>-&gt;<name><name>aDb</name><index>[<expr><name>iDb</name></expr>]</index></name>.<name>pBt</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%p"</expr></argument>, <argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** usage:   btree_set_cache_size ID NCACHE
+**
+** Set the size of the cache used by btree $ID.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_set_cache_size</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>nCache</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=3</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" BT NCACHE\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><call><name>Tcl_GetInt</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>nCache</name></expr></argument>)</argument_list></call></expr> )</condition><then> <return>return <expr><name>TCL_ERROR</name></expr>;</return></then></if>
+
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeSetCacheSize</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>, <argument><expr><name>nCache</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Usage:   btree_ismemdb ID
+**
+** Return true if the B-Tree is in-memory.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>btree_ismemdb</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type><name>NotUsed</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,    <comment type="block">/* The TCL interpreter that invoked this command */</comment>
+  <param><decl><type><name>int</name></type> <name>argc</name></decl></param>,              <comment type="block">/* Number of arguments */</comment>
+  <param><decl><type><name>const</name> <name>char</name> **</type><name>argv</name></decl></param>      <comment type="block">/* Text of each argument */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Btree</name> *</type><name>pBt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>res</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>argc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"wrong # args: should be \""</expr></argument>, <argument><expr><name><name>argv</name><index>[<expr>0</expr>]</index></name></expr></argument>,
+       <argument><expr>" ID\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>pBt</name> = <call><name>sqlite3TestTextToPtr</name><argument_list>(<argument><expr><name><name>argv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeEnter</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>res</name> = <call><name>sqlite3PagerIsMemdb</name><argument_list>(<argument><expr><call><name>sqlite3BtreePager</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3BtreeLeave</name><argument_list>(<argument><expr><name>pBt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><name>pBt</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><call><name>Tcl_NewBooleanObj</name><argument_list>(<argument><expr><name>res</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+
+<comment type="block">/*
+** Register commands with the TCL interpreter.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqlitetest3_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+     <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+     <decl_stmt><decl><type><name>Tcl_CmdProc</name> *</type><name>xProc</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aCmd</name><index>[]</index></name> =<init> <expr><block>{
+     <expr><block>{ <expr>"btree_open"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>btree_open</name></expr>               }</block></expr>,
+     <expr><block>{ <expr>"btree_close"</expr>,              <expr>(<name>Tcl_CmdProc</name>*)<name>btree_close</name></expr>              }</block></expr>,
+     <expr><block>{ <expr>"btree_begin_transaction"</expr>,  <expr>(<name>Tcl_CmdProc</name>*)<name>btree_begin_transaction</name></expr>  }</block></expr>,
+     <expr><block>{ <expr>"btree_commit"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>btree_commit</name></expr>             }</block></expr>,
+     <expr><block>{ <expr>"btree_rollback"</expr>,           <expr>(<name>Tcl_CmdProc</name>*)<name>btree_rollback</name></expr>           }</block></expr>,
+     <expr><block>{ <expr>"btree_create_table"</expr>,       <expr>(<name>Tcl_CmdProc</name>*)<name>btree_create_table</name></expr>       }</block></expr>,
+     <expr><block>{ <expr>"btree_drop_table"</expr>,         <expr>(<name>Tcl_CmdProc</name>*)<name>btree_drop_table</name></expr>         }</block></expr>,
+     <expr><block>{ <expr>"btree_clear_table"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_clear_table</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_get_meta"</expr>,           <expr>(<name>Tcl_CmdProc</name>*)<name>btree_get_meta</name></expr>           }</block></expr>,
+     <expr><block>{ <expr>"btree_update_meta"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_update_meta</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_pager_stats"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_pager_stats</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_cursor"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>btree_cursor</name></expr>             }</block></expr>,
+     <expr><block>{ <expr>"btree_close_cursor"</expr>,       <expr>(<name>Tcl_CmdProc</name>*)<name>btree_close_cursor</name></expr>       }</block></expr>,
+     <expr><block>{ <expr>"btree_move_to"</expr>,            <expr>(<name>Tcl_CmdProc</name>*)<name>btree_move_to</name></expr>            }</block></expr>,
+     <expr><block>{ <expr>"btree_delete"</expr>,             <expr>(<name>Tcl_CmdProc</name>*)<name>btree_delete</name></expr>             }</block></expr>,
+     <expr><block>{ <expr>"btree_next"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>btree_next</name></expr>               }</block></expr>,
+     <expr><block>{ <expr>"btree_prev"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>btree_prev</name></expr>               }</block></expr>,
+     <expr><block>{ <expr>"btree_eof"</expr>,                <expr>(<name>Tcl_CmdProc</name>*)<name>btree_eof</name></expr>                }</block></expr>,
+     <expr><block>{ <expr>"btree_keysize"</expr>,            <expr>(<name>Tcl_CmdProc</name>*)<name>btree_keysize</name></expr>            }</block></expr>,
+     <expr><block>{ <expr>"btree_key"</expr>,                <expr>(<name>Tcl_CmdProc</name>*)<name>btree_key</name></expr>                }</block></expr>,
+     <expr><block>{ <expr>"btree_data"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>btree_data</name></expr>               }</block></expr>,
+     <expr><block>{ <expr>"btree_fetch_key"</expr>,          <expr>(<name>Tcl_CmdProc</name>*)<name>btree_fetch_key</name></expr>          }</block></expr>,
+     <expr><block>{ <expr>"btree_fetch_data"</expr>,         <expr>(<name>Tcl_CmdProc</name>*)<name>btree_fetch_data</name></expr>         }</block></expr>,
+     <expr><block>{ <expr>"btree_payload_size"</expr>,       <expr>(<name>Tcl_CmdProc</name>*)<name>btree_payload_size</name></expr>       }</block></expr>,
+     <expr><block>{ <expr>"btree_first"</expr>,              <expr>(<name>Tcl_CmdProc</name>*)<name>btree_first</name></expr>              }</block></expr>,
+     <expr><block>{ <expr>"btree_last"</expr>,               <expr>(<name>Tcl_CmdProc</name>*)<name>btree_last</name></expr>               }</block></expr>,
+     <expr><block>{ <expr>"btree_integrity_check"</expr>,    <expr>(<name>Tcl_CmdProc</name>*)<name>btree_integrity_check</name></expr>    }</block></expr>,
+     <expr><block>{ <expr>"btree_breakpoint"</expr>,         <expr>(<name>Tcl_CmdProc</name>*)<name>btree_breakpoint</name></expr>         }</block></expr>,
+     <expr><block>{ <expr>"btree_varint_test"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_varint_test</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_begin_statement"</expr>,    <expr>(<name>Tcl_CmdProc</name>*)<name>btree_begin_statement</name></expr>    }</block></expr>,
+     <expr><block>{ <expr>"btree_commit_statement"</expr>,   <expr>(<name>Tcl_CmdProc</name>*)<name>btree_commit_statement</name></expr>   }</block></expr>,
+     <expr><block>{ <expr>"btree_rollback_statement"</expr>, <expr>(<name>Tcl_CmdProc</name>*)<name>btree_rollback_statement</name></expr> }</block></expr>,
+     <expr><block>{ <expr>"btree_from_db"</expr>,            <expr>(<name>Tcl_CmdProc</name>*)<name>btree_from_db</name></expr>            }</block></expr>,
+     <expr><block>{ <expr>"btree_set_cache_size"</expr>,     <expr>(<name>Tcl_CmdProc</name>*)<name>btree_set_cache_size</name></expr>     }</block></expr>,
+     <expr><block>{ <expr>"btree_cursor_info"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_cursor_info</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_ovfl_info"</expr>,          <expr>(<name>Tcl_CmdProc</name>*)<name>btree_ovfl_info</name></expr>          }</block></expr>,
+     <expr><block>{ <expr>"btree_cursor_list"</expr>,        <expr>(<name>Tcl_CmdProc</name>*)<name>btree_cursor_list</name></expr>        }</block></expr>,
+     <expr><block>{ <expr>"btree_ismemdb"</expr>,            <expr>(<name>Tcl_CmdProc</name>*)<name>btree_ismemdb</name></expr>            }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aCmd</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aCmd</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>Tcl_CreateCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>xProc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+
+  <comment type="block">/* The btree_insert command is implemented using the tcl 'object'
+  ** interface, not the string interface like the other commands in this
+  ** file. This is so binary data can be inserted into btree tables.
+  */</comment>
+  <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"btree_insert"</expr></argument>, <argument><expr><name>btree_insert</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

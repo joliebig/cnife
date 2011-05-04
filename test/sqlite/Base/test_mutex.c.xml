@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_mutex.c" filename=""><comment type="block">/*
+** 2008 June 18
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** 
+** $Id: test_mutex.c,v 1.12 2008/11/04 14:55:47 danielk1977 Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqlite3.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/* defined in test1.c */</comment>
+<function_decl><type><name>const</name> <name>char</name> *</type><name>sqlite3TestErrorName</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list>;</function_decl>
+
+<comment type="block">/* A countable mutex */</comment>
+<struct>struct <name>sqlite3_mutex</name> <block>{<public type="default">
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>pReal</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>eType</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<comment type="block">/* State variables */</comment>
+<decl_stmt><decl><type><name>static</name> struct</type> <name>test_mutex_globals</name> <block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>isInstalled</name></decl>;</decl_stmt>              <comment type="block">/* True if installed */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>disableInit</name></decl>;</decl_stmt>              <comment type="block">/* True to cause sqlite3_initalize() to fail */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>disableTry</name></decl>;</decl_stmt>               <comment type="block">/* True to force sqlite3_mutex_try() to fail */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name>isInit</name></decl>;</decl_stmt>                   <comment type="block">/* True if initialized */</comment>
+  <decl_stmt><decl><type><name>sqlite3_mutex_methods</name></type> <name>m</name></decl>;</decl_stmt>      <comment type="block">/* Interface to "real" mutex system */</comment>
+  <decl_stmt><decl><type><name>int</name></type> <name><name>aCounter</name><index>[<expr>8</expr>]</index></name></decl>;</decl_stmt>              <comment type="block">/* Number of grabs of each type of mutex */</comment>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name></type> <name><name>aStatic</name><index>[<expr>6</expr>]</index></name></decl>;</decl_stmt>     <comment type="block">/* The six static mutexes */</comment>
+}</block></decl></decl_stmt> <expr_stmt><expr><name>g</name></expr>;</expr_stmt>
+
+<comment type="block">/* Return true if the countable mutex is currently held */</comment>
+<function><type><name>static</name> <name>int</name></type> <name>counterMutexHeld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>g</name>.<name>m</name>.<call><name>xMutexHeld</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/* Return true if the countable mutex is not currently held */</comment>
+<function><type><name>static</name> <name>int</name></type> <name>counterMutexNotheld</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <return>return <expr><name>g</name>.<name>m</name>.<call><name>xMutexNotheld</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/* Initialize the countable mutex interface
+** Or, if g.disableInit is non-zero, then do not initialize but instead
+** return the value of g.disableInit as the result code.  This can be used
+** to simulate an initialization failure.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>counterMutexInit</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ 
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>g</name>.<name>disableInit</name></expr> )</condition><then> <return>return <expr><name>g</name>.<name>disableInit</name></expr>;</return></then></if>
+  <expr_stmt><expr><name>rc</name> = <name>g</name>.<name>m</name>.<call><name>xMutexInit</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name>isInit</name> = 1</expr>;</expr_stmt>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Uninitialize the mutex subsystem
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>counterMutexEnd</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{ 
+  <expr_stmt><expr><name>g</name>.<name>isInit</name> = 0</expr>;</expr_stmt>
+  <return>return <expr><name>g</name>.<name>m</name>.<call><name>xMutexEnd</name><argument_list>()</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Allocate a countable mutex
+*/</comment>
+<function><type><name>static</name> <name>sqlite3_mutex</name> *</type><name>counterMutexAlloc</name><parameter_list>(<param><decl><type><name>int</name></type> <name>eType</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>pReal</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>pRet</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>isInit</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>eType</name>&lt;8 &amp;&amp; <name>eType</name>&gt;=0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>pReal</name> = <name>g</name>.<name>m</name>.<call><name>xMutexAlloc</name><argument_list>(<argument><expr><name>eType</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>pReal</name></expr> )</condition><then> <return>return <expr>0</expr>;</return></then></if>
+
+  <if>if<condition>( <expr><name>eType</name>==<name>SQLITE_MUTEX_FAST</name> || <name>eType</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>pRet</name> = (<name>sqlite3_mutex</name> *)<call><name>malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>sqlite3_mutex</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>pRet</name> = &amp;<name>g</name>.<name><name>aStatic</name><index>[<expr><name>eType</name>-2</expr>]</index></name></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><name>pRet</name>-&gt;<name>eType</name> = <name>eType</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pRet</name>-&gt;<name>pReal</name> = <name>pReal</name></expr>;</expr_stmt>
+  <return>return <expr><name>pRet</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Free a countable mutex
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>counterMutexFree</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>isInit</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name>m</name>.<call><name>xMutexFree</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>p</name>-&gt;<name>eType</name>==<name>SQLITE_MUTEX_FAST</name> || <name>p</name>-&gt;<name>eType</name>==<name>SQLITE_MUTEX_RECURSIVE</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></then></if>
+}</block></function>
+
+<comment type="block">/*
+** Enter a countable mutex.  Block until entry is safe.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>counterMutexEnter</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>isInit</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name><name>aCounter</name><index>[<expr><name>p</name>-&gt;<name>eType</name></expr>]</index></name>++</expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name>m</name>.<call><name>xMutexEnter</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** Try to enter a mutex.  Return true on success.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>counterMutexTry</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>isInit</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name><name>aCounter</name><index>[<expr><name>p</name>-&gt;<name>eType</name></expr>]</index></name>++</expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>g</name>.<name>disableTry</name></expr> )</condition><then> <return>return <expr><name>SQLITE_BUSY</name></expr>;</return></then></if>
+  <return>return <expr><name>g</name>.<name>m</name>.<call><name>xMutexTry</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/* Leave a mutex
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>counterMutexLeave</name><parameter_list>(<param><decl><type><name>sqlite3_mutex</name> *</type><name>p</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>isInit</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>g</name>.<name>m</name>.<call><name>xMutexLeave</name><argument_list>(<argument><expr><name>p</name>-&gt;<name>pReal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3_shutdown
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_shutdown</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_shutdown</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3_initialize
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_initialize</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_initialize</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** install_mutex_counters BOOLEAN
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_install_mutex_counters</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>isInstall</name></decl>;</decl_stmt>
+
+  <decl_stmt><decl><type><name>sqlite3_mutex_methods</name></type> <name>counter_methods</name> =<init> <expr><block>{
+    <expr><name>counterMutexInit</name></expr>,
+    <expr><name>counterMutexEnd</name></expr>,
+    <expr><name>counterMutexAlloc</name></expr>,
+    <expr><name>counterMutexFree</name></expr>,
+    <expr><name>counterMutexEnter</name></expr>,
+    <expr><name>counterMutexTry</name></expr>,
+    <expr><name>counterMutexLeave</name></expr>,
+    <expr><name>counterMutexHeld</name></expr>,
+    <expr><name>counterMutexNotheld</name></expr>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"BOOLEAN"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <if>if<condition>( <expr><name>TCL_OK</name>!=<call><name>Tcl_GetBooleanFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>isInstall</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>isInstall</name>==0 || <name>isInstall</name>==1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>g</name>.<name>isInstalled</name>==0 || <name>g</name>.<name>isInstalled</name>==1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>isInstall</name>==<name>g</name>.<name>isInstalled</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"mutex counters are "</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>isInstall</name>?"already installed":"not installed"</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><name>isInstall</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>m</name>.<name>xMutexAlloc</name>==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_GETMUTEX</name></expr></argument>, <argument><expr>&amp;<name>g</name>.<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MUTEX</name></expr></argument>, <argument><expr>&amp;<name>counter_methods</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>g</name>.<name>disableTry</name> = 0</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>g</name>.<name>m</name>.<name>xMutexAlloc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>SQLITE_CONFIG_MUTEX</name></expr></argument>, <argument><expr>&amp;<name>g</name>.<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>g</name>.<name>m</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>sqlite3_mutex_methods</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>g</name>.<name>isInstalled</name> = <name>isInstall</name></expr>;</expr_stmt>
+  }</block></then></if>
+
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** read_mutex_counters
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_read_mutex_counters</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Tcl_Obj</name> *</type><name>pRet</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name><name>aName</name><index>[<expr>8</expr>]</index></name> =<init> <expr><block>{
+    <expr>"fast"</expr>,        <expr>"recursive"</expr>,   <expr>"static_master"</expr>, <expr>"static_mem"</expr>, 
+    <expr>"static_mem2"</expr>, <expr>"static_prng"</expr>, <expr>"static_lru"</expr>,    <expr>"static_lru2"</expr>
+  }</block></expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <expr_stmt><expr><name>pRet</name> = <call><name>Tcl_NewObj</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_IncrRefCount</name><argument_list>(<argument><expr><name>pRet</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>ii</name>&lt;8</expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>, <argument><expr><call><name>Tcl_NewStringObj</name><argument_list>(<argument><expr><name><name>aName</name><index>[<expr><name>ii</name></expr>]</index></name></expr></argument>, <argument><expr>-1</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>Tcl_ListObjAppendElement</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>, <argument><expr><call><name>Tcl_NewIntObj</name><argument_list>(<argument><expr><name>g</name>.<name><name>aCounter</name><index>[<expr><name>ii</name></expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>Tcl_SetObjResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>pRet</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_DecrRefCount</name><argument_list>(<argument><expr><name>pRet</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** clear_mutex_counters
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_clear_mutex_counters</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>ii</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=1</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <for>for(<init><expr><name>ii</name>=0</expr>;</init> <condition><expr><name>ii</name>&lt;8</expr>;</condition> <incr><expr><name>ii</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>g</name>.<name><name>aCounter</name><index>[<expr><name>ii</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+  }</block></for>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** Create and free a mutex.  Return the mutex pointer.  The pointer
+** will be invalid since the mutex has already been freed.  The
+** return pointer just checks to see if the mutex really was allocated.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_alloc_mutex</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_THREADSAFE</name></expr></cpp:if>
+  <decl_stmt><decl><type><name>sqlite3_mutex</name> *</type><name>p</name> =<init> <expr><call><name>sqlite3_mutex_alloc</name><argument_list>(<argument><expr><name>SQLITE_MUTEX_FAST</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>sqlite3_mutex_free</name><argument_list>(<argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3_snprintf</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>"%p"</expr></argument>, <argument><expr><name>p</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>, <argument><expr>(<name>char</name>*)0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** sqlite3_config OPTION
+**
+** OPTION can be either one of the keywords:
+**
+**            SQLITE_CONFIG_SINGLETHREAD
+**            SQLITE_CONFIG_MULTITHREAD
+**            SQLITE_CONFIG_SERIALIZED
+**
+** Or OPTION can be an raw integer.
+*/</comment>
+<function><type><name>static</name> <name>int</name></type> <name>test_config</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <struct>struct <name>ConfigOption</name> <block>{<public type="default">
+    <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>iValue</name></decl>;</decl_stmt>
+  </public>}</block> <decl><name><name>aOpt</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{<expr>"singlethread"</expr>, <expr><name>SQLITE_CONFIG_SINGLETHREAD</name></expr>}</block></expr>,
+    <expr><block>{<expr>"multithread"</expr>,  <expr><name>SQLITE_CONFIG_MULTITHREAD</name></expr>}</block></expr>,
+    <expr><block>{<expr>"serialized"</expr>,   <expr><name>SQLITE_CONFIG_SERIALIZED</name></expr>}</block></expr>,
+    <expr><block>{<expr>0</expr>, <expr>0</expr>}</block></expr>
+  }</block></expr></init></decl>;</struct>
+  <decl_stmt><decl><type><name>int</name></type> <name>s</name> =<init> <expr><call><name>sizeof</name><argument_list>(<argument><expr>struct <name>ConfigOption</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>""</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+
+  <if>if<condition>( <expr><call><name>Tcl_GetIndexFromObjStruct</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>aOpt</name></expr></argument>, <argument><expr><name>s</name></expr></argument>, <argument><expr>"flag"</expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>i</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><call><name>Tcl_GetIntFromObj</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr>&amp;<name>i</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+      <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+    }</block></then></if>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>i</name> = <name><name>aOpt</name><index>[<expr><name>i</name></expr>]</index></name>.<name>iValue</name></expr>;</expr_stmt>
+  }</block></else></if>
+
+  <expr_stmt><expr><name>rc</name> = <call><name>sqlite3_config</name><argument_list>(<argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetResult</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>(<name>char</name> *)<call><name>sqlite3TestErrorName</name><argument_list>(<argument><expr><name>rc</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_VOLATILE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>sqlite3</name> *</type><name>getDbPointer</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>pInterp</name></decl></param>, <param><decl><type><name>Tcl_Obj</name> *</type><name>pObj</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>Tcl_CmdInfo</name></type> <name>info</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type><name>zCmd</name> =<init> <expr><call><name>Tcl_GetString</name><argument_list>(<argument><expr><name>pObj</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr>1!=<call><name>Tcl_GetCommandInfo</name><argument_list>(<argument><expr><name>pInterp</name></expr></argument>, <argument><expr><name>zCmd</name></expr></argument>, <argument><expr>&amp;<name>info</name></expr></argument>)</argument_list></call></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_AppendResult</name><argument_list>(<argument><expr><name>pInterp</name></expr></argument>, <argument><expr>"No such db-handle: \""</expr></argument>, <argument><expr><name>zCmd</name></expr></argument>, <argument><expr>"\""</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr>0</expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>db</name> = *((<name>sqlite3</name> **)<name>info</name>.<name>objClientData</name>)</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>db</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>db</name></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>test_enter_db_mutex</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"DB"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>db</name> = <call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>db</name></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_enter</name><argument_list>(<argument><expr><call><name>sqlite3_db_mutex</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<function><type><name>static</name> <name>int</name></type> <name>test_leave_db_mutex</name><parameter_list>(
+  <param><decl><type><name>void</name> *</type> <name>clientData</name></decl></param>,
+  <param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>,
+  <param><decl><type><name>int</name></type> <name>objc</name></decl></param>,
+  <param><decl><type><name>Tcl_Obj</name> *<name>CONST</name></type> <name><name>objv</name><index>[]</index></name></decl></param>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>sqlite3</name> *</type><name>db</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>objc</name>!=2</expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>Tcl_WrongNumArgs</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>objv</name></expr></argument>, <argument><expr>"DB"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>db</name> = <call><name>getDbPointer</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>objv</name><index>[<expr>1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>db</name></expr> )</condition><then><block>{
+    <return>return <expr><name>TCL_ERROR</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>sqlite3_mutex_leave</name><argument_list>(<argument><expr><call><name>sqlite3_db_mutex</name><argument_list>(<argument><expr><name>db</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name>Sqlitetest_mutex_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>static</name> <struct>struct <block>{<public type="default"/>
+    <decl_stmt><decl><type><name>char</name> *</type><name>zName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Tcl_ObjCmdProc</name> *</type><name>xProc</name></decl>;</decl_stmt>
+  }</block> <decl><name><name>aCmd</name><index>[]</index></name> =<init> <expr><block>{
+    <expr><block>{ <expr>"sqlite3_shutdown"</expr>,        <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_shutdown</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"sqlite3_initialize"</expr>,      <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_initialize</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"sqlite3_config"</expr>,          <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_config</name></expr> }</block></expr>,
+
+    <expr><block>{ <expr>"enter_db_mutex"</expr>,          <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_enter_db_mutex</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"leave_db_mutex"</expr>,          <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_leave_db_mutex</name></expr> }</block></expr>,
+
+    <expr><block>{ <expr>"alloc_dealloc_mutex"</expr>,     <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_alloc_mutex</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"install_mutex_counters"</expr>,  <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_install_mutex_counters</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"read_mutex_counters"</expr>,     <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_read_mutex_counters</name></expr> }</block></expr>,
+    <expr><block>{ <expr>"clear_mutex_counters"</expr>,    <expr>(<name>Tcl_ObjCmdProc</name>*)<name>test_clear_mutex_counters</name></expr> }</block></expr>,
+  }</block></expr></init></decl>;</struct></type></decl></decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;<call><name>sizeof</name><argument_list>(<argument><expr><name>aCmd</name></expr></argument>)</argument_list></call>/<call><name>sizeof</name><argument_list>(<argument><expr><name><name>aCmd</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><call><name>Tcl_CreateObjCommand</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>zName</name></expr></argument>, <argument><expr><name><name>aCmd</name><index>[<expr><name>i</name></expr>]</index></name>.<name>xProc</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>g</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>g</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"disable_mutex_init"</expr></argument>, 
+              <argument><expr>(<name>char</name>*)&amp;<name>g</name>.<name>disableInit</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"disable_mutex_try"</expr></argument>, 
+              <argument><expr>(<name>char</name>*)&amp;<name>g</name>.<name>disableTry</name></expr></argument>, <argument><expr><name>TCL_LINK_INT</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+</unit>

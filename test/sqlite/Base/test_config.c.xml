@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="test_config.c" filename=""><comment type="block">/*
+** 2007 May 7
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** 
+** This file contains code used for testing the SQLite system.
+** None of the code in this file goes into a deliverable build.
+** 
+** The focus of this file is providing the TCL testing layer
+** access to compile-time constants.
+**
+** $Id: test_config.c,v 1.47 2009/01/12 14:01:45 danielk1977 Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteLimit.h"</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"tcl.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+
+<comment type="block">/*
+** Macro to stringify the results of the evaluation a pre-processor
+** macro. i.e. so that STRINGVALUE(SQLITE_NOMEM) -&gt; "7".
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>STRINGVALUE2</name>(x) #x</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>STRINGVALUE</name>(x) STRINGVALUE2(x)</cpp:define>
+
+<comment type="block">/*
+** This routine sets entries in the global ::sqlite_options() array variable
+** according to the compile-time configuration of the database.  Test
+** procedures use this to determine when tests should be omitted.
+*/</comment>
+<function><type><name>static</name> <name>void</name></type> <name>set_options</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_32BIT_ROWID</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"rowid32"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"rowid32"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_CASE_SENSITIVE_LIKE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"casesensitivelike"</expr></argument>,<argument><expr>"1"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"casesensitivelike"</expr></argument>,<argument><expr>"0"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DEBUG</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"debug"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"debug"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DISABLE_DIRSYNC</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"dirsync"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"dirsync"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_DISABLE_LFS</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"lfs"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"lfs"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>1</expr></cpp:if> <comment type="block">/* def SQLITE_MEMDEBUG */</comment>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memdebug"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memdebug"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMSYS3</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mem3"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mem3"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMSYS5</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mem5"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mem5"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_MUTEX_OMIT</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mutex"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"mutex"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_ALTERTABLE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"altertable"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"altertable"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_ANALYZE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"analyze"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"analyze"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_ATOMIC_WRITE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"atomicwrite"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"atomicwrite"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_ATTACH</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"attach"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"attach"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_AUTHORIZATION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"auth"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"auth"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_AUTOINCREMENT</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"autoinc"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"autoinc"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_AUTOVACUUM</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"autovacuum"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"autovacuum"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_AUTOVACUUM */</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_DEFAULT_AUTOVACUUM</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"default_autovacuum"</expr></argument>,<argument><expr>"0"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"default_autovacuum"</expr></argument>, 
+      <argument><expr><call><name>STRINGVALUE</name><argument_list>(<argument><expr><name>SQLITE_DEFAULT_AUTOVACUUM</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_BETWEEN_OPTIMIZATION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"between_opt"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"between_opt"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_BUILTIN_TEST</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"builtin_test"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"builtin_test"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_BLOB_LITERAL</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"bloblit"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"bloblit"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_CAST</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"cast"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"cast"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_CHECK</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"check"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"check"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_COLUMN_METADATA</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"columnmetadata"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"columnmetadata"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_COMPLETE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"complete"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"complete"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_COMPOUND_SELECT</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"compound"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"compound"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_CONFLICT_CLAUSE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"conflict"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"conflict"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_OS_UNIX</name></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"crashtest"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"crashtest"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DATETIME_FUNCS</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"datetime"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"datetime"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DECLTYPE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"decltype"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"decltype"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DEPRECATED</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"deprecated"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"deprecated"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_DISKIO</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"diskio"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"diskio"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_EXPLAIN</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"explain"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"explain"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_FLOATING_POINT</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"floatingpoint"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"floatingpoint"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_FOREIGN_KEY</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"foreignkey"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"foreignkey"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_FTS1</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts1"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts1"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_FTS2</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts2"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts2"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_FTS3</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts3"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"fts3"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_GET_TABLE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"gettable"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"gettable"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_GLOBALRECOVER</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"globalrecover"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"globalrecover"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_ICU</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"icu"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"icu"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_INCRBLOB</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"incrblob"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"incrblob"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_AUTOVACUUM */</comment>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_INTEGRITY_CHECK</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"integrityck"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"integrityck"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_DEFAULT_FILE_FORMAT</name></expr></argument>)</argument_list></call> &amp;&amp; <name>SQLITE_DEFAULT_FILE_FORMAT</name>==1</expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"legacyformat"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"legacyformat"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_LIKE_OPTIMIZATION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"like_opt"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"like_opt"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_LOAD_EXTENSION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"load_ext"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"load_ext"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_LOCALTIME</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"localtime"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"localtime"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_LOOKASIDE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"lookaside"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"lookaside"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"long_double"</expr></argument>,
+              <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>LONGDOUBLE_TYPE</name></expr></argument>)</argument_list></call>&gt;<call><name>sizeof</name><argument_list>(<argument><expr><name>double</name></expr></argument>)</argument_list></call> ? "1" : "0"</expr></argument>,
+              <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_MEMORYDB</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memorydb"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memorydb"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_MEMORY_MANAGEMENT</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memorymanage"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"memorymanage"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_OR_OPTIMIZATION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"or_opt"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"or_opt"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_PAGER_PRAGMAS</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"pager_pragmas"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"pager_pragmas"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_PARSER</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"parser"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"parser"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_PRAGMA</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_FLAG_PRAGMAS</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"pragma"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"integrityck"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"pragma"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_PROGRESS_CALLBACK</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"progress"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"progress"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_REINDEX</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"reindex"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"reindex"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_ENABLE_RTREE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"rtree"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"rtree"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_SCHEMA_PRAGMAS</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"schema_pragmas"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"schema_pragmas"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_SCHEMA_VERSION_PRAGMAS</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"schema_version"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"schema_version"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_ENABLE_LOCKING_STYLE</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:if>#  <cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>__APPLE__</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:define>#    <cpp:directive>define</cpp:directive> <name>SQLITE_ENABLE_LOCKING_STYLE</name> 1</cpp:define>
+<cpp:else>#  <cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define>#    <cpp:directive>define</cpp:directive> <name>SQLITE_ENABLE_LOCKING_STYLE</name> 0</cpp:define>
+<cpp:endif>#  <cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SQLITE_ENABLE_LOCKING_STYLE</name> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>__APPLE__</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"lock_proxy_pragmas"</expr></argument>,<argument><expr>"1"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"lock_proxy_pragmas"</expr></argument>,<argument><expr>"0"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_PREFER_PROXY_LOCKING</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>__APPLE__</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"prefer_proxy_locking"</expr></argument>,<argument><expr>"1"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>,<argument><expr>"sqlite_options"</expr></argument>,<argument><expr>"prefer_proxy_locking"</expr></argument>,<argument><expr>"0"</expr></argument>,<argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    
+    
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_SHARED_CACHE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"shared_cache"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"shared_cache"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_SUBQUERY</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"subquery"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"subquery"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_TCL_VARIABLE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"tclvar"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"tclvar"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"threadsafe"</expr></argument>, 
+      <argument><expr><call><name>STRINGVALUE</name><argument_list>(<argument><expr><name>SQLITE_THREADSAFE</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><call><name>sqlite3_threadsafe</name><argument_list>()</argument_list></call>==<name>SQLITE_THREADSAFE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_TEMPDB</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"tempdb"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"tempdb"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_TRACE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"trace"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"trace"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_TRIGGER</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"trigger"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"trigger"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_TRUCATE_OPTIMIZATION</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"truncate_opt"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"truncate_opt"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"utf16"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"utf16"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_VACUUM</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_ATTACH</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"vacuum"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"vacuum"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_VIEW</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"view"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"view"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_VIRTUALTABLE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"vtab"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"vtab"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_OMIT_WSD</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"wsd"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"wsd"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_ENABLE_UPDATE_DELETE_LIMIT</name></expr></argument>)</argument_list></call> &amp;&amp; !<call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_OMIT_SUBQUERY</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"update_delete_limit"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"update_delete_limit"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>SQLITE_SECURE_DELETE</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"secure_delete"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"secure_delete"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>YYTRACKMAXSTACKDEPTH</name></cpp:ifdef>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"yytrackmaxstackdepth"</expr></argument>, <argument><expr>"1"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+  <expr_stmt><expr><call><name>Tcl_SetVar2</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"sqlite_options"</expr></argument>, <argument><expr>"yytrackmaxstackdepth"</expr></argument>, <argument><expr>"0"</expr></argument>, <argument><expr><name>TCL_GLOBAL_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>LINKVAR</name>(x) { \
+    static const int cv_ ## x = SQLITE_ ## x; \
+    Tcl_LinkVar(interp, "SQLITE_" #x, (char *)&amp;(cv_ ## x), \
+                TCL_LINK_INT | TCL_LINK_READ_ONLY); }</cpp:define>
+
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_LENGTH</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_COLUMN</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_SQL_LENGTH</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_EXPR_DEPTH</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_COMPOUND_SELECT</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_VDBE_OP</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_FUNCTION_ARG</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_VARIABLE_NUMBER</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_PAGE_SIZE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_PAGE_COUNT</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_LIKE_PATTERN_LENGTH</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>DEFAULT_TEMP_CACHE_SIZE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>DEFAULT_CACHE_SIZE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>DEFAULT_PAGE_SIZE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>DEFAULT_FILE_FORMAT</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>LINKVAR</name><argument_list>( <argument><expr><name>MAX_ATTACHED</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <block>{
+    <decl_stmt><decl><type><name>static</name> <name>const</name> <name>int</name></type> <name>cv_TEMP_STORE</name> =<init> <expr><name>SQLITE_TEMP_STORE</name></expr></init></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>Tcl_LinkVar</name><argument_list>(<argument><expr><name>interp</name></expr></argument>, <argument><expr>"TEMP_STORE"</expr></argument>, <argument><expr>(<name>char</name> *)&amp;(<name>cv_TEMP_STORE</name>)</expr></argument>,
+                <argument><expr><name>TCL_LINK_INT</name> | <name>TCL_LINK_READ_ONLY</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+}</block></function>
+
+
+<comment type="block">/*
+** Register commands with the TCL interpreter.
+*/</comment>
+<function><type><name>int</name></type> <name>Sqliteconfig_Init</name><parameter_list>(<param><decl><type><name>Tcl_Interp</name> *</type><name>interp</name></decl></param>)</parameter_list><block>{
+  <expr_stmt><expr><call><name>set_options</name><argument_list>(<argument><expr><name>interp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr><name>TCL_OK</name></expr>;</return>
+}</block></function>
+</unit>

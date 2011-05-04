@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="utf.c" filename=""><comment type="block">/*
+** 2004 April 13
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+** This file contains routines used to translate between UTF-8, 
+** UTF-16, UTF-16BE, and UTF-16LE.
+**
+** $Id: utf.c,v 1.70 2008/12/10 22:30:25 shane Exp $
+**
+** Notes on UTF-8:
+**
+**   Byte-0    Byte-1    Byte-2    Byte-3    Value
+**  0xxxxxxx                                 00000000 00000000 0xxxxxxx
+**  110yyyyy  10xxxxxx                       00000000 00000yyy yyxxxxxx
+**  1110zzzz  10yyyyyy  10xxxxxx             00000000 zzzzyyyy yyxxxxxx
+**  11110uuu  10uuzzzz  10yyyyyy  10xxxxxx   000uuuuu zzzzyyyy yyxxxxxx
+**
+**
+** Notes on UTF-16:  (with wwww+1==uuuuu)
+**
+**      Word-0               Word-1          Value
+**  110110ww wwzzzzyy   110111yy yyxxxxxx    000uuuuu zzzzyyyy yyxxxxxx
+**  zzzzyyyy yyxxxxxx                        00000000 zzzzyyyy yyxxxxxx
+**
+**
+** BOM or Byte Order Mark:
+**     0xff 0xfe   little-endian utf-16 follows
+**     0xfe 0xff   big-endian utf-16 follows
+**
+*/</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"sqliteInt.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"vdbeInt.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_AMALGAMATION</name></cpp:ifndef>
+<comment type="block">/*
+** The following constant value is used by the SQLITE_BIGENDIAN and
+** SQLITE_LITTLEENDIAN macros.
+*/</comment>
+<decl_stmt><decl><type><name>const</name> <name>int</name></type> <name>sqlite3one</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_AMALGAMATION */</comment>
+
+<comment type="block">/*
+** This lookup table is used to help decode the first byte of
+** a multi-byte UTF8 character.
+*/</comment>
+<decl_stmt><decl><type><name>static</name> <name>const</name> <name>unsigned</name> <name>char</name></type> <name><name>sqlite3Utf8Trans1</name><index>[]</index></name> =<init> <expr><block>{
+  <expr>0x00</expr>, <expr>0x01</expr>, <expr>0x02</expr>, <expr>0x03</expr>, <expr>0x04</expr>, <expr>0x05</expr>, <expr>0x06</expr>, <expr>0x07</expr>,
+  <expr>0x08</expr>, <expr>0x09</expr>, <expr>0x0a</expr>, <expr>0x0b</expr>, <expr>0x0c</expr>, <expr>0x0d</expr>, <expr>0x0e</expr>, <expr>0x0f</expr>,
+  <expr>0x10</expr>, <expr>0x11</expr>, <expr>0x12</expr>, <expr>0x13</expr>, <expr>0x14</expr>, <expr>0x15</expr>, <expr>0x16</expr>, <expr>0x17</expr>,
+  <expr>0x18</expr>, <expr>0x19</expr>, <expr>0x1a</expr>, <expr>0x1b</expr>, <expr>0x1c</expr>, <expr>0x1d</expr>, <expr>0x1e</expr>, <expr>0x1f</expr>,
+  <expr>0x00</expr>, <expr>0x01</expr>, <expr>0x02</expr>, <expr>0x03</expr>, <expr>0x04</expr>, <expr>0x05</expr>, <expr>0x06</expr>, <expr>0x07</expr>,
+  <expr>0x08</expr>, <expr>0x09</expr>, <expr>0x0a</expr>, <expr>0x0b</expr>, <expr>0x0c</expr>, <expr>0x0d</expr>, <expr>0x0e</expr>, <expr>0x0f</expr>,
+  <expr>0x00</expr>, <expr>0x01</expr>, <expr>0x02</expr>, <expr>0x03</expr>, <expr>0x04</expr>, <expr>0x05</expr>, <expr>0x06</expr>, <expr>0x07</expr>,
+  <expr>0x00</expr>, <expr>0x01</expr>, <expr>0x02</expr>, <expr>0x03</expr>, <expr>0x00</expr>, <expr>0x01</expr>, <expr>0x00</expr>, <expr>0x00</expr>,
+}</block></expr></init></decl>;</decl_stmt>
+
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>WRITE_UTF8</name>(zOut, c) {                          \
+  if( c&lt;0x00080 ){                                     \
+    *zOut++ = (u8)(c&amp;0xFF);                            \
+  }                                                    \
+  else if( c&lt;0x00800 ){                                \
+    *zOut++ = 0xC0 + (u8)((c&gt;&gt;6)&amp;0x1F);                \
+    *zOut++ = 0x80 + (u8)(c &amp; 0x3F);                   \
+  }                                                    \
+  else if( c&lt;0x10000 ){                                \
+    *zOut++ = 0xE0 + (u8)((c&gt;&gt;12)&amp;0x0F);               \
+    *zOut++ = 0x80 + (u8)((c&gt;&gt;6) &amp; 0x3F);              \
+    *zOut++ = 0x80 + (u8)(c &amp; 0x3F);                   \
+  }else{                                               \
+    *zOut++ = 0xF0 + (u8)((c&gt;&gt;18) &amp; 0x07);             \
+    *zOut++ = 0x80 + (u8)((c&gt;&gt;12) &amp; 0x3F);             \
+    *zOut++ = 0x80 + (u8)((c&gt;&gt;6) &amp; 0x3F);              \
+    *zOut++ = 0x80 + (u8)(c &amp; 0x3F);                   \
+  }                                                    \
+}</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>WRITE_UTF16LE</name>(zOut, c) {                                    \
+  if( c&lt;=0xFFFF ){                                                  \
+    *zOut++ = (u8)(c&amp;0x00FF);                                       \
+    *zOut++ = (u8)((c&gt;&gt;8)&amp;0x00FF);                                  \
+  }else{                                                            \
+    *zOut++ = (u8)(((c&gt;&gt;10)&amp;0x003F) + (((c-0x10000)&gt;&gt;10)&amp;0x00C0));  \
+    *zOut++ = (u8)(0x00D8 + (((c-0x10000)&gt;&gt;18)&amp;0x03));              \
+    *zOut++ = (u8)(c&amp;0x00FF);                                       \
+    *zOut++ = (u8)(0x00DC + ((c&gt;&gt;8)&amp;0x03));                         \
+  }                                                                 \
+}</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>WRITE_UTF16BE</name>(zOut, c) {                                    \
+  if( c&lt;=0xFFFF ){                                                  \
+    *zOut++ = (u8)((c&gt;&gt;8)&amp;0x00FF);                                  \
+    *zOut++ = (u8)(c&amp;0x00FF);                                       \
+  }else{                                                            \
+    *zOut++ = (u8)(0x00D8 + (((c-0x10000)&gt;&gt;18)&amp;0x03));              \
+    *zOut++ = (u8)(((c&gt;&gt;10)&amp;0x003F) + (((c-0x10000)&gt;&gt;10)&amp;0x00C0));  \
+    *zOut++ = (u8)(0x00DC + ((c&gt;&gt;8)&amp;0x03));                         \
+    *zOut++ = (u8)(c&amp;0x00FF);                                       \
+  }                                                                 \
+}</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>READ_UTF16LE</name>(zIn, c){                                         \
+  c = (*zIn++);                                                       \
+  c += ((*zIn++)&lt;&lt;8);                                                 \
+  if( c&gt;=0xD800 &amp;&amp; c&lt;0xE000 ){                                       \
+    int c2 = (*zIn++);                                                \
+    c2 += ((*zIn++)&lt;&lt;8);                                              \
+    c = (c2&amp;0x03FF) + ((c&amp;0x003F)&lt;&lt;10) + (((c&amp;0x03C0)+0x0040)&lt;&lt;10);   \
+    if( (c &amp; 0xFFFF0000)==0 ) c = 0xFFFD;                             \
+  }                                                                   \
+}</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>READ_UTF16BE</name>(zIn, c){                                         \
+  c = ((*zIn++)&lt;&lt;8);                                                  \
+  c += (*zIn++);                                                      \
+  if( c&gt;=0xD800 &amp;&amp; c&lt;0xE000 ){                                       \
+    int c2 = ((*zIn++)&lt;&lt;8);                                           \
+    c2 += (*zIn++);                                                   \
+    c = (c2&amp;0x03FF) + ((c&amp;0x003F)&lt;&lt;10) + (((c&amp;0x03C0)+0x0040)&lt;&lt;10);   \
+    if( (c &amp; 0xFFFF0000)==0 ) c = 0xFFFD;                             \
+  }                                                                   \
+}</cpp:define>
+
+<comment type="block">/*
+** Translate a single UTF-8 character.  Return the unicode value.
+**
+** During translation, assume that the byte that zTerm points
+** is a 0x00.
+**
+** Write a pointer to the next unread byte back into *pzNext.
+**
+** Notes On Invalid UTF-8:
+**
+**  *  This routine never allows a 7-bit character (0x00 through 0x7f) to
+**     be encoded as a multi-byte character.  Any multi-byte character that
+**     attempts to encode a value between 0x00 and 0x7f is rendered as 0xfffd.
+**
+**  *  This routine never allows a UTF16 surrogate value to be encoded.
+**     If a multi-byte character attempts to encode a value between
+**     0xd800 and 0xe000 then it is rendered as 0xfffd.
+**
+**  *  Bytes in the range of 0x80 through 0xbf which occur as the first
+**     byte of a character are interpreted as single-byte characters
+**     and rendered as themselves even though they are technically
+**     invalid characters.
+**
+**  *  This routine accepts an infinite number of different UTF8 encodings
+**     for unicode values 0x80 and greater.  It do not change over-length
+**     encodings to 0xfffd as some systems recommend.
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>READ_UTF8</name>(zIn, zTerm, c)                           \
+  c = *(zIn++);                                            \
+  if( c&gt;=0xc0 ){                                           \
+    c = sqlite3Utf8Trans1[c-0xc0];                         \
+    while( zIn!=zTerm &amp;&amp; (*zIn &amp; 0xc0)==0x80 ){            \
+      c = (c&lt;&lt;6) + (0x3f &amp; *(zIn++));                      \
+    }                                                      \
+    if( c&lt;0x80                                             \
+        || (c&amp;0xFFFFF800)==0xD800                          \
+        || (c&amp;0xFFFFFFFE)==0xFFFE ){  c = 0xFFFD; }        \
+  }</cpp:define>
+<function><type><name>int</name></type> <name>sqlite3Utf8Read</name><parameter_list>(
+  <param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>z</name></decl></param>,         <comment type="block">/* First byte of UTF-8 character */</comment>
+  <param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>zTerm</name></decl></param>,     <comment type="block">/* Pretend this byte is 0x00 */</comment>
+  <param><decl><type><name>const</name> <name>unsigned</name> <name>char</name> **</type><name>pzNext</name></decl></param>    <comment type="block">/* Write first byte past UTF-8 char here */</comment>
+)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>c</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>READ_UTF8</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>zTerm</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr>*<name>pzNext</name> = <name>z</name></expr>;</expr_stmt>
+  <return>return <expr><name>c</name></expr>;</return>
+}</block></function>
+
+
+
+
+<comment type="block">/*
+** If the TRANSLATE_TRACE macro is defined, the value of each Mem is
+** printed on stderr on the way into and out of sqlite3VdbeMemTranslate().
+*/</comment> 
+<comment type="block">/* #define TRANSLATE_TRACE 1 */</comment>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<comment type="block">/*
+** This routine transforms the internal text encoding used by pMem to
+** desiredEnc. It is an error if the string is already of the desired
+** encoding, or if *pMem does not contain a string value.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3VdbeMemTranslate</name><parameter_list>(<param><decl><type><name>Mem</name> *</type><name>pMem</name></decl></param>, <param><decl><type><name>u8</name></type> <name>desiredEnc</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>len</name></decl>;</decl_stmt>                    <comment type="block">/* Maximum length of output string in bytes */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zOut</name></decl>;</decl_stmt>                  <comment type="block">/* Output buffer */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zIn</name></decl>;</decl_stmt>                   <comment type="block">/* Input iterator */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zTerm</name></decl>;</decl_stmt>                 <comment type="block">/* End of input */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>z</name></decl>;</decl_stmt>                     <comment type="block">/* Output iterator */</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>c</name></decl>;</decl_stmt>
+
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMem</name>-&gt;<name>db</name>==0 || <call><name>sqlite3_mutex_held</name><argument_list>(<argument><expr><name>pMem</name>-&gt;<name>db</name>-&gt;<name>mutex</name></expr></argument>)</argument_list></call></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMem</name>-&gt;<name>flags</name>&amp;<name>MEM_Str</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMem</name>-&gt;<name>enc</name>!=<name>desiredEnc</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMem</name>-&gt;<name>enc</name>!=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>pMem</name>-&gt;<name>n</name>&gt;=0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>TRANSLATE_TRACE</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_DEBUG</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeMemPrettyPrint</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"INPUT:  %s\n"</expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  <comment type="block">/* If the translation is between UTF-16 little and big endian, then 
+  ** all that is required is to swap the byte order. This case is handled
+  ** differently from the others.
+  */</comment>
+  <if>if<condition>( <expr><name>pMem</name>-&gt;<name>enc</name>!=<name>SQLITE_UTF8</name> &amp;&amp; <name>desiredEnc</name>!=<name>SQLITE_UTF8</name></expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>u8</name></type> <name>temp</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>rc</name></decl>;</decl_stmt>
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeMemMakeWriteable</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>!=<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>rc</name>==<name>SQLITE_NOMEM</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+    }</block></then></if>
+    <expr_stmt><expr><name>zIn</name> = (<name>u8</name>*)<name>pMem</name>-&gt;<name>z</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>zTerm</name> = &amp;<name><name>zIn</name><index>[<expr><name>pMem</name>-&gt;<name>n</name>&amp;~1</expr>]</index></name></expr>;</expr_stmt>
+    <while>while<condition>( <expr><name>zIn</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+      <expr_stmt><expr><name>temp</name> = *<name>zIn</name></expr>;</expr_stmt>
+      <expr_stmt><expr>*<name>zIn</name> = *(<name>zIn</name>+1)</expr>;</expr_stmt>
+      <expr_stmt><expr><name>zIn</name>++</expr>;</expr_stmt>
+      <expr_stmt><expr>*<name>zIn</name>++ = <name>temp</name></expr>;</expr_stmt>
+    }</block></while>
+    <expr_stmt><expr><name>pMem</name>-&gt;<name>enc</name> = <name>desiredEnc</name></expr>;</expr_stmt>
+    <goto>goto <name>translate_out</name>;</goto>
+  }</block></then></if>
+
+  <comment type="block">/* Set len to the maximum number of bytes required in the output buffer. */</comment>
+  <if>if<condition>( <expr><name>desiredEnc</name>==<name>SQLITE_UTF8</name></expr> )</condition><then><block>{
+    <comment type="block">/* When converting from UTF-16, the maximum growth results from
+    ** translating a 2-byte character to a 4-byte UTF-8 character.
+    ** A single byte is required for the output string
+    ** nul-terminator.
+    */</comment>
+    <expr_stmt><expr><name>pMem</name>-&gt;<name>n</name> &amp;= ~1</expr>;</expr_stmt>
+    <expr_stmt><expr><name>len</name> = <name>pMem</name>-&gt;<name>n</name> * 2 + 1</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <comment type="block">/* When converting from UTF-8 to UTF-16 the maximum growth is caused
+    ** when a 1-byte UTF-8 character is translated into a 2-byte UTF-16
+    ** character. Two bytes are required in the output buffer for the
+    ** nul-terminator.
+    */</comment>
+    <expr_stmt><expr><name>len</name> = <name>pMem</name>-&gt;<name>n</name> * 2 + 2</expr>;</expr_stmt>
+  }</block></else></if>
+
+  <comment type="block">/* Set zIn to point at the start of the input buffer and zTerm to point 1
+  ** byte past the end.
+  **
+  ** Variable zOut is set to point at the output buffer, space obtained
+  ** from sqlite3_malloc().
+  */</comment>
+  <expr_stmt><expr><name>zIn</name> = (<name>u8</name>*)<name>pMem</name>-&gt;<name>z</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zTerm</name> = &amp;<name><name>zIn</name><index>[<expr><name>pMem</name>-&gt;<name>n</name></expr>]</index></name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>zOut</name> = <call><name>sqlite3DbMallocRaw</name><argument_list>(<argument><expr><name>pMem</name>-&gt;<name>db</name></expr></argument>, <argument><expr><name>len</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr>!<name>zOut</name></expr> )</condition><then><block>{
+    <return>return <expr><name>SQLITE_NOMEM</name></expr>;</return>
+  }</block></then></if>
+  <expr_stmt><expr><name>z</name> = <name>zOut</name></expr>;</expr_stmt>
+
+  <if>if<condition>( <expr><name>pMem</name>-&gt;<name>enc</name>==<name>SQLITE_UTF8</name></expr> )</condition><then><block>{
+    <if>if<condition>( <expr><name>desiredEnc</name>==<name>SQLITE_UTF16LE</name></expr> )</condition><then><block>{
+      <comment type="block">/* UTF-8 -&gt; UTF-16 Little-endian */</comment>
+      <while>while<condition>( <expr><name>zIn</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+        <comment type="block">/* c = sqlite3Utf8Read(zIn, zTerm, (const u8**)&amp;zIn); */</comment>
+        <expr_stmt><expr><call><name>READ_UTF8</name><argument_list>(<argument><expr><name>zIn</name></expr></argument>, <argument><expr><name>zTerm</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>WRITE_UTF16LE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></while>
+    }</block></then><else>else<block>{
+      <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>desiredEnc</name>==<name>SQLITE_UTF16BE</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+      <comment type="block">/* UTF-8 -&gt; UTF-16 Big-endian */</comment>
+      <while>while<condition>( <expr><name>zIn</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+        <comment type="block">/* c = sqlite3Utf8Read(zIn, zTerm, (const u8**)&amp;zIn); */</comment>
+        <expr_stmt><expr><call><name>READ_UTF8</name><argument_list>(<argument><expr><name>zIn</name></expr></argument>, <argument><expr><name>zTerm</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><call><name>WRITE_UTF16BE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></while>
+    }</block></else></if>
+    <expr_stmt><expr><name>pMem</name>-&gt;<name>n</name> = (<name>int</name>)(<name>z</name> - <name>zOut</name>)</expr>;</expr_stmt>
+    <expr_stmt><expr>*<name>z</name>++ = 0</expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>desiredEnc</name>==<name>SQLITE_UTF8</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>pMem</name>-&gt;<name>enc</name>==<name>SQLITE_UTF16LE</name></expr> )</condition><then><block>{
+      <comment type="block">/* UTF-16 Little-endian -&gt; UTF-8 */</comment>
+      <while>while<condition>( <expr><name>zIn</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+        <expr_stmt><expr><call><name>READ_UTF16LE</name><argument_list>(<argument><expr><name>zIn</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+        <expr_stmt><expr><call><name>WRITE_UTF8</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></while>
+    }</block></then><else>else<block>{
+      <comment type="block">/* UTF-16 Big-endian -&gt; UTF-8 */</comment>
+      <while>while<condition>( <expr><name>zIn</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+        <expr_stmt><expr><call><name>READ_UTF16BE</name><argument_list>(<argument><expr><name>zIn</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+        <expr_stmt><expr><call><name>WRITE_UTF8</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></while>
+    }</block></else></if>
+    <expr_stmt><expr><name>pMem</name>-&gt;<name>n</name> = (<name>int</name>)(<name>z</name> - <name>zOut</name>)</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr>*<name>z</name> = 0</expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>pMem</name>-&gt;<name>n</name>+(<name>desiredEnc</name>==<name>SQLITE_UTF8</name>?1:2))&lt;=<name>len</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>sqlite3VdbeMemRelease</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name>-&gt;<name>flags</name> &amp;= ~(<name>MEM_Static</name>|<name>MEM_Dyn</name>|<name>MEM_Ephem</name>)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name>-&gt;<name>enc</name> = <name>desiredEnc</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name>-&gt;<name>flags</name> |= (<name>MEM_Term</name>|<name>MEM_Dyn</name>)</expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name>-&gt;<name>z</name> = (<name>char</name>*)<name>zOut</name></expr>;</expr_stmt>
+  <expr_stmt><expr><name>pMem</name>-&gt;<name>zMalloc</name> = <name>pMem</name>-&gt;<name>z</name></expr>;</expr_stmt>
+
+<label><name>translate_out</name>:</label>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>TRANSLATE_TRACE</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_DEBUG</name></expr></argument>)</argument_list></call></expr></cpp:if>
+  <block>{
+    <decl_stmt><decl><type><name>char</name></type> <name><name>zBuf</name><index>[<expr>100</expr>]</index></name></decl>;</decl_stmt>
+    <expr_stmt><expr><call><name>sqlite3VdbeMemPrettyPrint</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"OUTPUT: %s\n"</expr></argument>, <argument><expr><name>zBuf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  }</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+  <return>return <expr><name>SQLITE_OK</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** This routine checks for a byte-order mark at the beginning of the 
+** UTF-16 string stored in *pMem. If one is present, it is removed and
+** the encoding of the Mem adjusted. This routine does not do any
+** byte-swapping, it just sets Mem.enc appropriately.
+**
+** The allocation (static, dynamic etc.) and encoding of the Mem may be
+** changed by this function.
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3VdbeMemHandleBom</name><parameter_list>(<param><decl><type><name>Mem</name> *</type><name>pMem</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>rc</name> =<init> <expr><name>SQLITE_OK</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u8</name></type> <name>bom</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+
+  <if>if<condition>( <expr><name>pMem</name>-&gt;<name>n</name>&lt;0 || <name>pMem</name>-&gt;<name>n</name>&gt;1</expr> )</condition><then><block>{
+    <decl_stmt><decl><type><name>u8</name></type> <name>b1</name> =<init> <expr>*(<name>u8</name> *)<name>pMem</name>-&gt;<name>z</name></expr></init></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>u8</name></type> <name>b2</name> =<init> <expr>*(((<name>u8</name> *)<name>pMem</name>-&gt;<name>z</name>) + 1)</expr></init></decl>;</decl_stmt>
+    <if>if<condition>( <expr><name>b1</name>==0xFE &amp;&amp; <name>b2</name>==0xFF</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>bom</name> = <name>SQLITE_UTF16BE</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <if>if<condition>( <expr><name>b1</name>==0xFF &amp;&amp; <name>b2</name>==0xFE</expr> )</condition><then><block>{
+      <expr_stmt><expr><name>bom</name> = <name>SQLITE_UTF16LE</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  
+  <if>if<condition>( <expr><name>bom</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><name>rc</name> = <call><name>sqlite3VdbeMemMakeWriteable</name><argument_list>(<argument><expr><name>pMem</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>rc</name>==<name>SQLITE_OK</name></expr> )</condition><then><block>{
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>n</name> -= 2</expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>memmove</name><argument_list>(<argument><expr><name>pMem</name>-&gt;<name>z</name></expr></argument>, <argument><expr>&amp;<name>pMem</name>-&gt;<name><name>z</name><index>[<expr>2</expr>]</index></name></expr></argument>, <argument><expr><name>pMem</name>-&gt;<name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name><name>z</name><index>[<expr><name>pMem</name>-&gt;<name>n</name></expr>]</index></name> = '\0'</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name><name>z</name><index>[<expr><name>pMem</name>-&gt;<name>n</name>+1</expr>]</index></name> = '\0'</expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>flags</name> |= <name>MEM_Term</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>pMem</name>-&gt;<name>enc</name> = <name>bom</name></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></then></if>
+  <return>return <expr><name>rc</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+
+<comment type="block">/*
+** pZ is a UTF-8 encoded unicode string. If nByte is less than zero,
+** return the number of unicode characters in pZ up to (but not including)
+** the first 0x00 byte. If nByte is not less than zero, return the
+** number of unicode characters in the first nByte of pZ (or up to 
+** the first 0x00, whichever comes first).
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Utf8CharLen</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>zIn</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>int</name></type> <name>r</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>u8</name> *</type><name>z</name> =<init> <expr>(<name>const</name> <name>u8</name>*)<name>zIn</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>u8</name> *</type><name>zTerm</name></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>nByte</name>&gt;=0</expr> )</condition><then><block>{
+    <expr_stmt><expr><name>zTerm</name> = &amp;<name><name>z</name><index>[<expr><name>nByte</name></expr>]</index></name></expr>;</expr_stmt>
+  }</block></then><else>else<block>{
+    <expr_stmt><expr><name>zTerm</name> = (<name>const</name> <name>u8</name>*)(-1)</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>z</name>&lt;=<name>zTerm</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <while>while<condition>( <expr>*<name>z</name>!=0 &amp;&amp; <name>z</name>&lt;<name>zTerm</name></expr> )</condition><block>{
+    <expr_stmt><expr><call><name>SQLITE_SKIP_UTF8</name><argument_list>(<argument><expr><name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>r</name>++</expr>;</expr_stmt>
+  }</block></while>
+  <return>return <expr><name>r</name></expr>;</return>
+}</block></function>
+
+<comment type="block">/* This test function is not currently used by the automated test-suite. 
+** Hence it is only available in debug builds.
+*/</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_DEBUG</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<comment type="block">/*
+** Translate UTF-8 to UTF-8.
+**
+** This has the effect of making sure that the string is well-formed
+** UTF-8.  Miscoded characters are removed.
+**
+** The translation is done in-place (since it is impossible for the
+** correct UTF-8 encoding to be longer than a malformed encoding).
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Utf8To8</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>char</name> *</type><name>zIn</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zOut</name> =<init> <expr><name>zIn</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zStart</name> =<init> <expr><name>zIn</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zTerm</name> =<init> <expr>&amp;<name><name>zIn</name><index>[<expr><call><name>sqlite3Strlen30</name><argument_list>(<argument><expr>(<name>char</name> *)<name>zIn</name></expr></argument>)</argument_list></call></expr>]</index></name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>u32</name></type> <name>c</name></decl>;</decl_stmt>
+
+  <while>while<condition>( <expr><name><name>zIn</name><index>[<expr>0</expr>]</index></name></expr> )</condition><block>{
+    <expr_stmt><expr><name>c</name> = <call><name>sqlite3Utf8Read</name><argument_list>(<argument><expr><name>zIn</name></expr></argument>, <argument><expr><name>zTerm</name></expr></argument>, <argument><expr>(<name>const</name> <name>u8</name>**)&amp;<name>zIn</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>c</name>!=0xfffd</expr> )</condition><then><block>{
+      <expr_stmt><expr><call><name>WRITE_UTF8</name><argument_list>(<argument><expr><name>zOut</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></then></if>
+  }</block></while>
+  <expr_stmt><expr>*<name>zOut</name> = 0</expr>;</expr_stmt>
+  <return>return <expr><name>zOut</name> - <name>zStart</name></expr>;</return>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SQLITE_OMIT_UTF16</name></cpp:ifndef>
+<comment type="block">/*
+** Convert a UTF-16 string in the native encoding into a UTF-8 string.
+** Memory to hold the UTF-8 string is obtained from sqlite3_malloc and must
+** be freed by the calling function.
+**
+** NULL is returned if there is an allocation error.
+*/</comment>
+<function><type><name>char</name> *</type><name>sqlite3Utf16to8</name><parameter_list>(<param><decl><type><name>sqlite3</name> *</type><name>db</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>z</name></decl></param>, <param><decl><type><name>int</name></type> <name>nByte</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>Mem</name></type> <name>m</name></decl>;</decl_stmt>
+  <expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>m</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><name>m</name>.<name>db</name> = <name>db</name></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeMemSetStr</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>, <argument><expr><name>z</name></expr></argument>, <argument><expr><name>nByte</name></expr></argument>, <argument><expr><name>SQLITE_UTF16NATIVE</name></expr></argument>, <argument><expr><name>SQLITE_STATIC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>sqlite3VdbeChangeEncoding</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>, <argument><expr><name>SQLITE_UTF8</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+  <if>if<condition>( <expr><name>db</name>-&gt;<name>mallocFailed</name></expr> )</condition><then><block>{
+    <expr_stmt><expr><call><name>sqlite3VdbeMemRelease</name><argument_list>(<argument><expr>&amp;<name>m</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>m</name>.<name>z</name> = 0</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>m</name>.<name>flags</name> &amp; <name>MEM_Term</name>)!=0 || <name>db</name>-&gt;<name>mallocFailed</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>m</name>.<name>flags</name> &amp; <name>MEM_Str</name>)!=0 || <name>db</name>-&gt;<name>mallocFailed</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  <return>return <expr>(<name>m</name>.<name>flags</name> &amp; <name>MEM_Dyn</name>)!=0 ? <name>m</name>.<name>z</name> : <call><name>sqlite3DbStrDup</name><argument_list>(<argument><expr><name>db</name></expr></argument>, <argument><expr><name>m</name>.<name>z</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="block">/*
+** pZ is a UTF-16 encoded unicode string. If nChar is less than zero,
+** return the number of bytes up to (but not including), the first pair
+** of consecutive 0x00 bytes in pZ. If nChar is not less than zero,
+** then return the number of bytes in the first nChar unicode characters
+** in pZ (or up until the first pair of 0x00 bytes, whichever comes first).
+*/</comment>
+<function><type><name>int</name></type> <name>sqlite3Utf16ByteLen</name><parameter_list>(<param><decl><type><name>const</name> <name>void</name> *</type><name>zIn</name></decl></param>, <param><decl><type><name>int</name></type> <name>nChar</name></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>c</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> <name>const</name> *</type><name>z</name> =<init> <expr><name>zIn</name></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+  <if>if<condition>( <expr><name>SQLITE_UTF16NATIVE</name>==<name>SQLITE_UTF16BE</name></expr> )</condition><then><block>{
+    <comment type="block">/* Using an "if (SQLITE_UTF16NATIVE==SQLITE_UTF16BE)" construct here
+    ** and in other parts of this file means that at one branch will
+    ** not be covered by coverage testing on any single host. But coverage
+    ** will be complete if the tests are run on both a little-endian and 
+    ** big-endian host. Because both the UTF16NATIVE and SQLITE_UTF16BE
+    ** macros are constant at compile time the compiler can determine
+    ** which branch will be followed. It is therefore assumed that no runtime
+    ** penalty is paid for this "if" statement.
+    */</comment>
+    <while>while<condition>( <expr><name>c</name> &amp;&amp; ((<name>nChar</name>&lt;0) || <name>n</name>&lt;<name>nChar</name>)</expr> )</condition><block>{
+      <expr_stmt><expr><call><name>READ_UTF16BE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>n</name>++</expr>;</expr_stmt>
+    }</block></while>
+  }</block></then><else>else<block>{
+    <while>while<condition>( <expr><name>c</name> &amp;&amp; ((<name>nChar</name>&lt;0) || <name>n</name>&lt;<name>nChar</name>)</expr> )</condition><block>{
+      <expr_stmt><expr><call><name>READ_UTF16LE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>n</name>++</expr>;</expr_stmt>
+    }</block></while>
+  }</block></else></if>
+  <return>return <expr>(<name>int</name>)(<name>z</name>-(<name>char</name> <name>const</name> *)<name>zIn</name>)-((<name>c</name>==0)?2:0)</expr>;</return>
+}</block></function>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>SQLITE_TEST</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<comment type="block">/*
+** This routine is called from the TCL test function "translate_selftest".
+** It checks that the primitives for serializing and deserializing
+** characters in each encoding are inverses of each other.
+*/</comment>
+<function><type><name>void</name></type> <name>sqlite3UtfSelfTest</name><parameter_list>(<param><decl><type><name>void</name></type></decl></param>)</parameter_list><block>{
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>i</name>, <name>t</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name><name>zBuf</name><index>[<expr>20</expr>]</index></name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>z</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>char</name> *</type><name>zTerm</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type> <name>n</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>c</name></decl>;</decl_stmt>
+
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;0x00110000</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>WRITE_UTF8</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> = (<name>int</name>)(<name>z</name>-<name>zBuf</name>)</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;0 &amp;&amp; <name>n</name>&lt;=4</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>z</name><index>[<expr>0</expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>zTerm</name> = <name>z</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>c</name> = <call><name>sqlite3Utf8Read</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>zTerm</name></expr></argument>, <argument><expr>(<name>const</name> <name>u8</name>**)&amp;<name>z</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> = <name>i</name></expr>;</expr_stmt>
+    <if>if<condition>( <expr><name>i</name>&gt;=0xD800 &amp;&amp; <name>i</name>&lt;=0xDFFF</expr> )</condition><then> <expr_stmt><expr><name>t</name> = 0xFFFD</expr>;</expr_stmt></then></if>
+    <if>if<condition>( <expr>(<name>i</name>&amp;0xFFFFFFFE)==0xFFFE</expr> )</condition><then> <expr_stmt><expr><name>t</name> = 0xFFFD</expr>;</expr_stmt></then></if>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>c</name>==<name>t</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>z</name>-<name>zBuf</name>)==<name>n</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;0x00110000</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>i</name>&gt;=0xD800 &amp;&amp; <name>i</name>&lt;0xE000</expr> )</condition><then> <continue>continue;</continue></then></if>
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>WRITE_UTF16LE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> = (<name>int</name>)(<name>z</name>-<name>zBuf</name>)</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;0 &amp;&amp; <name>n</name>&lt;=4</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>z</name><index>[<expr>0</expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>READ_UTF16LE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>c</name>==<name>i</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>z</name>-<name>zBuf</name>)==<name>n</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+  <for>for(<init><expr><name>i</name>=0</expr>;</init> <condition><expr><name>i</name>&lt;0x00110000</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)<block>{
+    <if>if<condition>( <expr><name>i</name>&gt;=0xD800 &amp;&amp; <name>i</name>&lt;0xE000</expr> )</condition><then> <continue>continue;</continue></then></if>
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>WRITE_UTF16BE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>i</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name>n</name> = (<name>int</name>)(<name>z</name>-<name>zBuf</name>)</expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>n</name>&gt;0 &amp;&amp; <name>n</name>&lt;=4</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><name><name>z</name><index>[<expr>0</expr>]</index></name> = 0</expr>;</expr_stmt>
+    <expr_stmt><expr><name>z</name> = <name>zBuf</name></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>READ_UTF16BE</name><argument_list>(<argument><expr><name>z</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr><name>c</name>==<name>i</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+    <expr_stmt><expr><call><name>assert</name><argument_list>( <argument><expr>(<name>z</name>-<name>zBuf</name>)==<name>n</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+  }</block></for>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_TEST */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* SQLITE_OMIT_UTF16 */</comment>
+</unit>
