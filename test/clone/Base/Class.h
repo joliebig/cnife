@@ -6,7 +6,7 @@ public:
 	Class();
 	~Class();
 #if A
-	int k;
+	int l;
 #endif
 
 	void print1();

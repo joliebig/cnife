@@ -1,6 +1,8 @@
 package analyzer;
 
 import java.io.File;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,24 +34,27 @@ public class AnalyzeFeature {
 	private static final String UNKNOWN = "unknown";
 	private IdentifiedFeature feature;
 	private Boolean findclones;
-	private Boolean providehoonames;
+	private Boolean providehooknames;
 	private AnalyzedFeature analyzedFeature = null;
-	private LinkedList<CriticalOccurrence> crits; //TODO kann lokal werden
+	private LinkedList<CriticalOccurrence> crits;
 	
-	
+	private InputStreamReader istreamreader;
+	private BufferedReader bufreader;
+
+
 //	 * @deprecated
 //	private static String EXPR_NAMES_QUERY = 
 //		"((./following::*/src:expr/src:name[1]) " +
 //		"intersect " +
 //		"(./following-sibling::cpp:endif/preceding::*/src:expr/src:name[1]))";
-	
+
 	private static String EXPR_NAMES_BELOW_IF_QUERY = 
 		"./(following::src:expr[not(contains(.,\"->\"))]/src:name union following::src:expr/src:name[1])";
 	
 	private static String EXPR_NAMES_BEFORE_END_QUERY = 
 		"./(preceding::src:expr[not(contains(.,\"->\"))]/src:name union preceding::src:expr/src:name[1])";
-	
-	
+
+
 //	 * @deprecated
 //	private static String EXPR_DECLS_QUERY =
 //		"((./following::*/src:decl_stmt/src:decl/src:name) " +
@@ -62,38 +67,37 @@ public class AnalyzeFeature {
 	private static String EXPR_DECLS_BEFORE_END_QUERY =
 		"./preceding::src:decl_stmt/src:decl/src:name";
 
-	
 	private static String FIND_FUNCTION_CONTAINER =
 		"./(ancestor::src:function union ancestor::src:constructor union ancestor::src:destructor)";
-	
+
 	private static String FIND_NEXT_GOTOS = 
 		"./following::* intersect //src:goto";
-	
+
 	private static String FIND_NEXT_DEFINE = 
 		"./following::* intersect //cpp:define";
-	
+
 	public AnalyzeFeature (IdentifiedFeature feature, Boolean findclones, Boolean providehooknames) {
 		this.feature = feature;
 		this.findclones = findclones;
-		this.providehoonames = providehooknames;
+		this.providehooknames = providehooknames;
 	}
-	
+
 	public LinkedList<CriticalOccurrence> getCriticalNodes() {
 		return crits;
 	}
-	
+
 	public void analyze() {
 		analyzedFeature = new AnalyzedFeature();
 		analyzedFeature.setName(feature.getName());
-		
+
 		Iterator<PreprocessorOccurrence> it = feature.iterateOccurrences();
 		crits = new LinkedList<CriticalOccurrence>();
-		
+
 		HashMap<String, HashMap<Node, LinkedList<CriticalOccurrence>>> affectedFiles =
 			new HashMap<String, HashMap<Node,LinkedList<CriticalOccurrence>>>();
 		HashMap<String, SimpleHookCloneFinder> cloneMap = new HashMap<String, SimpleHookCloneFinder>();
 		analyzedFeature.setAffectedFiles(affectedFiles);
-		
+
 		while(it.hasNext()) {
 			PreprocessorOccurrence current = it.next();
 			if (current.getType().equals(UNKNOWN) 
@@ -114,8 +118,6 @@ public class AnalyzeFeature {
 				}
 				
 				if (!isImpossible || occ.getContainingFunctionNode() != null) {
-					
-					
 					HashMap<Node, LinkedList<CriticalOccurrence>> affectedFunctions;
 					if (affectedFiles.containsKey(occ.getDocFileName()) && affectedFiles.get(occ.getDocFileName()) != null) {
 						affectedFunctions = affectedFiles.get(occ.getDocFileName());
@@ -127,8 +129,7 @@ public class AnalyzeFeature {
 						affectedFunctions = new HashMap<Node, LinkedList<CriticalOccurrence>>();
 						affectedFiles.put(occ.getDocFileName(), affectedFunctions);
 					}
-					
-					
+
 					LinkedList<CriticalOccurrence> occsInFunction;
 					if (affectedFunctions != null && affectedFunctions.containsKey(occ.getContainingFunctionNode())) {
 						occsInFunction = affectedFunctions.get(occ.getContainingFunctionNode());
@@ -173,7 +174,6 @@ public class AnalyzeFeature {
 //							System.out.println("own declarations: " + occ.getOwnLocalVariables().size());
 //						}
 					} catch (XPathExpressionException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 				}
@@ -199,16 +199,16 @@ public class AnalyzeFeature {
 	
 		return lower.item(0) != upper.item(0);
 	}
-	
+
 	private boolean hasGoto(CriticalOccurrence occ) throws XPathExpressionException {
 		XPathExpression expr = 
 			QueryBuilder.instance().getExpression(FIND_NEXT_GOTOS);
-		
+
 		NodeList upper = (NodeList) expr.evaluate(
 				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
 		NodeList lower = (NodeList) expr.evaluate(
 				occ.getPrepNodes()[occ.getPrepNodes().length-1].getNode(), XPathConstants.NODESET);
-	
+
 		return lower.getLength() != 0 && upper.getLength() != 0 && lower.item(0) != upper.item(0);
 	}
 
@@ -263,7 +263,7 @@ public class AnalyzeFeature {
 	private void checkDependencies(CriticalOccurrence occ) 
 	throws XPathExpressionException {
 		
-		//Hack f�r Schnittmengenbildung zwischen allen Vars, 
+		//Hack fuer Schnittmengenbildung zwischen allen Vars, 
 		//die nach ifdef und vor endif auftreten
 		XPathExpression varUsageBelowIfExpr = 
 			QueryBuilder.instance().getExpression(EXPR_NAMES_BELOW_IF_QUERY);
@@ -280,7 +280,7 @@ public class AnalyzeFeature {
 		NodeList exprList = NodeTools.intersectUpperLower(belowIfList, beforeEndList);
 		//-------------------------------------------------
 		
-		//gleiches nochmal f�r die lokalen Definitionen von Vars
+		//gleiches nochmal fuer die lokalen Definitionen von Vars
 		XPathExpression varDeclBelowIfExpr = 
 			QueryBuilder.instance().getExpression(EXPR_DECLS_BELOW_IF_QUERY);
 		XPathExpression varDeclBeforeEndExpr = 
@@ -312,7 +312,7 @@ public class AnalyzeFeature {
 			String varName = exprList.item(i).getTextContent();
 			//TODO: check, ob Variable von einer andren Occurrence definiert wurde!
 			if (declNames.contains(varName)) {
-				//selbstdefinierte Variable
+				// selbstdefinierte Variable
 				occ.setType("impossible (local declaration)");
 			} else if (!duplicateEliminator.contains(varName) &&
 					isLocalVar(occ.getPrepNodes()[0].getNode(), varName)) {
@@ -392,7 +392,6 @@ public class AnalyzeFeature {
 					try {
 						((NewFileTemplate)pos).setClassName(occ.getDocument());
 					} catch (XPathExpressionException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 				}
@@ -404,7 +403,6 @@ public class AnalyzeFeature {
 					try {
 						((NewFileTemplate)neg).setClassName(occ.getDocument());
 					} catch (XPathExpressionException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 				}
@@ -462,11 +460,21 @@ public class AnalyzeFeature {
 								cloneFinder.doDuplicateCheck(occ);
 							
 							if (occ.getDupe() == null) {
-								counter++;
+								
 								String name = key.substring(key.lastIndexOf('\\')+1);
 								name = name.substring(0, name.indexOf('.'));
 								
-								occ.setHookFunctionName(name + "HookFunction" + counter);
+								if (providehooknames) {
+									try {
+										String hookname = bufreader.readLine();
+										occ.setHookFunctionName(hookname);
+									} catch (IOException e) {
+										e.printStackTrace();
+									}
+								} else {
+									counter++;
+									occ.setHookFunctionName(name + "HookFunction" + counter);
+								}
 							} else {
 								clonecounter++;
 								System.out.println("CLONES " + clonecounter);

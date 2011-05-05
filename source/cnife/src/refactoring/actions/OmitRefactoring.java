@@ -11,8 +11,7 @@ public class OmitRefactoring extends RefactoringAction {
 	@Override
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 			RefactoringDocument neg, PreprocessorOccurrence occ) {
-		// TODO Auto-generated method stub
-		
+		// do nothing
 	}
 
 }

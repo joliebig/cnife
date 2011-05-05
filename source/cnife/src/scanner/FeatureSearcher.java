@@ -53,7 +53,7 @@ public class FeatureSearcher {
 	private IdentifiedFeatureList backend = null;
 	
 	/**
-	 * Fügt eine neue XML-Datei ins Backend ein und erstellt eine Kopie im Ordner "Base"
+	 * Fï¿½gt eine neue XML-Datei ins Backend ein und erstellt eine Kopie im Ordner "Base"
 	 * @param xmlDoc
 	 * @throws ReplaceFileException - wird geworfen, falls eine Datei eingefuegt wird, die schon existiert
 	 */
@@ -123,13 +123,14 @@ public class FeatureSearcher {
 			FeaturePattern pattern5 = new DirectivesPattern();
 			FeaturePattern pattern6 = new SwitchCasePattern();
 			
-			LinkedList<PreprocessorOccurrence> occs = pattern1.checkDoc(doc, tree);
+			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>(); 
+			occs.addAll(pattern1.checkDoc(doc, tree));
 			occs.addAll(pattern4.checkDoc(doc, tree));
 			occs.addAll(pattern5.checkDoc(doc, tree));
 			occs.addAll(pattern2.checkDoc(doc, tree));
 			occs.addAll(pattern3.checkDoc(doc, tree));
-			occs.addAll(pattern6.checkDoc(doc, tree));
-			//uebrige Occurrences, die zu keinem Pattern passen, aufsammeln
+			occs.addAll(pattern6.checkDoc(doc, tree)); // TODO Reihenfolge beachten!
+			// uebrige Occurrences, die zu keinem Pattern passen, aufsammeln
 			FeaturePattern remains = new RemainingOccurrencesPattern();
 			
 			occs.addAll(remains.checkDoc(doc, tree));
@@ -142,19 +143,14 @@ public class FeatureSearcher {
 			}
 			
 		} catch (SAXException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (ParserConfigurationException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (TransformerFactoryConfigurationError e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -190,7 +186,8 @@ public class FeatureSearcher {
 	}
 
 	/**
-	 * füllt einen bereits aufgebauten PreprocessorTree mit DOMNode Objekten
+	 * fuellt einen bereits aufgebauten PreprocessorTree mit DOMNode Objekten
+	 * 
 	 * @param doc
 	 * @param tree
 	 * @throws SAXException
@@ -208,9 +205,10 @@ public class FeatureSearcher {
 	}
 
 	/**
-	 * baut den PreprocessorTree des gesamten Dokuments mit Zeilennummern auf
-	 * @param xmlDoc
-	 * @return
+	 * creates a {@link PreprocessorTree} of the srcml document with line numbers
+	 * 
+	 * @param xmlDoc -- srcml document
+	 * @return created PreprocessorTree 
 	 */
 	public PreprocessorTree buildPrepTreeWithLineNumbers(File xmlDoc) {
 		AugmentedSource src = AugmentedSource.makeAugmentedSource(new StreamSource(xmlDoc));
@@ -233,7 +231,6 @@ public class FeatureSearcher {
 			
 			
 		} catch (XPathException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -253,38 +250,34 @@ public class FeatureSearcher {
 	}
 	
 	/**
-	 * fügt eine gefundene Occurrence ins Backend ein
+	 * adds a {@link PreprocessorOccurrence} to the backend
+	 * 
 	 * @param occurrence
 	 */
 	private void addToBackend(PreprocessorOccurrence occurrence) {
-		String featureName = new CheckLogics().getFeatureName(occurrence);
-		
-		/*/TODO DEBUG
-		System.out.println(featureName);
-		//TODO DEBUG END */
-		
+		String featureName = new CheckLogics().getFeatureName(occurrence);	
 		backend.add(featureName, occurrence);
 	}
 	
 	/**
-	 * setzt das zu verwendende Projektverzeichnis
+	 * set the output directory
+	 * 
 	 * @param outputDir
 	 */
 	public void setOutputDir(File outputDir) {
 		this.outputDir = outputDir;
-		
 	}
 
 	/**
-	 * setzt das zu verwendende Backend des Objekts
+	 * set the backend for the FeatureSearcher class
+	 * 
 	 * @param backend
 	 */
 	public void setBackend(IdentifiedFeatureList backend) {
 		this.backend = backend;
-		
 	}
 	
-//	//TODO: DEBUG 
+//	//TODO: test document // should be a unit test or something 
 //	public static void main (String[] args) {
 //		FeatureSearcher fs = new FeatureSearcher();
 //		
