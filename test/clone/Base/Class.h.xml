@@ -11,19 +11,16 @@
 
 	</public>}</block>;</class>
 
-<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/clone/Base/ClassHookFunction1</name><parameterlist>()</parameterlist>
+<function>	<type><name>void</name></type> <name>cool</name><parameterlist>()</parameterlist>
 	<block>{
 	<comment>//--functionbody</comment>
 	}</block></function><function><type><name>void</name></type> <name><name>Class</name>::<name>print1</name></name><parameter_list>()</parameter_list> <block>{
 	<decl_stmt><decl><type><name>int</name></type> <name>k</name> =<init> <expr>10</expr></init></decl>;</decl_stmt>
-<expr_stmt><expr><call><name>/home/joliebig/workspace/cnife/test/clone/Base/ClassHookFunction1</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>cool</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 }</block></function>
 
-<function>	<type><name>void</name></type> <name>/home/joliebig/workspace/cnife/test/clone/Base/ClassHookFunction1</name><parameterlist>()</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>void</name></type> <name><name>Class</name>::<name>print2</name></name><parameter_list>()</parameter_list> <block>{
+<function><type><name>void</name></type> <name><name>Class</name>::<name>print2</name></name><parameter_list>()</parameter_list> <block>{
 	<decl_stmt><decl><type><name>int</name></type> <name>k</name> =<init> <expr>10</expr></init></decl>;</decl_stmt>
-<expr_stmt><expr><call><name>/home/joliebig/workspace/cnife/test/clone/Base/ClassHookFunction1</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>cool</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 }</block></function>
 </unit>

@@ -80,6 +80,8 @@ public class AnalyzeFeature {
 		this.feature = feature;
 		this.findclones = findclones;
 		this.providehooknames = providehooknames;
+		this.istreamreader = new InputStreamReader(System.in);
+		this.bufreader = new BufferedReader(this.istreamreader);
 	}
 
 	public LinkedList<CriticalOccurrence> getCriticalNodes() {
