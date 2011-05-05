@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsRpath.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"iosLib.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsRpath.h"</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<class>class <name>COsRpath</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>char</name> *</type> <name>db_rpath</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>s</name>, *<name>last</name></decl>;</decl_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		<decl_stmt><decl><type><name>DEV_HDR</name> *</type><name>dummy</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name> *</type><name>ptail</name></decl>;</decl_stmt>
+	
+		<comment type="block">/*
+		 * VxWorks devices can be rooted at any name.  We want to
+		 * skip over the device name and not take into account any
+		 * PATH_SEPARATOR characters that might be in that name.
+		 *
+		 * XXX [#2393]
+		 * VxWorks supports having a filename directly follow a device
+		 * name with no separator.  I.e. to access a file 'xxx' in
+		 * the top level directory of a device mounted at "mydrive"
+		 * you could say "mydrivexxx" or "mydrive/xxx" or "mydrive\xxx".
+		 * We do not support the first usage here.
+		 * XXX
+		 */</comment>
+		<if>if <condition>(<expr>(<name>dummy</name> = <call><name>iosDevFind</name><argument_list>(<argument><expr>(<name>char</name> *)<name>path</name></expr></argument>, <argument><expr>&amp;<name>ptail</name></expr></argument>)</argument_list></call>) == <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr><name>s</name> = <name>path</name></expr>;</expr_stmt></then>
+		<else>else
+			<expr_stmt><expr><name>s</name> = <name>ptail</name></expr>;</expr_stmt></else></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<expr_stmt><expr><name>s</name> = <name>path</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	
+		<expr_stmt><expr><name>last</name> = <name>NULL</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name><name>PATH_SEPARATOR</name><index>[<expr>1</expr>]</index></name> != '\0'</expr>)</condition><then> <block>{
+			<for>for (<init>;</init> <condition><expr><name><name>s</name><index>[<expr>0</expr>]</index></name> != '\0'</expr>;</condition> <incr><expr>++<name>s</name></expr></incr>)
+				<if>if <condition>(<expr><call><name>strchr</name><argument_list>(<argument><expr><name>PATH_SEPARATOR</name></expr></argument>, <argument><expr><name><name>s</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+					<expr_stmt><expr><name>last</name> = <name>s</name></expr>;</expr_stmt></then></if></for>
+		}</block></then> <else>else
+			<for>for (<init>;</init> <condition><expr><name><name>s</name><index>[<expr>0</expr>]</index></name> != '\0'</expr>;</condition> <incr><expr>++<name>s</name></expr></incr>)
+				<if>if <condition>(<expr><name><name>s</name><index>[<expr>0</expr>]</index></name> == <name><name>PATH_SEPARATOR</name><index>[<expr>0</expr>]</index></name></expr>)</condition><then>
+					<expr_stmt><expr><name>last</name> = <name>s</name></expr>;</expr_stmt></then></if></for></else></if>
+		<return>return <expr>((<name>char</name> *)<name>last</name>)</expr>;</return>
+	}</block></function>
+</public>}</block>;</class>
+
+</unit>

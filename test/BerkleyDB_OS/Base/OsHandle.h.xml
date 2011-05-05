@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsHandle.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;fcntl.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsHandle.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<class>class <name>COsHandle</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_openhandle</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int</name></type> <name>nrepeat</name>, <name>retries</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		<decl_stmt><decl><type><name>int</name></type> <name>newflags</name></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_calloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>DB_FH</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>fhpp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr><name>fhp</name> = *<name>fhpp</name></expr>;</expr_stmt>
+	
+		<comment type="block">/* If the application specified an interface, use it. */</comment>
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_open</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>fhp</name>-&gt;<name>fd</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_open</name></expr></argument>)</argument_list></call>(<name>name</name>, <name>flags</name>, <name>mode</name>)) == -1</expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+				<goto>goto <name>err</name>;</goto>
+			}</block></then></if>
+			<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>(0)</expr>;</return>
+		}</block></then></if>
+	
+		<expr_stmt><expr><name>retries</name> = 0</expr>;</expr_stmt>
+		<for>for (<init><expr><name>nrepeat</name> = 1</expr>;</init> <condition><expr><name>nrepeat</name> &lt; 4</expr>;</condition> <incr><expr>++<name>nrepeat</name></expr></incr>) <block>{
+			<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive>	<name>HAVE_VXWORKS</name></cpp:ifdef>
+			<comment type="block">/*
+			 * VxWorks does not support O_CREAT on open, you have to use
+			 * creat() instead.  (It does not support O_EXCL or O_TRUNC
+			 * either, even though they are defined "for future support".)
+			 * We really want the POSIX behavior that if O_CREAT is set,
+			 * we open if it exists, or create it if it doesn't exist.
+			 * If O_CREAT is specified, single thread and try to open the
+			 * file.  If successful, and O_EXCL return EEXIST.  If
+			 * unsuccessful call creat and then end single threading.
+			 */</comment>
+			<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>O_CREAT</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>DB_BEGIN_SINGLE_THREAD</name></expr>;</expr_stmt>
+				<expr_stmt><expr><name>newflags</name> = <name>flags</name> &amp; ~(<name>O_CREAT</name> | <name>O_EXCL</name>)</expr>;</expr_stmt>
+				<if>if <condition>(<expr>(<name>fhp</name>-&gt;<name>fd</name> = <call><name>open</name><argument_list>(<argument><expr><name>name</name></expr></argument>, <argument><expr><name>newflags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>)</argument_list></call>) != -1</expr>)</condition><then> <block>{
+					<comment type="block">/*
+					 * We need to mark the file opened at this
+					 * point so that if we get any error below
+					 * we will properly close the fd we just
+					 * opened on the error path.
+					 */</comment>
+					<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>O_EXCL</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+						<comment type="block">/*
+						 * If we get here, want O_EXCL create,
+						 * and the file exists.  Close and
+						 * return EEXISTS.
+						 */</comment>
+						<expr_stmt><expr><name>DB_END_SINGLE_THREAD</name></expr>;</expr_stmt>
+						<expr_stmt><expr><name>ret</name> = <name>EEXIST</name></expr>;</expr_stmt>
+						<goto>goto <name>err</name>;</goto>
+					}</block></then></if>
+					<comment type="block">/*
+					 * XXX
+					 * Assume any error means non-existence.
+					 * Unfortunately return values (even for
+					 * non-existence) are driver specific so
+					 * there is no single error we can use to
+					 * verify we truly got the equivalent of
+					 * ENOENT.
+					 */</comment>
+				}</block></then> <else>else
+					<expr_stmt><expr><name>fhp</name>-&gt;<name>fd</name> = <call><name>creat</name><argument_list>(<argument><expr><name>name</name></expr></argument>, <argument><expr><name>newflags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+				<expr_stmt><expr><name>DB_END_SINGLE_THREAD</name></expr>;</expr_stmt>
+			}</block></then> <else>else
+			<comment type="block">/* FALLTHROUGH */</comment>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>__VMS</name></cpp:ifdef>
+			<comment type="block">/*
+			 * !!!
+			 * Open with full sharing on VMS.
+			 *
+			 * We use these flags because they are the ones set by the VMS
+			 * CRTL mmap() call when it opens a file, and we have to be
+			 * able to open files that mmap() has previously opened, e.g.,
+			 * when we're joining already existing DB regions.
+			 */</comment>
+			<expr_stmt><expr><name>fhp</name>-&gt;<name>fd</name> = <call><name>open</name><argument_list>(<argument><expr><name>name</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>, <argument><expr>"shr=get,put,upd,del,upi"</expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+			<expr_stmt><expr><name>fhp</name>-&gt;<name>fd</name> = <call><name>open</name><argument_list>(<argument><expr><name>name</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			<if>if <condition>(<expr><name>fhp</name>-&gt;<name>fd</name> != -1</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_FCNTL_F_SETFD</name></expr></argument>)</argument_list></call></expr></cpp:if>
+				<comment type="block">/* Deny file descriptor access to any child process. */</comment>
+				<if>if <condition>(<expr><call><name>fcntl</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>F_SETFD</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call> == -1</expr>)</condition><then> <block>{
+					<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+					    <argument><expr>"fcntl(F_SETFD): %s"</expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<goto>goto <name>err</name>;</goto>
+				}</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+				<break>break;</break>
+			}</block></then></if>
+	
+			<switch>switch <condition>(<expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>)</condition> <block>{
+			<case>case <expr><name>EMFILE</name></expr>:
+			</case><case>case <expr><name>ENFILE</name></expr>:
+			</case><case>case <expr><name>ENOSPC</name></expr>:
+				<comment type="block">/*
+				 * If it's a "temporary" error, we retry up to 3 times,
+				 * waiting up to 12 seconds.  While it's not a problem
+				 * if we can't open a database, an inability to open a
+				 * log file is cause for serious dismay.
+				 */</comment>
+				<expr_stmt><expr><call><name><name>COsSleep</name>::<name>os_sleep</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>nrepeat</name> * 2</expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<break>break;</break>
+			</case><case>case <expr><name>EAGAIN</name></expr>:
+			</case><case>case <expr><name>EBUSY</name></expr>:
+			</case><case>case <expr><name>EINTR</name></expr>:
+				<comment type="block">/*
+				 * If an EAGAIN, EBUSY or EINTR, retry immediately for
+				 * DB_RETRY times.
+				 */</comment>
+				<if>if <condition>(<expr>++<name>retries</name> &lt; <name>DB_RETRY</name></expr>)</condition><then>
+					<expr_stmt><expr>--<name>nrepeat</name></expr>;</expr_stmt></then></if>
+				<break>break;</break>
+			</case><default>default:
+				<break>break;</break>
+			</default>}</block></switch>
+		}</block></for>
+	
+	<label><name>err</name>:</label>	<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr>(<name>void</name>)<call><name>os_closehandle</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr>*<name>fhpp</name> = <name>NULL</name></expr>;</expr_stmt>
+		}</block></then></if>
+	
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_closehandle</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	
+		<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+	
+		<comment type="block">/*
+		 * If we have a valid handle, close it and unlink any temporary
+		 * file.
+		 */</comment>
+		<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_close</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+				<expr_stmt><expr><name>ret</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_close</name></expr></argument>)</argument_list></call>(<name>fhp</name>-&gt;<name>fd</name>)</expr>;</expr_stmt></then>
+			<else>else
+				<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>close</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+	
+			<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"close: %s"</expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+			<comment type="block">/* Unlink the file if we haven't already done so. */</comment>
+			<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_UNLINK</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>(<name>void</name>)<call><name><name>COsUnlink</name>::<name>os_unlink</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name>-&gt;<name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name>-&gt;<name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+		}</block></then></if>
+	
+		<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+</public>}</block>;</class>
+
+</unit>

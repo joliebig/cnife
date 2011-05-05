@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="Store.h"><comment type="block">/******************************************************************************
+ *
+ * $Id: $
+ *
+ * Copyright (C) 1997-2008 by Dimitri van Heesch.
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation under the terms of the GNU General Public License is hereby 
+ * granted. No representations are made about the suitability of this software 
+ * for any purpose. It is provided "as is" without express or implied warranty.
+ * See the GNU General Public License for more details.
+ *
+ * Documents produced by Doxygen are derivative works derived from the
+ * input used in their production; they are not affected by this license.
+ *
+ */</comment>
+
+<cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;qglobal.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;errno.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"portable.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"StorageIntf.h"</cpp:file></cpp:include>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BLOCK_SIZE</name>         512</cpp:define> <comment type="line">// should be &gt;8 and a multiple of 8</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BLOCK_POINTER_SIZE</name> <name>sizeof</name>(portable_off_t)</cpp:define>
+
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>ASSERTS_ENABLED</name></cpp:define>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>ASSERTS_ENABLED</name></cpp:ifdef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>STORE_ASSERT</name>(x) assert(x)</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>STORE_ASSERT</name>(x)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<comment type="block">/*! @brief The Store is a file based memory manager.
+ *
+ *  You can open the store using open(). Then obtain a handle via alloc()
+ *  followed by a sequence of write() commands to store information,
+ *  and finalize it using end(). 
+ *  
+ *  Later on you locate the information
+ *  with seek() using the handle obtained with alloc(), and then use a
+ *  sequence of read() calls to read the information back. 
+ *
+ *  If no longer needed the storage space can be freed using release().
+ *  
+ *  The store will dynamically grow the file on disk if needed.
+ */</comment>
+<class>class <name>Store</name> <super>: <specifier>public</specifier> <name>StorageIntf</name></super>
+<block>{<private type="default">
+  </private><public>public:
+    <comment type="block">/*! Creates a store. */</comment>
+	  <constructor><name>Store</name><parameter_list>()</parameter_list>
+	  <block>{
+		  <expr_stmt><expr><name>m_file</name>       = 0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_front</name>      = 0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_head</name>       = 0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_state</name>      = <name>Init</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_reads</name>      = 0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_writes</name>     = 0</expr>;</expr_stmt>
+	  }</block></constructor>
+
+    <comment type="block">/*! Releases the store object. Will close the underlying file if opened. */</comment>
+	<destructor><name>~<name>Store</name></name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then>   <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+		<comment type="line">// clean up free list</comment>
+		<while>while <condition>(<expr><name>m_head</name></expr>)</condition>
+		<block>{
+			<decl_stmt><decl><type><name>Node</name> *</type><name>node</name> =<init> <expr><name>m_head</name></expr></init></decl>;</decl_stmt>
+			<expr_stmt><expr><name>m_head</name> = <name>node</name>-&gt;<name>next</name></expr>;</expr_stmt>
+			<expr_stmt><expr>delete <name>node</name></expr>;</expr_stmt>
+		}</block></while>
+	}</block></destructor>
+
+    <comment type="block">/*! Opens the file underlying the store using \a name as the file name. 
+     *  Returns 0 upon success, or -1 otherwise.
+     */</comment>
+	<function><type><name>int</name></type> <name>open</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Init</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then> <return>return <expr>0</expr>;</return></then></if> <comment type="line">// already open</comment>
+		<expr_stmt><expr><name>m_file</name> = <call><name>fopen</name><argument_list>(<argument><expr><name>name</name></expr></argument>,<argument><expr>"w+b"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>m_file</name>==0</expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
+
+		<comment type="line">// first block serves as header, so offset=0 can be used as the end of the list.</comment>
+		<for>for (<init><expr><name>i</name>=0</expr>;</init><condition><expr><name>i</name>&lt;<name>BLOCK_SIZE</name>/8</expr>;</condition><incr><expr><name>i</name>++</expr></incr>)
+		<block>{
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'D'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'O'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'X'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'Y'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'G'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'E'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>'N'</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>0</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr><name>m_front</name>  = <name>BLOCK_SIZE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_head</name>   = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_state</name>  = <name>Reading</name></expr>;</expr_stmt>
+		<return>return <expr>0</expr>;</return>
+	}</block></function>
+
+    <comment type="block">/*! Allocates a handle to write to and read from. */</comment>
+	<function><type><name>portable_off_t</name></type> <name>alloc</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_state</name>=<name>Writing</name></expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>portable_off_t</name></type> <name>pos</name></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>m_head</name>==0</expr>)</condition><then> <comment type="line">// allocate new block</comment>
+		<block>{
+			<comment type="line">//printf("alloc: new block\n");</comment>
+			<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr><name>SEEK_END</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then> <comment type="line">// go to end of the file</comment>
+			<block>{
+				<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::alloc: Error seeking to end of file: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><name>pos</name> = <call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>( <argument><expr>(<name>pos</name> &amp; (<name>BLOCK_SIZE</name>-1))==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>m_front</name> = <name>pos</name> + <name>BLOCK_SIZE</name></expr>;</expr_stmt> <comment type="line">// move front to end of this block</comment>
+		}</block></then>
+		<else>else <comment type="line">// reuse freed block</comment>
+		<block>{
+			<comment type="line">//printf("alloc: reuse block: m_head=%d\n",(int)m_head);</comment>
+			<decl_stmt><decl><type><name>Node</name> *</type><name>node</name> =<init> <expr><name>m_head</name></expr></init></decl>;</decl_stmt>
+			<expr_stmt><expr><name>pos</name> = <name>node</name>-&gt;<name>pos</name></expr>;</expr_stmt>
+			<comment type="line">// point head to next free item</comment>
+			<expr_stmt><expr><name>m_head</name> = <name>node</name>-&gt;<name>next</name></expr>;</expr_stmt>
+			<expr_stmt><expr>delete <name>node</name></expr>;</expr_stmt>
+			<comment type="line">// move to start of the block</comment>
+			<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr><name>pos</name></expr></argument>,<argument><expr><name>SEEK_SET</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::alloc: Error seeking to position %d: %s\n"</expr></argument>,
+					<argument><expr>(<name>int</name>)<name>pos</name></expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>( <argument><expr>(<name>pos</name> &amp; (<name>BLOCK_SIZE</name>-1))==0</expr></argument> )</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+		<comment type="line">//printf("%x: Store::alloc\n",(int)pos);</comment>
+		<return>return <expr><name>pos</name></expr>;</return>
+	}</block></function>
+
+    <comment type="block">/*! Writes \a size bytes in array \a buf to the store. 
+     *  First alloc() has to be called.
+     *  \note The information can only be read after end() has been called.
+     */</comment>
+	<function><type><name>int</name></type> <name>write</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>buf</name></decl></param>,<param><decl><type><name>uint</name></type> <name>size</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Writing</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">//printf("%x: Store::write\n",(int)portable_ftell(m_file));</comment>
+		<do>do
+		<block>{
+			<decl_stmt><decl><type><name>portable_off_t</name></type> <name>curPos</name>     =<init> <expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>bytesInBlock</name> =<init> <expr><name>BLOCK_SIZE</name> - <name>BLOCK_POINTER_SIZE</name> - (<name>curPos</name> &amp; (<name>BLOCK_SIZE</name>-1))</expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>bytesLeft</name>    =<init> <expr><name>bytesInBlock</name>&lt;(<name>int</name>)<name>size</name> ? (<name>int</name>)<name>size</name>-<name>bytesInBlock</name> : 0</expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>numBytes</name>     =<init> <expr><name>size</name> - <name>bytesLeft</name></expr></init></decl>;</decl_stmt>
+			<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>bytesInBlock</name>&gt;=0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>numBytes</name>&lt;=<call>(<name>int</name>)<argument_list>(<argument><expr><name>BLOCK_SIZE</name>-<name>BLOCK_POINTER_SIZE</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>numBytes</name>&gt;0</expr>)</condition><then>
+			<block>{
+				<if>if <condition>(<expr>(<name>int</name>)<call><name>fwrite</name><argument_list>(<argument><expr><name>buf</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>numBytes</name></expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=<name>numBytes</name></expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Error writing: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then></if>
+				<expr_stmt><expr><name>m_writes</name>++</expr>;</expr_stmt>
+			}</block></then></if>
+			<if>if <condition>(<expr><name>bytesLeft</name>&gt;0</expr>)</condition><then> <comment type="line">// still more bytes to write</comment>
+			<block>{
+				<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>((<call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>+<name>BLOCK_POINTER_SIZE</name>)&amp;(<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<comment type="line">// allocate new block</comment>
+				<if>if <condition>(<expr><name>m_head</name>==0</expr>)</condition><then> <comment type="line">// no free blocks to reuse</comment>
+				<block>{
+					<comment type="line">//printf("%x: Store::write: new: pos=%x\n",(int)m_front,(int)portable_ftell(m_file));</comment>
+					<comment type="line">// write pointer to next block</comment>
+					<if>if <condition>(<expr><call><name>fwrite</name><argument_list>(<argument><expr>&amp;<name>m_front</name></expr></argument>,<argument><expr><name>BLOCK_POINTER_SIZE</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=1</expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Error writing to store: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+						<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					}</block></then></if>
+					<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>==(<name>curPos</name>&amp;~(<name>BLOCK_SIZE</name>-1))+<name>BLOCK_SIZE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+					<comment type="line">// move to next block</comment>
+					<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr>0</expr></argument>,<argument><expr><name>SEEK_END</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then> <comment type="line">// go to end of the file</comment>
+					<block>{
+						<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::alloc: Error seeking to end of file: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+						<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					}</block></then></if>
+					<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>==<name>m_front</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<comment type="line">// move front to the next of the block</comment>
+					<expr_stmt><expr><name>m_front</name>+=<name>BLOCK_SIZE</name></expr>;</expr_stmt>
+				}</block></then>
+				<else>else <comment type="line">// reuse block from the free list</comment>
+				<block>{
+					<comment type="line">// write pointer to next block</comment>
+					<if>if <condition>(<expr><call><name>fwrite</name><argument_list>(<argument><expr>&amp;<name>m_head</name>-&gt;<name>pos</name></expr></argument>,<argument><expr><name>BLOCK_POINTER_SIZE</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=1</expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Error writing to store: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+						<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					}</block></then></if>
+					<decl_stmt><decl><type><name>Node</name> *</type><name>node</name> =<init> <expr><name>m_head</name></expr></init></decl>;</decl_stmt>
+					<decl_stmt><decl><type><name>portable_off_t</name></type> <name>pos</name> =<init> <expr><name>node</name>-&gt;<name>pos</name></expr></init></decl>;</decl_stmt>
+					<comment type="line">// point head to next free item</comment>
+					<expr_stmt><expr><name>m_head</name> = <name>node</name>-&gt;<name>next</name></expr>;</expr_stmt>
+					<expr_stmt><expr>delete <name>node</name></expr>;</expr_stmt>
+					<comment type="line">// move to start of the block</comment>
+					<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr><name>pos</name></expr></argument>,<argument><expr><name>SEEK_SET</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::write: Error seeking to position %d: %s\n"</expr></argument>,
+							<argument><expr>(<name>int</name>)<name>pos</name></expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+						<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					}</block></then></if>
+					<comment type="line">//printf("%x: Store::write: reuse\n",(int)pos);</comment>
+				}</block></else></if>
+			}</block></then></if>
+			<expr_stmt><expr><name>size</name>-=<name>numBytes</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>buf</name>+=<name>numBytes</name></expr>;</expr_stmt>
+		}</block>
+		while <condition>(<expr><name>size</name>&gt;0</expr>)</condition>;</do>
+		<return>return <expr><name>size</name></expr>;</return>
+	}</block></function>
+
+
+    <comment type="block">/*! Ends the sequence of writes. 
+     *  \note After this call, first alloc() has to be called
+     *  before new writes can be done.
+     */</comment>
+	<function><type><name>void</name></type> <name>end</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Writing</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>portable_off_t</name></type> <name>curPos</name>     =<init> <expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>bytesInBlock</name> =<init> <expr><name>BLOCK_SIZE</name> - (<name>curPos</name> &amp; (<name>BLOCK_SIZE</name>-1))</expr></init></decl>;</decl_stmt>
+		<comment type="line">//printf("%x: Store::end erasing %x bytes\n",(int)curPos&amp;~(BLOCK_SIZE-1),bytesInBlock);</comment>
+		<comment type="line">//printf("end: bytesInBlock=%x\n",bytesInBlock);</comment>
+		<comment type="line">// zero out rest of the block</comment>
+		<decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+		<for>for (<init><expr><name>i</name>=0</expr>;</init><condition><expr><name>i</name>&lt;<name>bytesInBlock</name></expr>;</condition><incr><expr><name>i</name>++</expr></incr>)
+		<block>{
+			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>0</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr><name>m_state</name>=<name>Reading</name></expr>;</expr_stmt>
+	}</block></function>
+
+    <comment type="block">/*! Releases the memory corresponding to the handle returned with alloc() */</comment>
+	<function><type><name>void</name></type> <name>release</name><parameter_list>(<param><decl><type><name>portable_off_t</name></type> <name>pos</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">//printf("%x: Store::release\n",(int)pos);</comment>
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>pos</name>&gt;0 &amp;&amp; (<name>pos</name> &amp; (<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">// goto end of the block</comment>
+		<decl_stmt><decl><type><name>portable_off_t</name></type> <name>cur</name> =<init> <expr><name>pos</name></expr>, <expr><name>next</name></expr></init></decl>;</decl_stmt>
+		<while>while <condition>(<expr>1</expr>)</condition>
+		<block>{
+			<comment type="line">// add new node to the free list</comment>
+			<decl_stmt><decl><type><name>Node</name> *</type><name>node</name> =<init> <expr>new <name>Node</name></expr></init></decl>;</decl_stmt>
+			<expr_stmt><expr><name>node</name>-&gt;<name>next</name> = <name>m_head</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>node</name>-&gt;<name>pos</name> = <name>cur</name></expr>;</expr_stmt>
+
+			<expr_stmt><expr><name>m_head</name> = <name>node</name></expr>;</expr_stmt>
+			<comment type="line">// goto the end of cur block</comment>
+			<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr><name>cur</name>+<name>BLOCK_SIZE</name>-<name>BLOCK_POINTER_SIZE</name></expr></argument>,<argument><expr><name>SEEK_SET</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::release: Error seeking to position %d: %s\n"</expr></argument>,
+					<argument><expr><call>(<name>int</name>)<argument_list>(<argument><expr><name>cur</name>+<name>BLOCK_SIZE</name>-<name>BLOCK_POINTER_SIZE</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<comment type="line">// read pointer to next block</comment>
+			<if>if <condition>(<expr><call><name>fread</name><argument_list>(<argument><expr>&amp;<name>next</name></expr></argument>,<argument><expr><name>BLOCK_POINTER_SIZE</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=1</expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::release: Error reading from store: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<if>if <condition>(<expr><name>next</name>==0</expr>)</condition><then> <break>break;</break></then></if> <comment type="line">// found end of list -&gt; cur is last element</comment>
+			<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>(<name>next</name> &amp; (<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>cur</name> = <name>next</name></expr>;</expr_stmt>
+			<comment type="line">//printf("%x: Store::release\n",(int)cur);</comment>
+		}</block></while>
+	}</block></function>
+
+
+    <comment type="block">/*! Closes the store */</comment>
+	<function><type><name>void</name></type> <name>close</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then> <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>m_file</name>=0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_state</name>  = <name>Init</name></expr>;</expr_stmt>
+	}</block></function>
+
+    <comment type="block">/*! Goes to the start of information corresponding to handle \a pos */</comment>
+	<function><type><name>void</name></type> <name>seek</name><parameter_list>(<param><decl><type><name>portable_off_t</name></type> <name>pos</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">//printf("%x: Store::seek\n",(int)pos);</comment>
+		<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr><name>pos</name></expr></argument>,<argument><expr><name>SEEK_SET</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::seek: Error seeking to position %d: %s\n"</expr></argument>,
+				<argument><expr>(<name>int</name>)<name>pos</name></expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>(<name>pos</name>&amp;(<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+
+
+    <comment type="block">/*! Reads \a size bytes from the store into the array pointed to be \a buf.
+     *  \note Before reading seek() has to be called to set the right start of the store.
+     */</comment>
+	<function><type><name>int</name></type> <name>read</name><parameter_list>(<param><decl><type><name>char</name> *</type><name>buf</name></decl></param>,<param><decl><type><name>uint</name></type> <name>size</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">//printf("%x: Store::read total=%d\n",(int)portable_ftell(m_file),size);</comment>
+		<do>do
+		<block>{
+			<decl_stmt><decl><type><name>portable_off_t</name></type> <name>curPos</name>     =<init> <expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>bytesInBlock</name> =<init> <expr><name>BLOCK_SIZE</name> - <name>BLOCK_POINTER_SIZE</name> - (<name>curPos</name> &amp; (<name>BLOCK_SIZE</name>-1))</expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>bytesLeft</name>    =<init> <expr><name>bytesInBlock</name>&lt;(<name>int</name>)<name>size</name> ? (<name>int</name>)<name>size</name>-<name>bytesInBlock</name> : 0</expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>numBytes</name>     =<init> <expr><name>size</name> - <name>bytesLeft</name></expr></init></decl>;</decl_stmt>
+			<comment type="line">//printf("  Store::read: pos=%x num=%d left=%d\n",(int)curPos,numBytes,bytesLeft);</comment>
+
+			<if>if <condition>(<expr><name>numBytes</name>&gt;0</expr>)</condition><then>
+			<block>{
+				<comment type="line">//printf("%x: Store::read: %d out of %d bytes\n",(int)portable_ftell(m_file),numBytes,size);</comment>
+				<if>if <condition>(<expr>(<name>int</name>)<call><name>fread</name><argument_list>(<argument><expr><name>buf</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>numBytes</name></expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=<name>numBytes</name></expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Error reading from store: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then></if>
+				<expr_stmt><expr><name>m_reads</name>++</expr>;</expr_stmt>
+			}</block></then></if>
+			<if>if <condition>(<expr><name>bytesLeft</name>&gt;0</expr>)</condition><then>
+			<block>{
+				<decl_stmt><decl><type><name>portable_off_t</name></type> <name>newPos</name></decl>;</decl_stmt>
+				<comment type="line">// read offset of the next block</comment>
+				<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>((<call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>+<name>BLOCK_POINTER_SIZE</name>)&amp;(<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr><call><name>fread</name><argument_list>(<argument><expr>(<name>char</name> *)&amp;<name>newPos</name></expr></argument>,<argument><expr><name>BLOCK_POINTER_SIZE</name></expr></argument>,<argument><expr>1</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call>!=1</expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Error reading from store: %s\n"</expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then></if>
+				<comment type="line">//printf("%x: Store::read: continue in next block, %d bytes to go\n",(int)newPos,bytesLeft);</comment>
+				<comment type="line">//printf("  Store::read: next block=%x\n",(int)newPos);</comment>
+				<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>newPos</name>!=0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>(<name>newPos</name>&amp;(<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>curPos</name> = <name>newPos</name></expr>;</expr_stmt>
+				<comment type="line">// move to next block</comment>
+				<if>if <condition>(<expr><call><name>portable_fseek</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>,<argument><expr><name>curPos</name></expr></argument>,<argument><expr><name>SEEK_SET</name></expr></argument>)</argument_list></call>==-1</expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><call><name>fprintf</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>,<argument><expr>"Store::read: Error seeking to position %d: %s\n"</expr></argument>,
+						<argument><expr>(<name>int</name>)<name>curPos</name></expr></argument>,<argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>errno</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then></if>
+			}</block></then></if>
+
+			<expr_stmt><expr><name>size</name>-=<name>numBytes</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>buf</name>+=<name>numBytes</name></expr>;</expr_stmt>
+		}</block>
+		while <condition>(<expr><name>size</name>&gt;0</expr>)</condition>;</do>
+		<return>return <expr><name>size</name></expr>;</return>
+	}</block></function>
+
+    <function><type><name>void</name></type> <name>printStats</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr>"ObjStore: block size %d bytes, total size %ld blocks, wrote %d blocks, read %d blocks\n"</expr></argument>,
+			<argument><expr><name>BLOCK_SIZE</name></expr></argument>,<argument><expr><call>(<name>long</name>)<argument_list>(<argument><expr><name>m_front</name>/<name>BLOCK_SIZE</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>m_reads</name></expr></argument>,<argument><expr><name>m_writes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+
+
+  </public><private>private:
+    <enum>enum <name>State</name>
+    <block>{
+      <expr><name>Init</name></expr>,
+      <expr><name>Reading</name></expr>,
+      <expr><name>Writing</name></expr>
+    }</block>;</enum>
+    <struct>struct <name>Node</name>
+    <block>{<public type="default">
+      <decl_stmt><decl><type><name>portable_off_t</name></type> <name>pos</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type>struct <name>Node</name> *</type><name>next</name></decl>;</decl_stmt>
+    </public>}</block>;</struct>
+    <function><type><name>void</name></type> <name>printFreeList</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr>"FreeList: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>portable_off_t</name></type> <name>pos</name> =<init> <expr><name>m_head</name>-&gt;<name>pos</name></expr></init></decl>;</decl_stmt>
+		<while>while <condition>(<expr><name>pos</name></expr>)</condition>
+		<block>{
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr>"%x "</expr></argument>,<argument><expr>(<name>int</name>)<name>pos</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>m_head</name> = <name>m_head</name>-&gt;<name>next</name></expr>;</expr_stmt>
+		}</block></while>
+		<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+
+    <decl_stmt><decl><type><name>FILE</name> *</type><name>m_file</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>portable_off_t</name></type> <name>m_front</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>Node</name> *</type><name>m_head</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>State</name></type> <name>m_state</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>m_reads</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>m_writes</name></decl>;</decl_stmt>
+</private>}</block>;</class>
+
+</unit>

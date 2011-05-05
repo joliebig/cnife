@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsTmpdir.h">
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsTmpdir.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"common/DbErr.h"</cpp:file></cpp:include>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>macintosh</name></cpp:ifdef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;TFileSpec.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+<class>class <name>COsTmpdir</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_tmpdir</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, 	<param><decl><type><name>u_int32_t</name></type> <name>flags</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>isdir</name></decl>;</decl_stmt>
+	
+		<comment type="block">/*
+		 * !!!
+		 * Don't change this to:
+		 *
+		 *	static const char * const list[]
+		 *
+		 * because it creates a text relocation in position independent code.
+		 */</comment>
+		<decl_stmt><decl><type><name>static</name> <name>const</name> <name>char</name> *</type> <name><name>list</name><index>[]</index></name> =<init> <expr><block>{
+			<expr>"/var/tmp"</expr>,
+			<expr>"/usr/tmp"</expr>,
+			<expr>"/temp"</expr>,		<comment type="block">/* Windows. */</comment>
+			<expr>"/tmp"</expr>,
+			<expr>"C:/temp"</expr>,		<comment type="block">/* Windows. */</comment>
+			<expr>"C:/tmp"</expr>,		<comment type="block">/* Windows. */</comment>
+			<expr><name>NULL</name></expr>
+		}</block></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>const</name> <name>char</name> * <name>const</name> *</type><name>lp</name>, *<name>p</name></decl>;</decl_stmt>
+	
+		<comment type="block">/* Use the environment if it's permitted and initialized. */</comment>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_USE_ENVIRON</name></expr></argument>)</argument_list></call> ||
+		    (<call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_USE_ENVIRON_ROOT</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name><name>COsRoot</name>::<name>os_isroot</name></name><argument_list>()</argument_list></call>)</expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>p</name> = <call><name>getenv</name><argument_list>(<argument><expr>"TMPDIR"</expr></argument>)</argument_list></call>) != <name>NULL</name> &amp;&amp; <name><name>p</name><index>[<expr>0</expr>]</index></name> == '\0'</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"illegal TMPDIR environment variable"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
+			}</block></then></if>
+			<comment type="block">/* Windows */</comment>
+			<if>if <condition>(<expr><name>p</name> == <name>NULL</name> &amp;&amp; (<name>p</name> = <call><name>getenv</name><argument_list>(<argument><expr>"TEMP"</expr></argument>)</argument_list></call>) != <name>NULL</name> &amp;&amp; <name><name>p</name><index>[<expr>0</expr>]</index></name> == '\0'</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"illegal TEMP environment variable"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
+			}</block></then></if>
+			<comment type="block">/* Windows */</comment>
+			<if>if <condition>(<expr><name>p</name> == <name>NULL</name> &amp;&amp; (<name>p</name> = <call><name>getenv</name><argument_list>(<argument><expr>"TMP"</expr></argument>)</argument_list></call>) != <name>NULL</name> &amp;&amp; <name><name>p</name><index>[<expr>0</expr>]</index></name> == '\0'</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"illegal TMP environment variable"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
+			}</block></then></if>
+			<comment type="block">/* Macintosh */</comment>
+			<if>if <condition>(<expr><name>p</name> == <name>NULL</name> &amp;&amp;
+			    (<name>p</name> = <call><name>getenv</name><argument_list>(<argument><expr>"TempFolder"</expr></argument>)</argument_list></call>) != <name>NULL</name> &amp;&amp; <name><name>p</name><index>[<expr>0</expr>]</index></name> == '\0'</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+				    <argument><expr>"illegal TempFolder environment variable"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
+			}</block></then></if>
+			<if>if <condition>(<expr><name>p</name> != <name>NULL</name></expr>)</condition><then>
+				<return>return <expr>(<call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr>&amp;<name>dbenv</name>-&gt;<name>db_tmp_dir</name></expr></argument>)</argument_list></call>)</expr>;</return></then></if>
+		}</block></then></if>
+	
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>macintosh</name></cpp:ifdef>
+		<comment type="block">/* Get the path to the temporary folder. */</comment>
+		<block>{<decl_stmt><decl><type><name>FSSpec</name></type> <name>spec</name></decl>;</decl_stmt>
+	
+			<if>if <condition>(<expr>!<call><name>Special2FSSpec</name><argument_list>(<argument><expr><name>kTemporaryFolderType</name></expr></argument>,
+			    <argument><expr><name>kOnSystemDisk</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>spec</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+				<return>return <expr>(<call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+				    <argument><expr><call><name>FSp2FullPath</name><argument_list>(<argument><expr>&amp;<name>spec</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>dbenv</name>-&gt;<name>db_tmp_dir</name></expr></argument>)</argument_list></call>)</expr>;</return></then></if>
+		}</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>DB_WIN32</name></cpp:ifdef>
+		<comment type="block">/* Get the path to the temporary directory. */</comment>
+		<block>{
+			<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>_TCHAR</name></type> <name><name>tpath</name><index>[<expr><name>MAXPATHLEN</name> + 1</expr>]</index></name></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>char</name> *</type><name>path</name>, *<name>eos</name></decl>;</decl_stmt>
+	
+			<if>if <condition>(<expr><call><name>GetTempPath</name><argument_list>(<argument><expr><name>MAXPATHLEN</name></expr></argument>, <argument><expr><name>tpath</name></expr></argument>)</argument_list></call> &gt; 2</expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>FROM_TSTRING</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>tpath</name></expr></argument>, <argument><expr><name>path</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+					<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+				<expr_stmt><expr><name>eos</name> = <name>path</name> + <call><name>strlen</name><argument_list>(<argument><expr><name>path</name></expr></argument>)</argument_list></call> - 1</expr>;</expr_stmt>
+				<if>if <condition>(<expr>*<name>eos</name> == '\\' || *<name>eos</name> == '/'</expr>)</condition><then>
+					<expr_stmt><expr>*<name>eos</name> = '\0'</expr>;</expr_stmt></then></if>
+				<if>if <condition>(<expr><call><name><name>COsStat</name>::<name>os_exists</name></name><argument_list>(<argument><expr><name>path</name></expr></argument>, <argument><expr>&amp;<name>isdir</name></expr></argument>)</argument_list></call> == 0 &amp;&amp; <name>isdir</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr><name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+						<argument><expr><name>path</name></expr></argument>, <argument><expr>&amp;<name>dbenv</name>-&gt;<name>db_tmp_dir</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>FREE_STRING</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>path</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<return>return <expr>(<name>ret</name>)</expr>;</return>
+				}</block></then></if>
+				<expr_stmt><expr><call><name>FREE_STRING</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>path</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+		}</block>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	
+		<comment type="block">/* Step through the static list looking for a possibility. */</comment>
+		<for>for (<init><expr><name>lp</name> = <name>list</name></expr>;</init> <condition><expr>*<name>lp</name> != <name>NULL</name></expr>;</condition> <incr><expr>++<name>lp</name></expr></incr>)
+			<if>if <condition>(<expr><call><name><name>COsStat</name>::<name>os_exists</name></name><argument_list>(<argument><expr>*<name>lp</name></expr></argument>, <argument><expr>&amp;<name>isdir</name></expr></argument>)</argument_list></call> == 0 &amp;&amp; <name>isdir</name> != 0</expr>)</condition><then>
+				<return>return <expr>(<call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>*<name>lp</name></expr></argument>, <argument><expr>&amp;<name>dbenv</name>-&gt;<name>db_tmp_dir</name></expr></argument>)</argument_list></call>)</expr>;</return></then></if></for>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+</public>}</block>;</class>
+
+
+</unit>

@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="ObjCache.h"><comment type="block">/******************************************************************************
+ *
+ * $Id:$
+ *
+ * Copyright (C) 1997-2008 by Dimitri van Heesch.
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation under the terms of the GNU General Public License is hereby 
+ * granted. No representations are made about the suitability of this software 
+ * for any purpose. It is provided "as is" without express or implied warranty.
+ * See the GNU General Public License for more details.
+ *
+ * Documents produced by Doxygen are derivative works derived from the
+ * input used in their production; they are not affected by this license.
+ *
+ */</comment>
+
+<cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;assert.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;qglobal.h&gt;</cpp:file></cpp:include>
+
+<comment type="line">//#define CACHE_TEST</comment>
+<comment type="line">//#define CACHE_DEBUG</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>CACHE_STATS</name></cpp:define>
+
+<comment type="block">/** @brief Cache for objects.
+ *
+ *  This cache is used to decide which objects should remain in
+ *  memory. It uses a least recently used policy (LRU) to decide
+ *  which object should make room for a new object when the cache
+ *  is full. An object should be added using add(), and then use()
+ *  should be called when the object is used.
+ */</comment>
+<class>class <name>ObjCache</name>
+<block>{<private type="default">
+  </private><private>private:
+    <struct>struct <name>CacheNode</name>
+    <block>{<public type="default">
+      <constructor><name>CacheNode</name><parameter_list>()</parameter_list> <member_list>: <call><name>next</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>prev</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>obj</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call> </member_list><block>{}</block></constructor>
+      <decl_stmt><decl><type><name>int</name></type> <name>next</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>int</name></type> <name>prev</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>void</name> *</type><name>obj</name></decl>;</decl_stmt>
+    </public>}</block>;</struct>
+    <struct>struct <name>HashNode</name>
+    <block>{<public type="default">
+      <constructor><name>HashNode</name><parameter_list>()</parameter_list> <member_list>: <call><name>head</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>nextHash</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>index</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>obj</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call> </member_list><block>{}</block></constructor>
+      <decl_stmt><decl><type><name>int</name></type> <name>head</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>int</name></type> <name>nextHash</name></decl>;</decl_stmt> 
+      <decl_stmt><decl><type><name>int</name></type> <name>index</name></decl>;</decl_stmt>
+      <decl_stmt><decl><type><name>void</name> *</type><name>obj</name></decl>;</decl_stmt>
+    </public>}</block>;</struct>
+
+  </private><public>public:
+    <comment type="block">/*! Creates the cache. The number of elements in the cache is 2 to 
+     *  the power of \a logSize. 
+     */</comment>
+	  <constructor><name>ObjCache</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>int</name></type> <name>logSize</name></decl></param>)</parameter_list> 
+		  <member_list>: <call><name>m_head</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <call><name>m_tail</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>, <comment type="line">//m_numEntries(0), </comment>
+		  <call><name>m_size</name><argument_list>(<argument><expr>1&lt;&lt;<name>logSize</name></expr></argument>)</argument_list></call>, <call><name>m_freeHashNodes</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call>, <call><name>m_freeCacheNodes</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call>, <call><name>m_lastHandle</name><argument_list>(<argument><expr>-1</expr></argument>)</argument_list></call>
+	  </member_list><block>{
+		  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>m_cache</name> = new <name><name>CacheNode</name><index>[<expr><name>m_size</name></expr>]</index></name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_hash</name>  = new <name><name>HashNode</name><index>[<expr><name>m_size</name></expr>]</index></name></expr>;</expr_stmt>
+		  <comment type="line">// add all items to list of free buckets</comment>
+		  <for>for (<init><expr><name>i</name>=0</expr>;</init><condition><expr><name>i</name>&lt;<name>m_size</name>-1</expr>;</condition><incr><expr><name>i</name>++</expr></incr>)
+		  <block>{
+			  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>i</name></expr>]</index></name>.<name>nextHash</name> = <name>i</name>+1</expr>;</expr_stmt>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>i</name></expr>]</index></name>.<name>next</name>    = <name>i</name>+1</expr>;</expr_stmt>
+		  }</block></for>
+	  }</block></constructor>
+
+    <comment type="block">/*! Deletes the cache and free all internal data-structures used. */</comment>
+	  <destructor><name>~<name>ObjCache</name></name><parameter_list>()</parameter_list>
+	  <block>{
+		  <expr_stmt><expr>delete[] <name>m_cache</name></expr>;</expr_stmt>
+		  <expr_stmt><expr>delete[] <name>m_hash</name></expr>;</expr_stmt>
+	  }</block></destructor>
+
+    <comment type="block">/*! Adds \a obj to the cache. When victim is not null, this object is
+     *  removed from the cache to make room for \a obj. 
+     *  Returns a handle to the object, which can be used by the use()
+     *  function, each time the object is used.
+     */</comment>
+	  <function><type><name>int</name></type> <name>add</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>,<param><decl><type><name>void</name> **</type><name>victim</name></decl></param>)</parameter_list>
+	  <block>{
+		  <expr_stmt><expr>*<name>victim</name>=0</expr>;</expr_stmt>
+
+		  <decl_stmt><decl><type><name>HashNode</name> *</type><name>hnode</name> =<init> <expr><call><name>hashFind</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		  <comment type="line">//printf("hnode=%p\n",hnode);</comment>
+		  <if>if <condition>(<expr><name>hnode</name></expr>)</condition><then> <comment type="line">// move object to the front of the LRU list, since it is used</comment>
+			  <comment type="line">// most recently</comment>
+		  <block>{
+			  <comment type="line">//printf("moveToFront=%d\n",hnode-&gt;index);</comment>
+			  <expr_stmt><expr><call><name>moveToFront</name><argument_list>(<argument><expr><name>hnode</name>-&gt;<name>index</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
+			  <expr_stmt><expr><name>hits</name>++</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		  }</block></then>
+		  <else>else <comment type="line">// object not in the cache.</comment>
+		  <block>{
+			  <decl_stmt><decl><type><name>void</name> *</type><name>lruObj</name>=<init><expr>0</expr></init></decl>;</decl_stmt>
+			  <if>if <condition>(<expr><name>m_freeCacheNodes</name>!=-1</expr>)</condition><then> <comment type="line">// cache not full -&gt; add element to the cache</comment>
+			  <block>{
+				  <comment type="line">// remove element from free list</comment>
+				  <decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><name>m_freeCacheNodes</name></expr></init></decl>;</decl_stmt>
+				  <expr_stmt><expr><name>m_freeCacheNodes</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name></expr>;</expr_stmt>
+
+				  <comment type="line">// add to head of the list</comment>
+				  <if>if <condition>(<expr><name>m_tail</name>==-1</expr>)</condition><then>
+				  <block>{
+					  <expr_stmt><expr><name>m_tail</name> = <name>index</name></expr>;</expr_stmt>
+				  }</block></then></if>
+				  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>prev</name> = -1</expr>;</expr_stmt>
+				  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name> = <name>m_head</name></expr>;</expr_stmt>
+				  <if>if <condition>(<expr><name>m_head</name>!=-1</expr>)</condition><then>
+				  <block>{
+					  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>m_head</name></expr>]</index></name>.<name>prev</name> = <name>index</name></expr>;</expr_stmt>
+				  }</block></then></if>
+				  <expr_stmt><expr><name>m_head</name> = <name>index</name></expr>;</expr_stmt>
+			  }</block></then>
+			  <else>else <comment type="line">// cache full -&gt; replace element in the cache</comment>
+			  <block>{
+				  <comment type="line">//printf("Cache full!\n");</comment>
+				  <expr_stmt><expr><name>lruObj</name> = <name><name>m_cache</name><index>[<expr><name>m_tail</name></expr>]</index></name>.<name>obj</name></expr>;</expr_stmt>
+				  <expr_stmt><expr><call><name>hashRemove</name><argument_list>(<argument><expr><name>lruObj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				  <expr_stmt><expr><call><name>moveToFront</name><argument_list>(<argument><expr><name>m_tail</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <comment type="line">// m_tail indexes the emptied element, which becomes m_head</comment>
+			  }</block></else></if>
+			  <comment type="line">//printf("numEntries=%d size=%d\n",m_numEntries,m_size);</comment>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>m_head</name></expr>]</index></name>.<name>obj</name> = <name>obj</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>hnode</name> = <call><name>hashInsert</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>hnode</name>-&gt;<name>index</name> = <name>m_head</name></expr>;</expr_stmt>
+			  <expr_stmt><expr>*<name>victim</name> = <name>lruObj</name></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
+			  <expr_stmt><expr><name>misses</name>++</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		  }</block></else></if>
+		  <return>return <expr><name>m_head</name></expr>;</return>
+	  }</block></function>
+
+    <comment type="block">/*! Indicates that this object is used. This will move the object
+     *  to the front of the internal LRU list to make sure it is removed last.
+     *  The parameter \a handle is returned when called add().
+     */</comment>
+    <function><type><name>void</name></type> <name>use</name><parameter_list>(<param><decl><type><name>int</name></type> <name>handle</name></decl></param>)</parameter_list>
+    <block>{
+      <expr_stmt><expr><name>hits</name>++</expr>;</expr_stmt>
+      <if>if <condition>(<expr><name>handle</name>==<name>m_lastHandle</name></expr>)</condition><then> <return>return;</return></then></if>
+      <expr_stmt><expr><name>m_lastHandle</name> = <name>handle</name></expr>;</expr_stmt>
+      <expr_stmt><expr><call><name>moveToFront</name><argument_list>(<argument><expr><name>handle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    }</block></function>
+
+    <comment type="block">/*! Removes the item identified by \a handle from the cache.
+     *  @see add()
+     */</comment>
+	<function><type><name>void</name></type> <name>del</name><parameter_list>(<param><decl><type><name>int</name></type> <name>handle</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>handle</name>!=-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>obj</name>!=0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>hashRemove</name><argument_list>(<argument><expr><name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>moveToFront</name><argument_list>(<argument><expr><name>handle</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_head</name> = <name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>next</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>m_head</name>==-1</expr>)</condition><then> 
+			<expr_stmt><expr><name>m_tail</name>=-1</expr>;</expr_stmt></then>
+		<else>else 
+			<expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>m_head</name></expr>]</index></name>.<name>prev</name>=-1</expr>;</expr_stmt></else></if>
+		<expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>obj</name>=0</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>prev</name>=-1</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>handle</name></expr>]</index></name>.<name>next</name> = <name>m_freeCacheNodes</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>m_freeCacheNodes</name> = <name>handle</name></expr>;</expr_stmt>
+	}</block></function>
+
+
+    <comment type="block">/*! Debug function. Prints the LRU list */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_DEBUG</name></cpp:ifdef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>cache_debug_printf</name> <name>printf</name></cpp:define>
+	<function><type><name>void</name></type> <name>printLRU</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"MRU-&gt;LRU: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><name>m_head</name></expr></init></decl>;</decl_stmt>
+		<while>while <condition>(<expr><name>index</name>!=-1</expr>)</condition>
+		<block>{
+			<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"%d=%p "</expr></argument>,<argument><expr><name>index</name></expr></argument>,<argument><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>index</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name></expr>;</expr_stmt>
+		}</block></while>
+		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"LRU-&gt;MRU: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>index</name> = <name>m_tail</name></expr>;</expr_stmt>
+		<while>while <condition>(<expr><name>index</name>!=-1</expr>)</condition>
+		<block>{
+			<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"%d=%p "</expr></argument>,<argument><expr><name>index</name></expr></argument>,<argument><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>index</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>prev</name></expr>;</expr_stmt>
+		}</block></while>
+		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+    <comment type="block">/*! Print miss/hits statistics */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>cache_stats_printf</name> <name>printf</name></cpp:define>
+	<function><type><name>void</name></type> <name>printStats</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>cache_stats_printf</name><argument_list>(<argument><expr>"ObjCache: hits=%d misses=%d hit ratio=%f\n"</expr></argument>,<argument><expr><name>hits</name></expr></argument>,<argument><expr><name>misses</name></expr></argument>,<argument><expr><name>hits</name>*100.0/(<name>hits</name>+<name>misses</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+  </public><private>private:
+	  <function><type><name>void</name></type> <name>moveToFront</name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>int</name></type> <name>prev</name>,<name>next</name></decl>;</decl_stmt>
+		  <if>if <condition>(<expr><name>m_head</name>!=<name>index</name></expr>)</condition><then>
+		  <block>{
+			  <expr_stmt><expr><name>next</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>prev</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>prev</name></expr>;</expr_stmt>
+
+			  <comment type="line">// de-chain node at index</comment>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>prev</name></expr>]</index></name>.<name>next</name> = <name>next</name></expr>;</expr_stmt>
+			  <if>if <condition>(<expr><name>next</name>!=-1</expr>)</condition><then> <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>next</name></expr>]</index></name>.<name>prev</name> = <name>prev</name></expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>m_tail</name> = <name>prev</name></expr>;</expr_stmt></else></if>
+
+			  <comment type="line">// add to head</comment>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>prev</name>  = -1</expr>;</expr_stmt>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name>  = <name>m_head</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name><name>m_cache</name><index>[<expr><name>m_head</name></expr>]</index></name>.<name>prev</name> = <name>index</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>m_head</name> = <name>index</name></expr>;</expr_stmt>
+		  }</block></then></if>
+	  }</block></function>
+	  <function><type><name>unsigned</name> <name>int</name></type> <name>hash</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>addr</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>isPtr64</name> =<init> <expr><call><name>sizeof</name><argument_list>(<argument><expr><name>addr</name></expr></argument>)</argument_list></call>==8</expr></init></decl>;</decl_stmt>
+		  <if>if <condition>(<expr><name>isPtr64</name></expr>)</condition><then>
+		  <block>{
+			  <decl_stmt><decl><type><name>uint64</name></type> <name>key</name> =<init> <expr>(<name>uint64</name>)<name>addr</name></expr></init></decl>;</decl_stmt>
+			  <comment type="line">// Thomas Wang's 64 bit Mix Function</comment>
+			  <expr_stmt><expr><name>key</name> += ~(<name>key</name> &lt;&lt; 32)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 22)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> += ~(<name>key</name> &lt;&lt; 13)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 8)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> +=  (<name>key</name> &lt;&lt; 3)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 15)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> += ~(<name>key</name> &lt;&lt; 27)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 31)</expr>;</expr_stmt>
+			  <return>return <expr><name>key</name> &amp; (<name>m_size</name>-1)</expr>;</return>
+		  }</block></then>
+		  <else>else
+		  <block>{
+			  <comment type="line">// Thomas Wang's 32 bit Mix Function</comment>
+			  <decl_stmt><decl><type><name>unsigned</name> <name>long</name></type> <name>key</name> =<init> <expr>(<name>unsigned</name> <name>long</name>)<name>addr</name></expr></init></decl>;</decl_stmt>
+			  <expr_stmt><expr><name>key</name> += ~(<name>key</name> &lt;&lt; 15)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 10)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> +=  (<name>key</name> &lt;&lt; 3)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 6)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> += ~(<name>key</name> &lt;&lt; 11)</expr>;</expr_stmt>
+			  <expr_stmt><expr><name>key</name> ^=  (<name>key</name> &gt;&gt; 16)</expr>;</expr_stmt>
+			  <return>return <expr><name>key</name> &amp; (<name>m_size</name>-1)</expr>;</return>
+		  }</block></else></if>
+	  }</block></function>
+	  <function><type><name>HashNode</name> *</type><name>hashFind</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>HashNode</name> *</type><name>node</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+		  <decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><name><name>m_hash</name><index>[<expr><call><name>hash</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr>]</index></name>.<name>head</name></expr></init></decl>;</decl_stmt>
+		  <comment type="line">//printf("hashFind: obj=%p index=%d\n",obj,index);</comment>
+		  <while>while <condition>(<expr><name>index</name>!=-1 &amp;&amp;
+			  <name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>obj</name>!=<name>obj</name></expr>
+			  )</condition> <comment type="line">// search for right object in the list</comment>
+		  <block>{
+			  <expr_stmt><expr><name>index</name> = <name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>
+		  }</block></while>
+		  <comment type="line">// found the obj at index, so it is in the cache!</comment>
+		  <if>if <condition>(<expr><name>index</name>!=-1</expr>)</condition><then>
+		  <block>{
+			  <expr_stmt><expr><name>node</name> = &amp;<name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name></expr>;</expr_stmt>
+		  }</block></then></if>
+		  <return>return <expr><name>node</name></expr>;</return>
+	  }</block></function>
+	  <function><type><name>HashNode</name> *</type><name>hashInsert</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><call><name>hash</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		  <comment type="line">//printf("Inserting %p index=%d\n",obj,index);</comment>
+
+		  <comment type="line">// remove element from empty list</comment>
+		  <decl_stmt><decl><type><name>int</name></type> <name>newElement</name> =<init> <expr><name>m_freeHashNodes</name></expr></init></decl>;</decl_stmt>
+		  <expr_stmt><expr><call><name>assert</name><argument_list>(<argument><expr><name>newElement</name>!=-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_freeHashNodes</name> = <name><name>m_hash</name><index>[<expr><name>m_freeHashNodes</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>
+
+		  <if>if <condition>(<expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>head</name>!=-1</expr>)</condition><then> <comment type="line">// hash collision -&gt; goto end of the list</comment>
+		  <block>{
+			  <expr_stmt><expr><name>index</name> = <name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>head</name></expr>;</expr_stmt>
+			  <while>while <condition>(<expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>nextHash</name>!=-1</expr>)</condition>
+			  <block>{
+				  <expr_stmt><expr><name>index</name> = <name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>
+			  }</block></while>
+			  <comment type="line">// add to end of the list</comment>
+			  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>nextHash</name> = <name>newElement</name></expr>;</expr_stmt>
+		  }</block></then>
+		  <else>else <comment type="line">// first element in the hash list</comment>
+		  <block>{
+			  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>head</name> = <name>newElement</name></expr>;</expr_stmt>
+		  }</block></else></if>
+		  <comment type="line">// add to the end of the list</comment>
+		  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>newElement</name></expr>]</index></name>.<name>nextHash</name> = -1</expr>;</expr_stmt>
+		  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>newElement</name></expr>]</index></name>.<name>obj</name> = <name>obj</name></expr>;</expr_stmt>
+		  <return>return <expr>&amp;<name><name>m_hash</name><index>[<expr><name>newElement</name></expr>]</index></name></expr>;</return>
+	  }</block></function>
+	  <function><type><name>void</name></type> <name>hashRemove</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><call><name>hash</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+		  <comment type="line">// find element</comment>
+		  <decl_stmt><decl><type><name>int</name></type> <name>curIndex</name> =<init> <expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>head</name></expr></init></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>int</name> <name>prevIndex</name>=-1</expr>;</expr_stmt>
+		  <while>while <condition>(<expr><name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>obj</name>!=<name>obj</name></expr>)</condition>
+		  <block>{
+			  <expr_stmt><expr><name>prevIndex</name> = <name>curIndex</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>curIndex</name> = <name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>     
+		  }</block></while>
+
+		  <if>if <condition>(<expr><name>prevIndex</name>==-1</expr>)</condition><then> <comment type="line">// remove from start</comment>
+		  <block>{
+			  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>index</name></expr>]</index></name>.<name>head</name> = <name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>
+		  }</block></then>
+		  <else>else <comment type="line">// remove in the middle</comment>
+		  <block>{
+			  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>prevIndex</name></expr>]</index></name>.<name>nextHash</name> = <name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>nextHash</name></expr>;</expr_stmt>
+		  }</block></else></if>
+
+		  <comment type="line">// add curIndex element to empty list</comment>
+		  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>nextHash</name> = <name>m_freeHashNodes</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>index</name> = -1</expr>;</expr_stmt>
+		  <expr_stmt><expr><name><name>m_hash</name><index>[<expr><name>curIndex</name></expr>]</index></name>.<name>obj</name>   = 0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_freeHashNodes</name> = <name>curIndex</name></expr>;</expr_stmt>
+	  }</block></function>
+
+    <decl_stmt><decl><type><name>CacheNode</name> *</type><name>m_cache</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>HashNode</name>  *</type><name>m_hash</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_head</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_tail</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_size</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_freeHashNodes</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_freeCacheNodes</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type>        <name>m_lastHandle</name></decl>;</decl_stmt>
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
+    <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>misses</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>hits</name></decl>;</decl_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</private>}</block>;</class>
+
+</unit>

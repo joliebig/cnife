@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="affentry.hxx"><cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_AFFIX_HXX_</name></cpp:ifndef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>_AFFIX_HXX_</name></cpp:define>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"atypes.hxx"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"baseaffix.hxx"</cpp:file></cpp:include>
+<comment type="line">//#include "affixmgr.hxx"</comment>
+<class_decl>class <name>AffixMgr</name>;</class_decl>
+<comment type="block">/* A Prefix Entry  */</comment>
+
+<class>class <name>PfxEntry</name> <super>: <specifier>protected</specifier> <name>AffEntry</name></super>
+<block>{<private type="default">
+       <decl_stmt><decl><type><name>AffixMgr</name>*</type>    <name>pmyMgr</name></decl>;</decl_stmt>
+
+       <decl_stmt><decl><type><name>PfxEntry</name> *</type> <name>next</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>PfxEntry</name> *</type> <name>nexteq</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>PfxEntry</name> *</type> <name>nextne</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>PfxEntry</name> *</type> <name>flgnxt</name></decl>;</decl_stmt>
+
+</private><public>public:
+
+  <constructor_decl><name>PfxEntry</name><parameter_list>(<param><decl><type><name>AffixMgr</name>*</type> <name>pmgr</name></decl></param>, <param><decl><type><name>affentry</name>*</type> <name>dp</name></decl></param> )</parameter_list>;</constructor_decl>
+  <destructor_decl><name>~<name>PfxEntry</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+
+  <function><type><name>inline</name> <name>bool</name></type>          <name>allowCross</name><parameter_list>()</parameter_list> <block>{ <return>return <expr>((<name>opts</name> &amp; <name>aeXPRODUCT</name>) != 0)</expr>;</return> }</block></function>
+  <function_decl><type>struct <name>hentry</name> *</type>      <name>checkword</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>char</name></type> <name>in_compound</name></decl></param>, 
+                            <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function_decl><type>struct <name>hentry</name> *</type>      <name>check_twosfx</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>char</name></type> <name>in_compound</name></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function_decl><type><name>char</name> *</type>      <name>check_morph</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>char</name></type> <name>in_compound</name></decl></param>,
+                            <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function_decl><type><name>char</name> *</type>      <name>check_twosfx_morph</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>,
+                  <param><decl><type><name>char</name></type> <name>in_compound</name></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function><type><name>inline</name> <name>FLAG</name></type> <name>getFlag</name><parameter_list>()</parameter_list>   <block>{ <return>return <expr><name>aflag</name></expr>;</return>   }</block></function>
+  <function><type><name>inline</name> <name>const</name> <name>char</name> *</type>  <name>getKey</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>appnd</name></expr>;</return>  }</block></function> 
+  <function_decl><type><name>char</name> *</type>               <name>add</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>)</parameter_list>;</function_decl>
+
+  <function><type><name>inline</name> <name>short</name></type> <name>getKeyLen</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>appndl</name></expr>;</return> }</block></function> 
+
+  <function><type><name>inline</name> <name>const</name> <name>char</name> *</type>  <name>getMorph</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>morphcode</name></expr>;</return>  }</block></function> 
+
+  <function><type><name>inline</name> <name>const</name> <name>unsigned</name> <name>short</name> *</type> <name>getCont</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>contclass</name></expr>;</return>  }</block></function> 
+  <function><type><name>inline</name> <name>short</name></type>           <name>getContLen</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>contclasslen</name></expr>;</return>  }</block></function> 
+
+  <function><type><name>inline</name> <name>PfxEntry</name> *</type>    <name>getNext</name><parameter_list>()</parameter_list>   <block>{ <return>return <expr><name>next</name></expr>;</return>   }</block></function>
+  <function><type><name>inline</name> <name>PfxEntry</name> *</type>    <name>getNextNE</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>nextne</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>PfxEntry</name> *</type>    <name>getNextEQ</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>nexteq</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>PfxEntry</name> *</type>    <name>getFlgNxt</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>flgnxt</name></expr>;</return> }</block></function>
+
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNext</name><parameter_list>(<param><decl><type><name>PfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list>   <block>{ <expr_stmt><expr><name>next</name> = <name>ptr</name></expr>;</expr_stmt>   }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNextNE</name><parameter_list>(<param><decl><type><name>PfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>nextne</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNextEQ</name><parameter_list>(<param><decl><type><name>PfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>nexteq</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setFlgNxt</name><parameter_list>(<param><decl><type><name>PfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>flgnxt</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+  
+  <function_decl><type><name>inline</name> <name>char</name> *</type> <name>nextchar</name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>p</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>inline</name> <name>int</name></type>    <name>test_condition</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>st</name></decl></param>)</parameter_list>;</function_decl>
+</public>}</block>;</class>
+
+
+
+
+<comment type="block">/* A Suffix Entry */</comment>
+
+<class>class <name>SfxEntry</name> <super>: <specifier>protected</specifier> <name>AffEntry</name></super>
+<block>{<private type="default">
+       <decl_stmt><decl><type><name>AffixMgr</name>*</type>    <name>pmyMgr</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>char</name> *</type>       <name>rappnd</name></decl>;</decl_stmt>
+
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>next</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>nexteq</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>nextne</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>flgnxt</name></decl>;</decl_stmt>
+           
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>l_morph</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>r_morph</name></decl>;</decl_stmt>
+       <decl_stmt><decl><type><name>SfxEntry</name> *</type>   <name>eq_morph</name></decl>;</decl_stmt>
+
+</private><public>public:
+
+  <constructor_decl><name>SfxEntry</name><parameter_list>(<param><decl><type><name>AffixMgr</name>*</type> <name>pmgr</name></decl></param>, <param><decl><type><name>affentry</name>*</type> <name>dp</name></decl></param> )</parameter_list>;</constructor_decl>
+  <destructor_decl><name>~<name>SfxEntry</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+
+  <function><type><name>inline</name> <name>bool</name></type>          <name>allowCross</name><parameter_list>()</parameter_list> <block>{ <return>return <expr>((<name>opts</name> &amp; <name>aeXPRODUCT</name>) != 0)</expr>;</return> }</block></function>
+  <function_decl><type>struct <name>hentry</name> *</type>   <name>checkword</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>int</name></type> <name>optflags</name></decl></param>, 
+                    <param><decl><type><name>PfxEntry</name>*</type> <name>ppfx</name></decl></param>, <param><decl><type><name>char</name> **</type> <name>wlst</name></decl></param>, <param><decl><type><name>int</name></type> <name>maxSug</name></decl></param>, <param><decl><type><name>int</name> *</type> <name>ns</name></decl></param>,
+<comment type="line">//                    const FLAG cclass = FLAG_NULL, const FLAG needflag = FLAG_NULL, char in_compound=IN_CPD_NOT);</comment>
+                    <param><decl><type><name>const</name> <name>FLAG</name></type> <name>cclass</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>badflag</name> =<init> <expr>0</expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function_decl><type>struct <name>hentry</name> *</type>   <name>check_twosfx</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>int</name></type> <name>optflags</name></decl></param>, <param><decl><type><name>PfxEntry</name>*</type> <name>ppfx</name></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+
+  <function_decl><type><name>char</name> *</type>      <name>check_twosfx_morph</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>, <param><decl><type><name>int</name></type> <name>optflags</name></decl></param>,
+                 <param><decl><type><name>PfxEntry</name>*</type> <name>ppfx</name></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name> =<init> <expr><name>FLAG_NULL</name></expr></init></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type>struct <name>hentry</name> *</type> <name>get_next_homonym</name><parameter_list>(<param><decl><type>struct <name>hentry</name> *</type> <name>he</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type>struct <name>hentry</name> *</type> <name>get_next_homonym</name><parameter_list>(<param><decl><type>struct <name>hentry</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>optflags</name></decl></param>, <param><decl><type><name>PfxEntry</name>*</type> <name>ppfx</name></decl></param>, 
+    <param><decl><type><name>const</name> <name>FLAG</name></type> <name>cclass</name></decl></param>, <param><decl><type><name>const</name> <name>FLAG</name></type> <name>needflag</name></decl></param>)</parameter_list>;</function_decl>
+
+
+  <function><type><name>inline</name> <name>FLAG</name></type> <name>getFlag</name><parameter_list>()</parameter_list>   <block>{ <return>return <expr><name>aflag</name></expr>;</return>   }</block></function>
+  <function><type><name>inline</name> <name>const</name> <name>char</name> *</type>  <name>getKey</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>rappnd</name></expr>;</return> }</block></function> 
+  <function_decl><type><name>char</name> *</type>               <name>add</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>len</name></decl></param>)</parameter_list>;</function_decl>
+
+
+  <function><type><name>inline</name> <name>const</name> <name>char</name> *</type>  <name>getMorph</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>morphcode</name></expr>;</return>  }</block></function> 
+
+  <function><type><name>inline</name> <name>const</name> <name>unsigned</name> <name>short</name> *</type> <name>getCont</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>contclass</name></expr>;</return>  }</block></function> 
+  <function><type><name>inline</name> <name>short</name></type>           <name>getContLen</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>contclasslen</name></expr>;</return>  }</block></function> 
+  <function><type><name>inline</name> <name>const</name> <name>char</name> *</type>  <name>getAffix</name><parameter_list>()</parameter_list>    <block>{ <return>return <expr><name>appnd</name></expr>;</return> }</block></function> 
+
+  <function><type><name>inline</name> <name>short</name></type> <name>getKeyLen</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>appndl</name></expr>;</return> }</block></function> 
+
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getNext</name><parameter_list>()</parameter_list>   <block>{ <return>return <expr><name>next</name></expr>;</return>   }</block></function>
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getNextNE</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>nextne</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getNextEQ</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>nexteq</name></expr>;</return> }</block></function>
+
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getLM</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>l_morph</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getRM</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>r_morph</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getEQM</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>eq_morph</name></expr>;</return> }</block></function>
+  <function><type><name>inline</name> <name>SfxEntry</name> *</type>    <name>getFlgNxt</name><parameter_list>()</parameter_list> <block>{ <return>return <expr><name>flgnxt</name></expr>;</return> }</block></function>
+
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNext</name><parameter_list>(<param><decl><type><name>SfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list>   <block>{ <expr_stmt><expr><name>next</name> = <name>ptr</name></expr>;</expr_stmt>   }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNextNE</name><parameter_list>(<param><decl><type><name>SfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>nextne</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setNextEQ</name><parameter_list>(<param><decl><type><name>SfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>nexteq</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+  <function><type><name>inline</name> <name>void</name></type>   <name>setFlgNxt</name><parameter_list>(<param><decl><type><name>SfxEntry</name> *</type> <name>ptr</name></decl></param>)</parameter_list> <block>{ <expr_stmt><expr><name>flgnxt</name> = <name>ptr</name></expr>;</expr_stmt> }</block></function>
+
+  <function_decl><type><name>inline</name> <name>char</name> *</type> <name>nextchar</name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>p</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>inline</name> <name>int</name></type>    <name>test_condition</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>st</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>begin</name></decl></param>)</parameter_list>;</function_decl>
+
+</public>}</block>;</class>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+</unit>

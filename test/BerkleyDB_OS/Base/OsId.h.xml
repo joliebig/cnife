@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsId.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"dbinc/mutex_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsId.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+
+
+<comment type="line">// extracted from os_id.c</comment>
+
+
+<class>class <name>COsId</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>void</name></type> <name>os_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>pid_t</name> *</type><name>pidp</name></decl></param>, <param><decl><type><name>db_threadid_t</name> *</type><name>tidp</name></decl></param>)</parameter_list>
+	<block>{
+		<comment type="block">/*
+		 * We can't depend on dbenv not being NULL, this routine is called
+		 * from places where there's no DB_ENV handle.  It takes a DB_ENV
+		 * handle as an arg because it's the default DB_ENV-&gt;thread_id function.
+		 *
+		 * We cache the pid in the DB_ENV handle, it's a fairly slow call on
+		 * lots of systems.
+		 */</comment>
+		<if>if <condition>(<expr><name>pidp</name> != <name>NULL</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>dbenv</name> == <name>NULL</name></expr>)</condition><then> <block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_VXWORKS</name></expr></argument>)</argument_list></call></expr></cpp:if>
+				<expr_stmt><expr>*<name>pidp</name> = <call><name>taskIdSelf</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+				<expr_stmt><expr>*<name>pidp</name> = <call><name>getpid</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			}</block></then> <else>else
+				<expr_stmt><expr>*<name>pidp</name> = <name>dbenv</name>-&gt;<name>pid_cache</name></expr>;</expr_stmt></else></if>
+		}</block></then></if>
+	
+		<if>if <condition>(<expr><name>tidp</name> != <name>NULL</name></expr>)</condition><then> <block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>DB_WIN32</name></expr></argument>)</argument_list></call></expr></cpp:if>
+			<expr_stmt><expr>*<name>tidp</name> = <call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_UI_THREADS</name></expr></argument>)</argument_list></call></expr></cpp:elif>
+			<expr_stmt><expr>*<name>tidp</name> = <call><name>thr_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_SOLARIS_LWP</name></expr></argument>)</argument_list></call> || \
+		<call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_PTHREADS</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PTHREAD_SELF</name></expr></argument>)</argument_list></call></expr></cpp:elif>
+			<expr_stmt><expr>*<name>tidp</name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+			<comment type="block">/*
+			 * Default to just getpid.
+			 */</comment>
+			<expr_stmt><expr>*<name>tidp</name> = 0</expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>static</name> <name>void</name></type> <name>os_unique_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>idp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>first</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>pid_t</name></type> <name>pid</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>db_threadid_t</name></type> <name>tid</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>id</name>, <name>sec</name>, <name>usec</name></decl>;</decl_stmt>
+	
+		<expr_stmt><expr>*<name>idp</name> = 0</expr>;</expr_stmt>
+	
+		<comment type="block">/*
+		 * Our randomized value is comprised of our process ID, the current
+		 * time of day and a couple of a stack addresses, all XOR'd together.
+		 */</comment>
+		<expr_stmt><expr><call><name>os_id</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>&amp;<name>pid</name></expr></argument>, <argument><expr>&amp;<name>tid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>COsClock</name>::<name>os_clock</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>&amp;<name>sec</name></expr></argument>, <argument><expr>&amp;<name>usec</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<expr_stmt><expr><name>id</name> = (<name>u_int32_t</name>)<name>pid</name> ^ <name>sec</name> ^ <name>usec</name> ^ <call><name>P_TO_UINT32</name><argument_list>(<argument><expr>&amp;<name>pid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<comment type="block">/*
+		 * We could try and find a reasonable random-number generator, but
+		 * that's not all that easy to do.  Seed and use srand()/rand(), if
+		 * we can find them.
+		 */</comment>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_SRAND</name></expr></cpp:if>
+		<if>if <condition>(<expr><name>first</name> == 1</expr>)</condition><then>
+			<expr_stmt><expr><call><name>srand</name><argument_list>(<argument><expr>(<name>u_int</name>)<name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<expr_stmt><expr><name>first</name> = 0</expr>;</expr_stmt>
+	
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_RAND</name></expr></cpp:if>
+		<expr_stmt><expr><name>id</name> ^= (<name>u_int</name>)<call><name>rand</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	
+		<expr_stmt><expr>*<name>idp</name> = <name>id</name></expr>;</expr_stmt>
+	}</block></function>
+</public>}</block>;</class>
+
+
+</unit>
