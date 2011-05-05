@@ -138,7 +138,6 @@ public class FeatureRefactoringAnalyzer {
 			backend.removeFileFromList(file);
 		}
 
-		// TODO Derivatives - only necessary for directives refactoring atm
 		for (RefactoringDocument doc : modFiles) {
 			String featureName = doc.getFeatureName();
 			if (featureName == null) {
@@ -153,7 +152,6 @@ public class FeatureRefactoringAnalyzer {
 				doc.saveDocument(featureDir.getAbsolutePath()
 						+ File.separatorChar + doc.getFileName());
 			}
-
 		}
 
 		initProjectDir();
@@ -191,6 +189,10 @@ public class FeatureRefactoringAnalyzer {
 		CmdLineParser.Option stmttrafo = cmdparser.addIntegerOption('s',
 				"stmttrafo");
 
+		// filter annotations
+		CmdLineParser.Option filterannotations = cmdparser.addStringOption('a',
+				"annotations");
+
 		try {
 			cmdparser.parse(args);
 		} catch (CmdLineParser.OptionException e) {
@@ -207,6 +209,8 @@ public class FeatureRefactoringAnalyzer {
 		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
 				providehooknames, Boolean.FALSE);
 		Integer stmttrafoval = (Integer) cmdparser.getOptionValue(stmttrafo, 0);
+		String[] filterannotationslist = ((String) cmdparser
+				.getOptionValue(filterannotations)).split(",");
 
 		File projectDirectory = new File(inputfolderval);
 		if (!projectDirectory.exists() || !projectDirectory.isDirectory()) {
@@ -267,7 +271,7 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("the good: " + simple);
 		System.out.println("the bad " + hook);
 		System.out.println("impossibles: " + impc);
-		System.out.println("omitted (user intervention): " + omit);		
+		System.out.println("omitted (user intervention): " + omit);
 	}
 
 	public static void main3(String[] args) throws SAXException, IOException,

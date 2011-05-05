@@ -145,10 +145,6 @@ public class AnalyzeFeature {
 					occsInFunction.add(occ);
 				} else {
 					occ.setType(IMPOSSIBLE);
-					//TODO: DEBUG
-//					System.out.println("_________");
-//					System.out.println(occ.getDocFileName());
-//					System.out.println("impossible Occ: " + occ.getPrepNodes()[0].getLineNumber());
 				}
 				if (!occ.getType().startsWith(IMPOSSIBLE) && !occ.getType().startsWith(UNKNOWN)) {
 					
@@ -166,15 +162,6 @@ public class AnalyzeFeature {
 							checkDependencies(occ);
 							scf.doDuplicateCheck(occ);
 						}
-//						//TODO DEBUG
-//						if (occ.getLocalVariableDependencies().size() == 0 && occ.getParameterDependencies().size() == 0) {
-//							System.out.println("no dependencies!");
-//						} else {
-//							System.out.println(occ.getLocalVariableDependencies().size() + " local/" + occ.getParameterDependencies().size() + " parameter dependencies");
-//						}
-//						if (occ.getOwnLocalVariables().size() > 0) {
-//							System.out.println("own declarations: " + occ.getOwnLocalVariables().size());
-//						}
 					} catch (XPathExpressionException e) {
 						e.printStackTrace();
 					}
@@ -223,7 +210,6 @@ public class AnalyzeFeature {
 			functionNode = (Node) expr.evaluate(
 					occ.getPrepNodes()[i].getNode(), XPathConstants.NODE);
 			if (functionNode == null) {
-				//TODO DEBUG (Pattern noch unbekannt?!)
 				System.out.println("Null-Function? " + occ.getDocFileName() + " at line " + occ.getPrepNodes()[i].getLineNumber());
 				occ.setType("impossible");
 				continue;
@@ -246,18 +232,6 @@ public class AnalyzeFeature {
 		
 		if (allNodesInSameFunction) {
 			occ.setContainingFunctionNode(functionNode);
-//			//TODO DEBUG
-//			System.out.println("_________");
-//			System.out.println(occ.getDocFileName());
-//			System.out.println(occ.getPrepNodes()[0].getLineNumber());
-//			System.out.println(occ.getType());
-//			System.out.println(functionCheck[0]);
-//		} else {
-//			System.out.println("_________");
-//			System.out.println(occ.getDocFileName());
-//			System.out.println(occ.getType());
-//			System.out.println("dismatch lines: " + occ.getPrepNodes()[0].getLineNumber() + " " + occ.getPrepNodes()[occ.getPrepNodes().length-1].getLineNumber());
-//			//END DEBUG
 		}
 		
 	}
@@ -312,7 +286,6 @@ public class AnalyzeFeature {
 		HashSet<String> duplicateEliminator = new HashSet<String>();
 		for (int i = 0; i < exprList.getLength(); i++) {
 			String varName = exprList.item(i).getTextContent();
-			//TODO: check, ob Variable von einer andren Occurrence definiert wurde!
 			if (declNames.contains(varName)) {
 				// selbstdefinierte Variable
 				occ.setType("impossible (local declaration)");
@@ -450,7 +423,6 @@ public class AnalyzeFeature {
 					
 					
 					for (CriticalOccurrence occ : files.get(key).get(node)) {
-						//TODO String-Konstante herausziehen
 						if (occ.getType().equals("HookRefactoring") 
 								&& (occ.getHookFunctionName() == null
 								|| occ.getHookFunctionName().length() == 0)

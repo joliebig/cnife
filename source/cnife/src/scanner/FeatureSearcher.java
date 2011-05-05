@@ -124,12 +124,12 @@ public class FeatureSearcher {
 			FeaturePattern pattern6 = new SwitchCasePattern();
 			
 			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>(); 
+			occs.addAll(pattern6.checkDoc(doc, tree)); // TODO Reihenfolge beachten!
 			occs.addAll(pattern1.checkDoc(doc, tree));
 			occs.addAll(pattern4.checkDoc(doc, tree));
 			occs.addAll(pattern5.checkDoc(doc, tree));
 			occs.addAll(pattern2.checkDoc(doc, tree));
 			occs.addAll(pattern3.checkDoc(doc, tree));
-			occs.addAll(pattern6.checkDoc(doc, tree)); // TODO Reihenfolge beachten!
 			// uebrige Occurrences, die zu keinem Pattern passen, aufsammeln
 			FeaturePattern remains = new RemainingOccurrencesPattern();
 			
