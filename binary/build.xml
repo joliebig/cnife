@@ -18,6 +18,7 @@
     <target name="main">
         <fatjar.build output="cnife.jar">
             <fatjar.manifest mainclass="analyzer.FeatureRefactoringAnalyzer"/>
+            <fatjar.filesource path="/home/joliebig/workspace/cnife/bin" relpath=""/>
             <fatjar.jarsource file="/home/joliebig/workspace/cnife/source/cnife/lib/saxon9he.jar" relpath=""/>
             <fatjar.jarsource file="/home/joliebig/workspace/cnife/source/cnife/lib/jargs.jar" relpath=""/>
         </fatjar.build>

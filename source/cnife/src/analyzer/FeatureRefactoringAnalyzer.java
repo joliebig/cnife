@@ -203,10 +203,14 @@ public class FeatureRefactoringAnalyzer {
 			System.exit(2);
 		}
 
-		String inputfolderval = (String) cmdparser.getOptionValue(inputfolder);
+		String inputfolderval = (String) cmdparser.getOptionValue(inputfolder, null);
 		Boolean findclonesval = (Boolean) cmdparser.getOptionValue(findclones,
 				Boolean.TRUE);
-		inputfolderval.trim();
+		
+		if (inputfolderval != null)
+			inputfolderval.trim();
+		else
+			System.exit(2);
 		Boolean refactorval = (Boolean) cmdparser.getOptionValue(refactor,
 				Boolean.FALSE);
 		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
