@@ -46,29 +46,30 @@ import backend.storage.PreprocessorOccurrence;
 
 public class FeatureSearcher {
 
-
-	private static final String ALL_RELEVANT_DIRECTIVES_XPATH = 
-		"//(cpp:if union cpp:ifdef union cpp:ifndef union cpp:else union cpp:elif union cpp:endif)";
+	private static final String ALL_RELEVANT_DIRECTIVES_XPATH = "//(cpp:if union cpp:ifdef union cpp:ifndef union cpp:else union cpp:elif union cpp:endif)";
 	private File outputDir = null;
 	private IdentifiedFeatureList backend = null;
-	
+	private LinkedList<String> annotationfilter;
+
 	/**
-	 * F�gt eine neue XML-Datei ins Backend ein und erstellt eine Kopie im Ordner "Base"
+	 * adds a new xml file to the backend and creates a copy in folder base
+	 * 
 	 * @param xmlDoc
-	 * @throws ReplaceFileException - wird geworfen, falls eine Datei eingefuegt wird, die schon existiert
+	 * @throws ReplaceFileException thrown if created file already exists in base
 	 */
-	public void importExternalFile (File xmlDoc) throws ReplaceFileException {
-		
+	public void importExternalFile(File xmlDoc) throws ReplaceFileException {
+
 		FileOutputStream out = null;
 		try {
 			Document doc = parseDocument(xmlDoc);
 			if (outputDir != null) {
-				File baseFile = new File(
-						outputDir.getAbsolutePath() 
-						+ File.separatorChar + "Base"
-						+ File.separatorChar + xmlDoc.getName());
-				if (baseFile.exists()) throw new ReplaceFileException();
-				Transformer transformer = TransformerFactory.newInstance().newTransformer();
+				File baseFile = new File(outputDir.getAbsolutePath()
+						+ File.separatorChar + "Base" + File.separatorChar
+						+ xmlDoc.getName());
+				if (baseFile.exists())
+					throw new ReplaceFileException();
+				Transformer transformer = TransformerFactory.newInstance()
+						.newTransformer();
 				DOMSource src = new DOMSource(doc);
 				out = new FileOutputStream(baseFile);
 				StreamResult res = new StreamResult(out);
@@ -97,51 +98,63 @@ public class FeatureSearcher {
 				}
 		}
 	}
-	
-	public void checkDoc (File xmlDoc) {
+
+	public void checkDoc(File xmlDoc) {
 		if (!backend.isKnown(xmlDoc.getAbsolutePath()))
 			checkDoc(xmlDoc, null);
 	}
-	
-	private void checkDoc (File xmlDoc, Document doc) {
-		
+
+	private void checkDoc(File xmlDoc, Document doc) {
 
 		PreprocessorTree tree = buildPrepTreeWithLineNumbers(xmlDoc);
-		
+
 		try {
 			if (doc == null) {
 				doc = parseDocument(xmlDoc);
 			}
 			populateTree(doc, tree);
 			tree.calculateDepths();
-			
-			//TODO: alle Patterns durchgehen
+
+			// analyzed patterns
 			FeaturePattern pattern1 = new CompletePrivatePublicBlock();
 			FeaturePattern pattern2 = new CompleteFunctionPattern();
 			FeaturePattern pattern3 = new InFunctionOccurrencesPattern();
 			FeaturePattern pattern4 = new ClassIntroductionPattern();
 			FeaturePattern pattern5 = new DirectivesPattern();
 			FeaturePattern pattern6 = new SwitchCasePattern();
-			
-			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>(); 
-			occs.addAll(pattern6.checkDoc(doc, tree)); // TODO Reihenfolge beachten!
-			occs.addAll(pattern1.checkDoc(doc, tree));
-			occs.addAll(pattern4.checkDoc(doc, tree));
-			occs.addAll(pattern5.checkDoc(doc, tree));
-			occs.addAll(pattern2.checkDoc(doc, tree));
-			occs.addAll(pattern3.checkDoc(doc, tree));
-			// uebrige Occurrences, die zu keinem Pattern passen, aufsammeln
+
+			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>();
+
+			// ordering does matter
+			if (annotationfilter == null
+					|| annotationfilter.contains("SwitchCasePattern"))
+				occs.addAll(pattern6.checkDoc(doc, tree));
+			if (annotationfilter == null
+					|| annotationfilter.contains("CompletePrivatePublicBlockPattern"))
+				occs.addAll(pattern1.checkDoc(doc, tree));
+			if (annotationfilter == null
+					|| annotationfilter.contains("ClassIntroductionPattern"))
+				occs.addAll(pattern4.checkDoc(doc, tree));
+			if (annotationfilter == null
+					|| annotationfilter.contains("DirectivesPattern"))
+				occs.addAll(pattern5.checkDoc(doc, tree));
+			if (annotationfilter == null
+					|| annotationfilter.contains("CompleteFunctionPattern"))
+				occs.addAll(pattern2.checkDoc(doc, tree));
+			if (annotationfilter == null
+					|| annotationfilter
+							.contains("InFunctionOccurrencesPattern"))
+				occs.addAll(pattern3.checkDoc(doc, tree));
+
+			// pick up the remaining patterns
 			FeaturePattern remains = new RemainingOccurrencesPattern();
-			
 			occs.addAll(remains.checkDoc(doc, tree));
-			
-			
-			
+
 			for (PreprocessorOccurrence occ : occs) {
 				occ.setDocFileName(xmlDoc);
 				addToBackend(occ);
 			}
-			
+
 		} catch (SAXException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -153,23 +166,11 @@ public class FeatureSearcher {
 		} catch (TransformerFactoryConfigurationError e) {
 			e.printStackTrace();
 		}
-		
-		/*/TODO: DEBUG
-		List<PreprocessorNode> list = tree.flattenTree();
-		for (PreprocessorNode node : list) {
-			System.out.println(node.getLineNumber() + " " +
-					node.getType() + " " +
-					node.getNode().getNodeValue() + " " + 
-					node.getNode().getNodeName());
-		}
-		//TODO: DEBUG END*/
-		
-		
-		
 	}
 
 	/**
-	 * Parst ein XML-File und liefert ein Document-Objekt
+	 * parses an xml file and returns a document object
+	 * 
 	 * @param xmlDoc
 	 * @return
 	 * @throws SAXException
@@ -186,7 +187,7 @@ public class FeatureSearcher {
 	}
 
 	/**
-	 * fuellt einen bereits aufgebauten PreprocessorTree mit DOMNode Objekten
+	 * adds dom-nodes to an exisiting preprocessortree
 	 * 
 	 * @param doc
 	 * @param tree
@@ -195,47 +196,52 @@ public class FeatureSearcher {
 	 * @throws ParserConfigurationException
 	 * @throws XPathExpressionException
 	 */
-	public void populateTree(Document doc, PreprocessorTree tree) 
-	throws SAXException, IOException, ParserConfigurationException, XPathExpressionException {
-		
-		javax.xml.xpath.XPathExpression expr = 
-			QueryBuilder.instance().getExpression(ALL_RELEVANT_DIRECTIVES_XPATH);
+	public void populateTree(Document doc, PreprocessorTree tree)
+			throws SAXException, IOException, ParserConfigurationException,
+			XPathExpressionException {
+
+		javax.xml.xpath.XPathExpression expr = QueryBuilder.instance()
+				.getExpression(ALL_RELEVANT_DIRECTIVES_XPATH);
 		NodeList result = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
 		tree.populate(result);
 	}
 
 	/**
-	 * creates a {@link PreprocessorTree} of the srcml document with line numbers
+	 * creates a {@link PreprocessorTree} of the srcml document with line
+	 * numbers
 	 * 
-	 * @param xmlDoc -- srcml document
-	 * @return created PreprocessorTree 
+	 * @param xmlDoc
+	 *            -- srcml document
+	 * @return created PreprocessorTree
 	 */
 	public PreprocessorTree buildPrepTreeWithLineNumbers(File xmlDoc) {
-		AugmentedSource src = AugmentedSource.makeAugmentedSource(new StreamSource(xmlDoc));
+		AugmentedSource src = AugmentedSource
+				.makeAugmentedSource(new StreamSource(xmlDoc));
 		src.setLineNumbering(true);
 		Configuration conf = new Configuration();
 		conf.setLineNumbering(true);
 		XPathEvaluator evaluator = new XPathEvaluator(conf);
 		List<?> resultNodes = null;
-		
+
 		try {
 			DocumentInfo doc = conf.buildDocument(src);
-			
-			
-			IndependentContext ctx = new IndependentContext(doc.getConfiguration());
-			ctx.declareNamespace(NameSpaceConfigs.CPP_PREFIX, NameSpaceConfigs.CPP_NS_URI);
+
+			IndependentContext ctx = new IndependentContext(
+					doc.getConfiguration());
+			ctx.declareNamespace(NameSpaceConfigs.CPP_PREFIX,
+					NameSpaceConfigs.CPP_NS_URI);
 			evaluator.setStaticContext(ctx);
-			
-			XPathExpression expr = evaluator.createExpression(ALL_RELEVANT_DIRECTIVES_XPATH);
+
+			XPathExpression expr = evaluator
+					.createExpression(ALL_RELEVANT_DIRECTIVES_XPATH);
 			resultNodes = expr.evaluate(src);
-			
-			
+
 		} catch (XPathException e) {
 			e.printStackTrace();
 		}
-		
+
 		PreprocessorTree tree = new PreprocessorTree();
-		
+
 		for (Object cont : resultNodes) {
 			if (cont instanceof NodeInfo) {
 				PreprocessorNode node = new PreprocessorNode();
@@ -248,17 +254,17 @@ public class FeatureSearcher {
 		src.close();
 		return tree;
 	}
-	
+
 	/**
 	 * adds a {@link PreprocessorOccurrence} to the backend
 	 * 
 	 * @param occurrence
 	 */
 	private void addToBackend(PreprocessorOccurrence occurrence) {
-		String featureName = new CheckLogics().getFeatureName(occurrence);	
+		String featureName = new CheckLogics().getFeatureName(occurrence);
 		backend.add(featureName, occurrence);
 	}
-	
+
 	/**
 	 * set the output directory
 	 * 
@@ -276,12 +282,16 @@ public class FeatureSearcher {
 	public void setBackend(IdentifiedFeatureList backend) {
 		this.backend = backend;
 	}
-	
-//	//TODO: test document // should be a unit test or something 
-//	public static void main (String[] args) {
-//		FeatureSearcher fs = new FeatureSearcher();
-//		
-//		fs.checkDoc(new File(".\\HashOpen.xml"));
-//	}
+
+	public void setAnnotationFilter(LinkedList<String> annotationfilter) {
+		this.annotationfilter = annotationfilter;
+	}
+
+	// test document should be a unit test or something
+	// public static void main (String[] args) {
+	// FeatureSearcher fs = new FeatureSearcher();
+	//
+	// fs.checkDoc(new File(".\\HashOpen.xml"));
+	// }
 
 }

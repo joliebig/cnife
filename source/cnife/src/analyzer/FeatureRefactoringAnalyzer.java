@@ -30,12 +30,14 @@ public class FeatureRefactoringAnalyzer {
 	private File outputDir;
 	LinkedList<FeatureVisitor> visitors;
 	IdentifiedFeatureList backend;
+	LinkedList<String> annotationfilter;
 
-	public FeatureRefactoringAnalyzer(File outputDir) {
+	public FeatureRefactoringAnalyzer(File outputDir, LinkedList<String> annotationfilterlist) {
 		assert outputDir.exists() && outputDir.isDirectory();
 
 		this.outputDir = outputDir;
 		this.visitors = new LinkedList<FeatureVisitor>();
+		this.annotationfilter = annotationfilterlist;
 
 		initBackEnd();
 		initProjectDir();
@@ -77,6 +79,7 @@ public class FeatureRefactoringAnalyzer {
 					FeatureSearcher searcher = new FeatureSearcher();
 					searcher.setOutputDir(outputDir);
 					searcher.setBackend(backend);
+					searcher.setAnnotationFilter(annotationfilter);
 					searcher.checkDoc(featureFile);
 				}
 			}
@@ -85,7 +88,7 @@ public class FeatureRefactoringAnalyzer {
 		}
 
 	}
-
+	
 	public boolean addFile(File xmlFile) {
 		if (!xmlFile.exists()) {
 			return false;
@@ -189,9 +192,9 @@ public class FeatureRefactoringAnalyzer {
 		CmdLineParser.Option stmttrafo = cmdparser.addIntegerOption('s',
 				"stmttrafo");
 
-		// filter annotations
-		CmdLineParser.Option filterannotations = cmdparser.addStringOption('a',
-				"annotations");
+		// filter annotations, e.g. omit case-blocks
+		CmdLineParser.Option annotationfilter = cmdparser.addStringOption('a',
+				"annotationfilter");
 
 		try {
 			cmdparser.parse(args);
@@ -209,8 +212,17 @@ public class FeatureRefactoringAnalyzer {
 		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
 				providehooknames, Boolean.FALSE);
 		Integer stmttrafoval = (Integer) cmdparser.getOptionValue(stmttrafo, 0);
-		String[] filterannotationslist = ((String) cmdparser
-				.getOptionValue(filterannotations)).split(",");
+		String s = (String) cmdparser.getOptionValue(annotationfilter, null);
+		String[] slist = null;
+		
+		if (s != null)
+			slist = s.split(",");
+		LinkedList<String> annotationfilterlist = null;
+		if (slist != null) {
+			annotationfilterlist = new LinkedList<String>();
+			for (String str: slist)
+				annotationfilterlist.add(str);
+		}
 
 		File projectDirectory = new File(inputfolderval);
 		if (!projectDirectory.exists() || !projectDirectory.isDirectory()) {
@@ -224,7 +236,7 @@ public class FeatureRefactoringAnalyzer {
 		int impc = 0;
 		int omit = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
-				projectDirectory);
+				projectDirectory, annotationfilterlist);
 		LinkedList<String> list = a.getFeatureNames();
 		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
 		System.out.println("Found " + list.size()
@@ -278,7 +290,7 @@ public class FeatureRefactoringAnalyzer {
 			ParserConfigurationException, XPathExpressionException,
 			TransformerFactoryConfigurationError, TransformerException {
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(new File(
-				"BerkleyDB_HASH"));
+				"BerkleyDB_HASH"), null);
 		int impc = 0;
 		int implc = 0;
 		int simple = 0;
