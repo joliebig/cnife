@@ -1,0 +1,11 @@
+#define NOSORT 0
+#define INSERTIONSORT 1
+#define BUBBLESORT 2
+
+#define DLINKED 1
+#define SORTALGO INSERTIONSORT
+#if SORTALGO != NOSORT
+#define UPWARD 0
+#define DOWNWARD 1
+#define SORTORDER DOWNWARD
+#endif

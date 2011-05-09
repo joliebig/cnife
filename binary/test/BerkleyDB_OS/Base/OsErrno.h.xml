@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsErrno.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsErrno.h"</cpp:file></cpp:include>
+
+
+<comment type="line">// extracted from os_errno.c</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;common/DbErr.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<class>class <name>COsErrno</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_get_errno_ret_zero</name><parameter_list>()</parameter_list>
+	<block>{
+		<comment type="block">/* This routine must be able to return the same value repeatedly. */</comment>
+		<return>return <expr>(<name>errno</name>)</expr>;</return>
+	}</block></function>
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_get_errno</name><parameter_list>()</parameter_list>
+	<block>{
+		<comment type="block">/*
+		 * This routine must be able to return the same value repeatedly.
+		 *
+		 * We've seen cases where system calls failed but errno was never set.
+		 * This version of COsErrno::os_get_errno() sets errno to EAGAIN if it's not
+		 * already set, to work around that problem.  For obvious reasons, we
+		 * can only call this function if we know an error has occurred, that
+		 * is, we can't test errno for a non-zero value after this call.
+		 */</comment>
+		<if>if <condition>(<expr><name>errno</name> == 0</expr>)</condition><then>
+			<expr_stmt><expr><call><name>os_set_errno</name><argument_list>(<argument><expr><name>EAGAIN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+		<return>return <expr>(<name>errno</name>)</expr>;</return>
+	}</block></function>
+
+	<function><type><name>static</name> <name>void</name></type> <name>os_set_errno</name><parameter_list>(<param><decl><type><name>int</name></type> <name>evalue</name></decl></param>)</parameter_list>
+	<block>{
+		<comment type="block">/*
+		 * This routine is called by the compatibility interfaces (DB 1.85,
+		 * dbm and hsearch).  Force values &gt; 0, that is, not one of DB 2.X
+		 * and later's public error returns.  If something bad has happened,
+		 * default to EFAULT -- a nasty return.  Otherwise, default to EINVAL.
+		 * As the compatibility APIs aren't included on Windows, the Windows
+		 * version of this routine doesn't need this behavior.
+		 */</comment>
+		<expr_stmt><expr><name>errno</name> =
+		    <name>evalue</name> &gt;= 0 ? <name>evalue</name> : (<name>evalue</name> == <name>DB_RUNRECOVERY</name> ? <name>EFAULT</name> : <name>EINVAL</name>)</expr>;</expr_stmt>
+	}</block></function>
+</public>}</block>;</class>
+
+
+</unit>

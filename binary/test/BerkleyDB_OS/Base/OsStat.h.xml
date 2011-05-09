@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsStat.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/stat.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsStat.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsErrno.h"</cpp:file></cpp:include>
+
+
+
+<class>class <name>COsStat</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_exists</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>, <param><decl><type><name>int</name> *</type><name>isdirp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type>struct <name>stat</name></type> <name>sb</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_exists</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+			<return>return <expr>(<call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_exists</name></expr></argument>)</argument_list></call>(<name>path</name>, <name>isdirp</name>))</expr>;</return></then></if>
+	
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>stat</name><argument_list>(<argument><expr>(<name>char</name> *)<name>path</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>stat</name><argument_list>(<argument><expr><name>path</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+	
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>!<call><name>defined</name><argument_list>(<argument><expr><name>S_ISDIR</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>STAT_MACROS_BROKEN</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:undef>#<cpp:directive>undef</cpp:directive>	<name>S_ISDIR</name></cpp:undef>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>_S_IFDIR</name></cpp:ifdef>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_ISDIR</name>(m)	(_S_IFDIR &amp; (m))</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_ISDIR</name>(m)	(((m) &amp; 0170000) == 0040000)</cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<if>if <condition>(<expr><name>isdirp</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>*<name>isdirp</name> = <call><name>S_ISDIR</name><argument_list>(<argument><expr><name>sb</name>.<name>st_mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_ioinfo</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>mbytesp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>bytesp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>iosizep</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type>struct <name>stat</name></type> <name>sb</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ioinfo</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+			<return>return <expr>(<call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ioinfo</name></expr></argument>)</argument_list></call>(<name>path</name>,
+			    <name>fhp</name>-&gt;<name>fd</name>, <name>mbytesp</name>, <name>bytesp</name>, <name>iosizep</name>))</expr>;</return></then></if>
+	
+		<comment type="block">/* Check for illegal usage. */</comment>
+		<expr_stmt><expr><call><name>DB_ASSERT</name><argument_list>(<argument><expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call> &amp;&amp; <name>fhp</name>-&gt;<name>fd</name> != -1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>fstat</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"fstat: %s"</expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>(<name>ret</name>)</expr>;</return>
+		}</block></then></if>
+	
+		<comment type="block">/* Return the size of the file. */</comment>
+		<if>if <condition>(<expr><name>mbytesp</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>*<name>mbytesp</name> = <call>(<name>u_int32_t</name>)<argument_list>(<argument><expr><name>sb</name>.<name>st_size</name> / <name>MEGABYTE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr><name>bytesp</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>*<name>bytesp</name> = <call>(<name>u_int32_t</name>)<argument_list>(<argument><expr><name>sb</name>.<name>st_size</name> % <name>MEGABYTE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+		<comment type="block">/*
+		 * Return the underlying filesystem blocksize, if available.
+		 *
+		 * XXX
+		 * Check for a 0 size -- the HP MPE/iX architecture has st_blksize,
+		 * but it's always 0.
+		 */</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_STRUCT_STAT_ST_BLKSIZE</name></cpp:ifdef>
+		<if>if <condition>(<expr><name>iosizep</name> != <name>NULL</name> &amp;&amp; (*<name>iosizep</name> = <name>sb</name>.<name>st_blksize</name>) == 0</expr>)</condition><then>
+			<expr_stmt><expr>*<name>iosizep</name> = <name>DB_DEF_IOSIZE</name></expr>;</expr_stmt></then></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<if>if <condition>(<expr><name>iosizep</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>*<name>iosizep</name> = <name>DB_DEF_IOSIZE</name></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+</public>}</block>;</class>
+
+</unit>

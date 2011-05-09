@@ -1,0 +1,2044 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="LatexGenerator.h"><comment type="block">/******************************************************************************
+ *
+ * $Id: latexgen.h,v 1.50 2001/03/19 19:27:41 root Exp $
+ *
+ * Copyright (C) 1997-2008 by Dimitri van Heesch.
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation under the terms of the GNU General Public License is hereby 
+ * granted. No representations are made about the suitability of this software 
+ * for any purpose. It is provided "as is" without express or implied warranty.
+ * See the GNU General Public License for more details.
+ *
+ * Documents produced by Doxygen are derivative works derived from the
+ * input used in their production; they are not affected by this license.
+ *
+ */</comment>
+
+<cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"outputgen.h"</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"qtbc.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;qdir.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"LatexGenerator.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"config.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"message.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"doxygen.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"util.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"diagram.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"language.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"version.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"dot.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"pagedef.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"docparser.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"latexdocvisitor.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"dirdef.h"</cpp:file></cpp:include>
+
+
+<class_decl>class <name>QFile</name>;</class_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart1</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart2</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart3</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart1</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart2</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+<function_decl><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart3</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>;</function_decl>
+
+<class>class <name>LatexGenerator</name> <super>: <specifier>public</specifier> <name>OutputGenerator</name></super>
+<block>{<private type="default">
+  </private><public>public:
+	  <constructor><name>LatexGenerator</name><parameter_list>()</parameter_list> <member_list>: <call><name>OutputGenerator</name><argument_list>()</argument_list></call>
+	  </member_list><block>{
+		  <expr_stmt><expr><name>dir</name>=<call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>col</name>=0</expr>;</expr_stmt>
+		  <comment type="line">//printf("LatexGenerator::LatexGenerator() insideTabbing=FALSE\n");</comment>
+		  <expr_stmt><expr><name>insideTabbing</name>=<name>FALSE</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>firstDescItem</name>=<name>TRUE</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>disableLinks</name>=<name>FALSE</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_indent</name>=0</expr>;</expr_stmt>
+		  <expr_stmt><expr><name>templateMemberItem</name> = <name>FALSE</name></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>m_prettyCode</name>=<call><name>Config_getBool</name><argument_list>(<argument><expr>"LATEX_SOURCE_CODE"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	  }</block></constructor>
+	  <destructor><name>~<name>LatexGenerator</name></name><parameter_list>()</parameter_list> <block>{ }</block></destructor>
+	  <function><type><name>static</name> <name>void</name></type> <name>init</name><parameter_list>()</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>QCString</name></type> <name>dir</name>=<init><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		  <function_decl><type><name>QDir</name></type> <name>d</name><parameter_list>(<param><decl><type><name>dir</name></type></decl></param>)</parameter_list>;</function_decl>
+		  <if>if <condition>(<expr>!<name>d</name>.<call><name>exists</name><argument_list>()</argument_list></call> &amp;&amp; !<name>d</name>.<call><name>mkdir</name><argument_list>(<argument><expr><name>dir</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+		  <block>{
+			  <expr_stmt><expr><call><name>err</name><argument_list>(<argument><expr>"Could not create output directory %s\n"</expr></argument>,<argument><expr><name>dir</name>.<call><name>data</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			  <expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  }</block></then></if>
+
+		  <decl_stmt><decl><type><name>QCString</name></type> <name>fileName</name>=<init><expr><name>dir</name>+"/Makefile"</expr></init></decl>;</decl_stmt>
+		  <function_decl><type><name>QFile</name></type> <name>file</name><parameter_list>(<param><decl><type><name>fileName</name></type></decl></param>)</parameter_list>;</function_decl>
+		  <if>if <condition>(<expr>!<name>file</name>.<call><name>open</name><argument_list>(<argument><expr><name>IO_WriteOnly</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+		  <block>{
+			  <expr_stmt><expr><call><name>err</name><argument_list>(<argument><expr>"Could not open file %s for writing\n"</expr></argument>,<argument><expr><name>fileName</name>.<call><name>data</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			  <expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  }</block></then></if>
+		  <comment type="line">// inserted by KONNO Akihisa &lt;konno@researchers.jp&gt; 2002-03-05</comment>
+		  <decl_stmt><decl><type><name>QCString</name></type> <name>latex_command</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_CMD_NAME"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		  <decl_stmt><decl><type><name>QCString</name></type> <name>mkidx_command</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"MAKEINDEX_CMD_NAME"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		  <comment type="line">// end insertion by KONNO Akihisa &lt;konno@researchers.jp&gt; 2002-03-05</comment>
+		  <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>file</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+		  <if>if <condition>(<expr>!<call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <comment type="line">// use plain old latex</comment>
+		  <block>{
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "all: clean refman.dvi" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "ps: refman.ps" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "pdf: refman.pdf" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "ps_2on1: refman_2on1.ps" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "pdf_2on1: refman_2on1.pdf" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "refman.ps: refman.dvi" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\tdvips -o refman.ps refman.dvi" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "refman.pdf: refman.ps" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>_MSC_VER</name></expr></argument>)</argument_list></call></expr></cpp:if>
+			  <comment type="line">// ps2pdf.bat does not work properly from a makefile using GNU make!</comment>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "\tgswin32c -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite "
+				  "-sOutputFile=refman.pdf -c save pop -f refman.ps" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "\tps2pdf refman.ps refman.pdf" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "refman.dvi: refman.tex doxygen.sty" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\techo \"Running latex...\"" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t" &lt;&lt; <name>latex_command</name> &lt;&lt; " refman.tex" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\techo \"Running makeindex...\"" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t" &lt;&lt; <name>mkidx_command</name> &lt;&lt; " refman.idx" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\techo \"Rerunning latex....\"" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t" &lt;&lt; <name>latex_command</name> &lt;&lt; " refman.tex" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\tlatex_count=5 ; \\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\twhile egrep -s 'Rerun (LaTeX|to get cross-references right)' refman.log &amp;&amp; [ $$latex_count -gt 0 ] ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t    do \\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      echo \"Rerunning latex....\" ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      " &lt;&lt; <name>latex_command</name> &lt;&lt; " refman.tex ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      latex_count=`expr $$latex_count - 1` ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t    done" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name>
+				  &lt;&lt; "refman_2on1.ps: refman.ps" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\tpsnup -2 refman.ps &gt;refman_2on1.ps" &lt;&lt; <name>endl</name>
+				  &lt;&lt; <name>endl</name>
+				  &lt;&lt; "refman_2on1.pdf: refman_2on1.ps" &lt;&lt; <name>endl</name>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>_MSC_VER</name></expr></argument>)</argument_list></call></expr></cpp:if>
+				  <comment type="line">// ps2pdf.bat does not work properly from a makefile using GNU make!</comment>
+				  &lt;&lt; "\tgswin32c -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite "
+				  "-sOutputFile=refman_2on1.pdf -c save pop -f refman_2on1.ps" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+				  <expr_stmt><expr>&lt;&lt; "\tps2pdf refman_2on1.ps refman_2on1.pdf" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		  }</block></then>
+		  <else>else <comment type="line">// use pdflatex for higher quality output</comment>
+		  <block>{
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "all: clean refman.pdf" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name>
+				  &lt;&lt; "pdf: refman.pdf" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "refman.pdf: refman.tex" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "\tpdflatex refman.tex" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "\tmakeindex refman.idx" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>t</name> &lt;&lt; "\tpdflatex refman.tex" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\tlatex_count=5 ; \\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\twhile egrep -s 'Rerun (LaTeX|to get cross-references right)' refman.log &amp;&amp; [ $$latex_count -gt 0 ] ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t    do \\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      echo \"Rerunning latex....\" ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      pdflatex refman.tex ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t      latex_count=`expr $$latex_count - 1` ;\\" &lt;&lt; <name>endl</name>
+				  &lt;&lt; "\t    done" &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		  }</block></else></if>
+
+		  <expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name>
+			  &lt;&lt; "clean:" &lt;&lt; <name>endl</name>
+			  &lt;&lt; "\trm -f *.ps *.dvi *.aux *.toc *.idx *.ind *.ilg *.log *.out refman.pdf" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+
+		  <expr_stmt><expr><call><name>createSubDirs</name><argument_list>(<argument><expr><name>d</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	  }</block></function>
+	  <function><type><name>static</name> <name>void</name></type> <name>writeStyleSheetFile</name><parameter_list>(<param><decl><type><name>QFile</name> &amp;</type><name>f</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>f</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>t</name>.<call><name>setEncoding</name><argument_list>(<argument><expr><name><name>QTextStream</name>::<name>UnicodeUTF8</name></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		  <expr_stmt><expr><call><name>writeDefaultStyleSheetPart1</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <decl_stmt><decl><type><name>QCString</name> &amp;</type><name>projectName</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"PROJECT_NAME"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+		  <expr_stmt><expr><name>t</name> &lt;&lt; <name>theTranslator</name>-&gt;<call><name>trGeneratedAt</name><argument_list>( <argument><expr><call><name>dateToString</name><argument_list>(<argument><expr><name>TRUE</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>projectName</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>t</name> &lt;&lt; " doxygen"</expr>;</expr_stmt>
+		  <comment type="line">//t &lt;&lt; " " &lt;&lt; theTranslator-&gt;trWrittenBy() &lt;&lt; " ";</comment>
+		  <comment type="line">//t &lt;&lt; "Dimitri van Heesch \\copyright~1997-2008";</comment>
+		  <expr_stmt><expr><call><name>writeDefaultStyleSheetPart2</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>t</name> &lt;&lt; <name>theTranslator</name>-&gt;<call><name>trGeneratedAt</name><argument_list>( <argument><expr><call><name>dateToString</name><argument_list>(<argument><expr><name>TRUE</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>projectName</name></expr></argument> )</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>t</name> &lt;&lt; " doxygen"</expr>;</expr_stmt>
+		  <comment type="line">//t &lt;&lt; " &lt;&lt; theTranslator-&gt;trWrittenBy() &lt;&lt; " ";</comment>
+		  <comment type="line">//t &lt;&lt; "Dimitri van Heesch \\copyright~1997-2008";</comment>
+		  <expr_stmt><expr><call><name>writeDefaultStyleSheetPart3</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	  }</block></function>
+	  <function><type><name>static</name> <name>void</name></type> <name>writeHeaderFile</name><parameter_list>(<param><decl><type><name>QFile</name> &amp;</type><name>f</name></decl></param>)</parameter_list>
+	  <block>{
+		  <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>f</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+		  <expr_stmt><expr><call><name>writeDefaultHeaderPart1</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>t</name> &lt;&lt; "Your title here"</expr>;</expr_stmt>
+		  <expr_stmt><expr><call><name>writeDefaultHeaderPart2</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr><name>t</name> &lt;&lt; "Generated by"</expr>;</expr_stmt>
+		  <expr_stmt><expr><call><name>writeDefaultHeaderPart3</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	  }</block></function>
+
+    <comment type="line">//OutputGenerator *copy();</comment>
+    <comment type="line">//OutputGenerator *clone() { return new LatexGenerator(*this); }</comment>
+    <comment type="line">//void append(const OutputGenerator *o);</comment>
+    <function><type><name>void</name></type> <name>enable</name><parameter_list>()</parameter_list> 
+    <block>{ <if>if <condition>(<expr><name>genStack</name>-&gt;<call><name>top</name><argument_list>()</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>active</name>=*<name>genStack</name>-&gt;<call><name>top</name><argument_list>()</argument_list></call></expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>active</name>=<name>TRUE</name></expr>;</expr_stmt></else></if> }</block></function>
+    <function><type><name>void</name></type> <name>disable</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>active</name>=<name>FALSE</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>enableIf</name><parameter_list>(<param><decl><type><name>OutputType</name></type> <name>o</name></decl></param>)</parameter_list>  <block>{ <if>if <condition>(<expr><name>o</name>==<name>Latex</name></expr>)</condition><then> <expr_stmt><expr><name>active</name>=<name>TRUE</name></expr>;</expr_stmt></then></if>  }</block></function>
+    <function><type><name>void</name></type> <name>disableIf</name><parameter_list>(<param><decl><type><name>OutputType</name></type> <name>o</name></decl></param>)</parameter_list> <block>{ <if>if <condition>(<expr><name>o</name>==<name>Latex</name></expr>)</condition><then> <expr_stmt><expr><name>active</name>=<name>FALSE</name></expr>;</expr_stmt></then></if> }</block></function>
+    <function><type><name>void</name></type> <name>disableIfNot</name><parameter_list>(<param><decl><type><name>OutputType</name></type> <name>o</name></decl></param>)</parameter_list> <block>{ <if>if <condition>(<expr><name>o</name>!=<name>Latex</name></expr>)</condition><then> <expr_stmt><expr><name>active</name>=<name>FALSE</name></expr>;</expr_stmt></then></if> }</block></function>
+    <function><type><name>bool</name></type> <name>isEnabled</name><parameter_list>(<param><decl><type><name>OutputType</name></type> <name>o</name></decl></param>)</parameter_list> <block>{ <return>return <expr>(<name>o</name>==<name>Latex</name> &amp;&amp; <name>active</name>)</expr>;</return> }</block></function> 
+    <function><type><name>OutputGenerator</name> *</type><name>get</name><parameter_list>(<param><decl><type><name>OutputType</name></type> <name>o</name></decl></param>)</parameter_list> <block>{ <return>return <expr>(<name>o</name>==<name>Latex</name>) ? <name>this</name> : 0</expr>;</return> }</block></function>
+
+	<function><type><name>void</name></type> <name>printDoc</name><parameter_list>(<param><decl><type><name>DocNode</name> *</type><name>n</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>langExt</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>LatexDocVisitor</name> *</type><name>visitor</name> =<init> <expr>new <call><name>LatexDocVisitor</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr>*<name>this</name></expr></argument>,<argument><expr><name>langExt</name></expr></argument>,<argument><expr><name>insideTabbing</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<expr_stmt><expr><name>n</name>-&gt;<call><name>accept</name><argument_list>(<argument><expr><name>visitor</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>delete <name>visitor</name></expr>;</expr_stmt> 
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>manName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>title</name></decl></param>)</parameter_list>
+	<block>{
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>0</expr></cpp:if>
+		setEncoding(Config_getString("LATEX_OUTPUT_ENCODING"));
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<decl_stmt><decl><type><name>QCString</name></type> <name>fileName</name>=<init><expr><name>name</name></expr></init></decl>;</decl_stmt>
+		<expr_stmt><expr><name>relPath</name> = <call><name>relativePathToRoot</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sourceFileName</name> = <call><name>stripPath</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>fileName</name>.<call><name>right</name><argument_list>(<argument><expr>4</expr></argument>)</argument_list></call>!=".tex" &amp;&amp; <name>fileName</name>.<call><name>right</name><argument_list>(<argument><expr>4</expr></argument>)</argument_list></call>!=".sty"</expr>)</condition><then> <expr_stmt><expr><name>fileName</name>+=".tex"</expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><call><name>startPlainFile</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>writeFooter</name><parameter_list>()</parameter_list> <block>{}</block></function>
+	<function><type><name>void</name></type> <name>endFile</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>endPlainFile</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>sourceFileName</name>.<call><name>resize</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+    <function_decl><type><name>void</name></type> <name>clearBuffer</name><parameter_list>()</parameter_list>;</function_decl>
+    
+	<function><type><name>void</name></type> <name>startIndexSection</name><parameter_list>(<param><decl><type><name>IndexSections</name></type> <name>is</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>bool</name> &amp;</type><name>compactLatex</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>QCString</name> &amp;</type><name>latexHeader</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_HEADER"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<switch>switch <condition>(<expr><name>is</name></expr>)</condition>
+		<block>{
+		<case>case <expr><name>isTitlePageStart</name></expr>:
+			<block>{
+				<if>if <condition>(<expr><name>latexHeader</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><call><name>writeDefaultHeaderPart1</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></then>
+				<else>else
+				<block>{
+					<decl_stmt><decl><type><name>QCString</name></type> <name>header</name> =<init> <expr><call><name>fileToString</name><argument_list>(<argument><expr><name>latexHeader</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+					<expr_stmt><expr><name>t</name> &lt;&lt; <call><name>substituteKeywords</name><argument_list>(<argument><expr><name>header</name></expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				}</block></else></if>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isTitlePageAuthor</name></expr>:
+			<if>if <condition>(<expr><name>latexHeader</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>writeDefaultHeaderPart2</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<break>break;</break>
+		</case><case>case <expr><name>isMainPage</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Introduction}\n"</comment>
+			<break>break;</break>
+			<comment type="line">//case isPackageIndex:</comment>
+			<comment type="line">//  if (compactLatex) t &lt;&lt; "\\section"; else t &lt;&lt; "\\chapter";</comment>
+			<comment type="line">//  t &lt;&lt; "{"; //Package Index}\n"</comment>
+			<comment type="line">//  break;</comment>
+		</case><case>case <expr><name>isModuleIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Module Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isDirIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Directory Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isNamespaceIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Namespace Index}\"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isClassHierarchyIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Hierarchical Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isCompoundIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Annotated Compound Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isFileIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Annotated File Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageIndex</name></expr>:
+			<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Annotated Page Index}\n"</comment>
+			<break>break;</break>
+		</case><case>case <expr><name>isModuleDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>GroupSDict</name>::<name>Iterator</name></name></type> <name>gli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>groupSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>GroupDef</name> *</type><name>gd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>gli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>gd</name>=<name>gli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>gli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr>!<name>gd</name>-&gt;<call><name>isReference</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Module Documentation}\n";</comment>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isDirDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name><name>SDict</name><argument_list>&lt;<argument><name>DirDef</name></argument>&gt;</argument_list></name>::<name>Iterator</name></name></type> <name>dli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>directories</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>DirDef</name> *</type><name>dd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>dli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>dd</name>=<name>dli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>dli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>dd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Module Documentation}\n";</comment>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isNamespaceDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>NamespaceSDict</name>::<name>Iterator</name></name></type> <name>nli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>namespaceSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>NamespaceDef</name> *</type><name>nd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>nli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>nd</name>=<name>nli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>nli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>nd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">// Namespace Documentation}\n":</comment>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for> 
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isClassDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>ClassSDict</name>::<name>Iterator</name></name></type> <name>cli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>classSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>ClassDef</name> *</type><name>cd</name>=<init><expr>0</expr></init></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>cli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>cd</name>=<name>cli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>cli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>cd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call> &amp;&amp; <name>cd</name>-&gt;<call><name>templateMaster</name><argument_list>()</argument_list></call>==0</expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Compound Documentation}\n";</comment>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isFileDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name>bool</name></type> <name>isFirst</name>=<init><expr><name>TRUE</name></expr></init></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>FileName</name> *</type><name>fn</name>=<init><expr><name><name>Doxygen</name>::<name>inputNameList</name></name>-&gt;<call><name>first</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+				<while>while <condition>(<expr><name>fn</name></expr>)</condition>
+				<block>{
+					<decl_stmt><decl><type><name>FileDef</name> *</type><name>fd</name>=<init><expr><name>fn</name>-&gt;<call><name>first</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+					<while>while <condition>(<expr><name>fd</name></expr>)</condition>
+					<block>{
+						<if>if <condition>(<expr><name>fd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+						<block>{
+							<if>if <condition>(<expr><name>isFirst</name></expr>)</condition><then>
+							<block>{
+								<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+								<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//File Documentation}\n";</comment>
+								<expr_stmt><expr><name>isFirst</name>=<name>FALSE</name></expr>;</expr_stmt>
+								<break>break;</break>
+							}</block></then></if>
+						}</block></then></if>
+						<expr_stmt><expr><name>fd</name>=<name>fn</name>-&gt;<call><name>next</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+					}</block></while>
+					<expr_stmt><expr><name>fn</name>=<name><name>Doxygen</name>::<name>inputNameList</name></name>-&gt;<call><name>next</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+				}</block></while>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isExampleDocumentation</name></expr>:
+			<block>{
+				<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Example Documentation}\n";</comment>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageDocumentation</name></expr>:
+			<block>{
+				<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\section"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\chapter"</expr>;</expr_stmt></else></if>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt> <comment type="line">//Page Documentation}\n";</comment>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageDocumentation2</name></expr>:
+			<break>break;</break>
+		</case><case>case <expr><name>isEndIndex</name></expr>:
+			<break>break;</break>
+		</case>}</block></switch>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endIndexSection</name><parameter_list>(<param><decl><type><name>IndexSections</name></type> <name>is</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>compactLatex</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>sourceBrowser</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"SOURCE_BROWSER"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>QCString</name></type> <name>latexHeader</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_HEADER"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<switch>switch <condition>(<expr><name>is</name></expr>)</condition>
+		<block>{
+		<case>case <expr><name>isTitlePageStart</name></expr>:
+			<break>break;</break>
+		</case><case>case <expr><name>isTitlePageAuthor</name></expr>:
+			<if>if <condition>(<expr><name>latexHeader</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>writeDefaultHeaderPart3</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<break>break;</break>
+		</case><case>case <expr><name>isMainPage</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name>QCString</name></type> <name>indexName</name>=<init><expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"GENERATE_TREEVIEW"</expr></argument>)</argument_list></call>?"main":"index"</expr></init></decl>;</decl_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\label{index}"</expr>;</expr_stmt>
+				<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{index}{}"</expr>;</expr_stmt></then></if>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "\\input{" &lt;&lt; <name>indexName</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isModuleIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{modules}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isDirIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{dirs}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isNamespaceIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{namespaces}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isClassHierarchyIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{hierarchy}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isCompoundIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{annotated}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isFileIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{files}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{pages}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>isModuleDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>GroupSDict</name>::<name>Iterator</name></name></type> <name>gli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>groupSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>GroupDef</name> *</type><name>gd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>gli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>gd</name>=<name>gli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>gli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr>!<name>gd</name>-&gt;<call><name>isReference</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{" &lt;&lt; <name>gd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+				<for>for (<init>;</init><condition><expr>(<name>gd</name>=<name>gli</name>.<call><name>current</name><argument_list>()</argument_list></call>)</expr>;</condition><incr><expr>++<name>gli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr>!<name>gd</name>-&gt;<call><name>isReference</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>gd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isDirDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name><name>SDict</name><argument_list>&lt;<argument><name>DirDef</name></argument>&gt;</argument_list></name>::<name>Iterator</name></name></type> <name>dli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>directories</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>DirDef</name> *</type><name>dd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>dli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>dd</name>=<name>dli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>dli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>dd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{" &lt;&lt; <name>dd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+				<for>for (<init>;</init><condition><expr>(<name>dd</name>=<name>dli</name>.<call><name>current</name><argument_list>()</argument_list></call>)</expr>;</condition><incr><expr>++<name>dli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>dd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>dd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isNamespaceDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>NamespaceSDict</name>::<name>Iterator</name></name></type> <name>nli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>namespaceSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>NamespaceDef</name> *</type><name>nd</name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>nli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>nd</name>=<name>nli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>nli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>nd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{" &lt;&lt; <name>nd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+				<while>while <condition>(<expr>(<name>nd</name>=<name>nli</name>.<call><name>current</name><argument_list>()</argument_list></call>)</expr>)</condition>
+				<block>{
+					<if>if <condition>(<expr><name>nd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>nd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+					}</block></then></if>
+					<expr_stmt><expr>++<name>nli</name></expr>;</expr_stmt>
+				}</block></while>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isClassDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name><name>ClassSDict</name>::<name>Iterator</name></name></type> <name>cli</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>classSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>ClassDef</name> *</type><name>cd</name>=<init><expr>0</expr></init></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>bool</name></type> <name>found</name>=<init><expr><name>FALSE</name></expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>cli</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr>;</init><condition><expr>(<name>cd</name>=<name>cli</name>.<call><name>current</name><argument_list>()</argument_list></call>) &amp;&amp; !<name>found</name></expr>;</condition><incr><expr>++<name>cli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>cd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call> &amp;&amp; <name>cd</name>-&gt;<call><name>templateMaster</name><argument_list>()</argument_list></call>==0</expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{" &lt;&lt; <name>cd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+						<expr_stmt><expr><name>found</name>=<name>TRUE</name></expr>;</expr_stmt>
+					}</block></then></if>
+				}</block></for>
+				<for>for (<init>;</init><condition><expr>(<name>cd</name>=<name>cli</name>.<call><name>current</name><argument_list>()</argument_list></call>)</expr>;</condition><incr><expr>++<name>cli</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>cd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call> &amp;&amp; <name>cd</name>-&gt;<call><name>templateMaster</name><argument_list>()</argument_list></call>==0</expr>)</condition><then>
+					<block>{
+						<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+						<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>cd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+					}</block></then></if> 
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isFileDocumentation</name></expr>:
+			<block>{
+				<decl_stmt><decl><type><name>bool</name></type> <name>isFirst</name>=<init><expr><name>TRUE</name></expr></init></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>FileName</name> *</type><name>fn</name>=<init><expr><name><name>Doxygen</name>::<name>inputNameList</name></name>-&gt;<call><name>first</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+				<while>while <condition>(<expr><name>fn</name></expr>)</condition>
+				<block>{
+					<decl_stmt><decl><type><name>FileDef</name> *</type><name>fd</name>=<init><expr><name>fn</name>-&gt;<call><name>first</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+					<while>while <condition>(<expr><name>fd</name></expr>)</condition>
+					<block>{
+						<if>if <condition>(<expr><name>fd</name>-&gt;<call><name>isLinkableInProject</name><argument_list>()</argument_list></call></expr>)</condition><then>
+						<block>{
+							<if>if <condition>(<expr><name>isFirst</name></expr>)</condition><then>
+							<block>{
+								<expr_stmt><expr><name>t</name> &lt;&lt; "}\n\\input{" &lt;&lt; <name>fd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+								<if>if <condition>(<expr><name>sourceBrowser</name> &amp;&amp; <name>m_prettyCode</name> &amp;&amp; <name>fd</name>-&gt;<call><name>generateSourceFile</name><argument_list>()</argument_list></call></expr>)</condition><then>
+								<block>{
+									<expr_stmt><expr><name>t</name> &lt;&lt; "\\include{" &lt;&lt; <name>fd</name>-&gt;<call><name>getSourceFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+								}</block></then></if>
+								<expr_stmt><expr><name>isFirst</name>=<name>FALSE</name></expr>;</expr_stmt>
+							}</block></then>
+							<else>else
+							<block>{
+								<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr> ;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+								<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>fd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+								<if>if <condition>(<expr><name>sourceBrowser</name> &amp;&amp; <name>m_prettyCode</name> &amp;&amp; <name>fd</name>-&gt;<call><name>generateSourceFile</name><argument_list>()</argument_list></call></expr>)</condition><then>
+								<block>{
+									<expr_stmt><expr><name>t</name> &lt;&lt; "\\include{" &lt;&lt; <name>fd</name>-&gt;<call><name>getSourceFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+								}</block></then></if>
+							}</block></else></if>
+						}</block></then></if>
+						<expr_stmt><expr><name>fd</name>=<name>fn</name>-&gt;<call><name>next</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+					}</block></while>
+					<expr_stmt><expr><name>fn</name>=<name><name>Doxygen</name>::<name>inputNameList</name></name>-&gt;<call><name>next</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+				}</block></while>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isExampleDocumentation</name></expr>:
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+				<decl_stmt><decl><type><name><name>PageSDict</name>::<name>Iterator</name></name></type> <name>pdi</name><argument_list>(<argument><expr>*<name><name>Doxygen</name>::<name>exampleSDict</name></name></expr></argument>)</argument_list></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>PageDef</name> *</type><name>pd</name>=<init><expr><name>pdi</name>.<call><name>toFirst</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+				<if>if <condition>(<expr><name>pd</name></expr>)</condition><then>
+				<block>{
+					<expr_stmt><expr><name>t</name> &lt;&lt; "\\input{" &lt;&lt; <name>pd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+				}</block></then></if>
+				<for>for (<init><expr>++<name>pdi</name></expr>;</init><condition><expr>(<name>pd</name>=<name>pdi</name>.<call><name>current</name><argument_list>()</argument_list></call>)</expr>;</condition><incr><expr>++<name>pdi</name></expr></incr>)
+				<block>{
+					<if>if <condition>(<expr><name>compactLatex</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr> ;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+					<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>pd</name>-&gt;<call><name>getOutputFileBase</name><argument_list>()</argument_list></call> &lt;&lt; "}\n"</expr>;</expr_stmt>
+				}</block></for>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageDocumentation</name></expr>:
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr>0</expr></cpp:if>
+				PageSDict::Iterator pdi(*Doxygen::pageSDict);
+				PageDef *pd=pdi.toFirst();
+				bool first=TRUE;
+				for (pdi.toFirst();(pd=pdi.current());++pdi)
+				{
+					if (!pd-&gt;getGroupDef() &amp;&amp; !pd-&gt;isReference())
+					{
+						if (compactLatex) t &lt;&lt; "\\section"; else t &lt;&lt; "\\chapter";
+						t &lt;&lt; "{" &lt;&lt; pd-&gt;title();
+						t &lt;&lt; "}\n";
+
+						if (compactLatex || first) t &lt;&lt; "\\input" ; else t &lt;&lt; "\\include";
+						t &lt;&lt; "{" &lt;&lt; pd-&gt;getOutputFileBase() &lt;&lt; "}\n";
+						first=FALSE;
+					}
+				}
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr><name>isPageDocumentation2</name></expr>:
+			<break>break;</break>
+		</case><case>case <expr><name>isEndIndex</name></expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\printindex\n"</expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{document}\n"</expr>;</expr_stmt>
+			<break>break;</break>
+		</case>}</block></switch>
+	}</block></function>
+	<function><type><name>void</name></type> <name>writePageLink</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>bool</name></type> <name>first</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>bool</name> &amp;</type><name>compactLatex</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>compactLatex</name> || <name>first</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\input"</expr> ;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\include"</expr>;</expr_stmt></else></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "{" &lt;&lt; <name>name</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startProjectNumber</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\\\[1ex]\\large "</expr>;</expr_stmt> 
+	}</block></function>
+    <function><type><name>void</name></type> <name>endProjectNumber</name><parameter_list>()</parameter_list> <block>{}</block></function>
+	<function><type><name>void</name></type> <name>writeStyleInfo</name><parameter_list>(<param><decl><type><name>int</name></type> <name>part</name></decl></param>)</parameter_list>
+	<block>{
+		<switch>switch<condition>(<expr><name>part</name></expr>)</condition>
+		<block>{
+		<case>case <expr>0</expr>:
+			<block>{
+				<comment type="line">//QCString pname=Config_getString("PROJECT_NAME").stripWhiteSpace();</comment>
+				<expr_stmt><expr><call><name>startPlainFile</name><argument_list>(<argument><expr>"doxygen.sty"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>writeDefaultStyleSheetPart1</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr>1</expr>:
+		</case><case>case <expr>3</expr>:
+			<expr_stmt><expr><name>t</name> &lt;&lt; " Doxygen "</expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr>2</expr>:
+			<block>{
+				<comment type="line">//t &lt;&lt; " Dimitri van Heesch \\copyright~1997-2008";</comment>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}]{}\n"</expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>writeDefaultStyleSheetPart2</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block>
+			<break>break;</break>
+		</case><case>case <expr>4</expr>:
+			<block>{
+				<comment type="line">//t &lt;&lt; " Dimitri van Heesch \\copyright~1997-2008";</comment>
+				<expr_stmt><expr><call><name>writeDefaultStyleSheetPart3</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>endPlainFile</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+			}</block>
+			<break>break;</break>
+		</case>}</block></switch>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startTitleHead</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>fileName</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name> &amp;&amp; <name>fileName</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{" &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call> &lt;&lt; "}{" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsection{"</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\section{"</expr>;</expr_stmt> 
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startTitle</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsection{"</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\section{"</expr>;</expr_stmt> 
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endTitleHead</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>fileName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>name</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\label{" &lt;&lt; <name>fileName</name> &lt;&lt; "}\\index{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name> &amp;&amp; <name>fileName</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>endTitle</name><parameter_list>()</parameter_list>   <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt> }</block></function>
+
+	<function><type><name>void</name></type> <name>newParagraph</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startParagraph</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endParagraph</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>writeString</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>text</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>text</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startIndexListItem</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endIndexListItem</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startIndexList</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{DoxyCompactList}"    &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endIndexList</name><parameter_list>()</parameter_list>   <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\end{DoxyCompactList}"      &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startIndexKey</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\item\\contentsline{section}{"</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endIndexKey</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>startIndexValue</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>hasBrief</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; " "</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>hasBrief</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "("</expr>;</expr_stmt></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endIndexValue</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>,<param><decl><type><name>bool</name></type> <name>hasBrief</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>hasBrief</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; ")"</expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}{\\pageref{" &lt;&lt; <name>name</name> &lt;&lt; "}}{}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startItemList</name><parameter_list>()</parameter_list>  <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{DoxyCompactItemize}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endItemList</name><parameter_list>()</parameter_list>    <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\end{DoxyCompactItemize}"   &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startIndexItem</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\item "</expr>;</expr_stmt>
+		<if>if <condition>(<expr>!<name>ref</name> &amp;&amp; <name>file</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\contentsline{section}{"</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endIndexItem</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>ref</name> &amp;&amp; <name>file</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}{\\pageref{" &lt;&lt; <name>file</name> &lt;&lt; "}}{}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>docify</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>text</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>filterLatexString</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>text</name></expr></argument>,<argument><expr><name>insideTabbing</name></expr></argument>,<argument><expr><name>FALSE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>codify</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>text</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>text</name></expr>)</condition><then>
+		<block>{ 
+			<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>p</name>=<init><expr><name>text</name></expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>char</name></type> <name>c</name></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>char</name></type> <name><name>cs</name><index>[<expr>5</expr>]</index></name></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>int</name></type> <name>spacesToNextTabStop</name></decl>;</decl_stmt>
+			<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>tabSize</name> =<init> <expr><call><name>Config_getInt</name><argument_list>(<argument><expr>"TAB_SIZE"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+			<while>while <condition>(<expr>*<name>p</name></expr>)</condition>
+			<block>{
+				<comment type="line">//static bool MultiByte = FALSE;</comment>
+				<expr_stmt><expr><name>c</name>=*<name>p</name>++</expr>;</expr_stmt>
+
+				<switch>switch<condition>(<expr><name>c</name></expr>)</condition>
+				<block>{
+				<case>case <expr>0x0c</expr>: <break>break;</break> <comment type="line">// remove ^L</comment>
+				</case><case>case <expr>'\t'</expr>: <expr_stmt><expr><name>spacesToNextTabStop</name> =
+							   <name>tabSize</name> - (<name>col</name>%<name>tabSize</name>)</expr>;</expr_stmt>
+					<expr_stmt><expr><name>t</name> &lt;&lt; <name><name>Doxygen</name>::<name>spaces</name></name>.<call><name>left</name><argument_list>(<argument><expr><name>spacesToNextTabStop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+					<expr_stmt><expr><name>col</name>+=<name>spacesToNextTabStop</name></expr>;</expr_stmt>
+					<break>break;</break> 
+				</case><case>case <expr>'\n'</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; '\n'</expr>;</expr_stmt> <expr_stmt><expr><name>col</name>=0</expr>;</expr_stmt>                    <break>break;</break>
+				</case><default>default:   <expr_stmt><expr><name><name>cs</name><index>[<expr>0</expr>]</index></name>=<name>c</name></expr>;</expr_stmt>
+					<expr_stmt><expr><name><name>cs</name><index>[<expr>1</expr>]</index></name>=0</expr>;</expr_stmt>
+					<decl_stmt><decl><type><name>int</name></type> <name>bytes</name>=<init><expr>1</expr></init></decl>;</decl_stmt>
+					<if>if <condition>(<expr><name>c</name>&lt;0</expr>)</condition><then> <comment type="line">// multibyte utf-8 character</comment>
+					<block>{
+						<expr_stmt><expr><name>bytes</name>++</expr>;</expr_stmt>   <comment type="line">// 1xxx.xxxx: &gt;=2 byte character</comment>
+						<expr_stmt><expr><name><name>cs</name><index>[<expr>1</expr>]</index></name>=*<name>p</name></expr>;</expr_stmt>
+						<expr_stmt><expr><name><name>cs</name><index>[<expr>2</expr>]</index></name>=0</expr>;</expr_stmt>
+						<if>if <condition>(<expr>((<name>uchar</name>)<name>c</name>&amp;0xE0)==0xE0</expr>)</condition><then>
+						<block>{
+							<expr_stmt><expr><name>bytes</name>++</expr>;</expr_stmt> <comment type="line">// 111x.xxxx: &gt;=3 byte character</comment>
+							<expr_stmt><expr><name><name>cs</name><index>[<expr>2</expr>]</index></name>=*(<name>p</name>+1)</expr>;</expr_stmt>
+							<expr_stmt><expr><name><name>cs</name><index>[<expr>3</expr>]</index></name>=0</expr>;</expr_stmt>
+						}</block></then></if>
+						<if>if <condition>(<expr>((<name>uchar</name>)<name>c</name>&amp;0xF0)==0xF0</expr>)</condition><then>
+						<block>{
+							<expr_stmt><expr><name>bytes</name>++</expr>;</expr_stmt> <comment type="line">// 1111.xxxx: 4 byte character</comment>
+							<expr_stmt><expr><name><name>cs</name><index>[<expr>2</expr>]</index></name>=*(<name>p</name>+2)</expr>;</expr_stmt>
+							<expr_stmt><expr><name><name>cs</name><index>[<expr>4</expr>]</index></name>=0</expr>;</expr_stmt>
+						}</block></then></if>
+					}</block></then></if>
+					<if>if <condition>(<expr><name>m_prettyCode</name></expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><call><name>filterLatexString</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>cs</name></expr></argument>,<argument><expr><name>insideTabbing</name></expr></argument>,<argument><expr><name>TRUE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					}</block></then>
+					<else>else
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; <name>cs</name></expr>;</expr_stmt>
+					}</block></else></if>
+					<if>if <condition>(<expr><name>col</name>&gt;=80</expr>)</condition><then>
+					<block>{
+						<expr_stmt><expr><name>t</name> &lt;&lt; "\n      "</expr>;</expr_stmt>
+						<expr_stmt><expr><name>col</name>=0</expr>;</expr_stmt>
+					}</block></then>
+					<else>else
+					<block>{
+						<expr_stmt><expr><name>col</name>++</expr>;</expr_stmt>
+					}</block></else></if>
+					<expr_stmt><expr><name>p</name>+=(<name>bytes</name>-1)</expr>;</expr_stmt> <comment type="line">// skip to next character</comment>
+					<break>break;</break>
+				</default>}</block></switch>
+			}</block></while>
+		}</block></then></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>writeObjectLink</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>disableLinks</name> &amp;&amp; !<name>ref</name> &amp;&amp; <call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hyperlink{"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>file</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><name>file</name> &amp;&amp; <name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_"</expr>;</expr_stmt></then></if> 
+			<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if> 
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{\\bf "</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		}</block></else></if> 
+	}</block></function>
+    <function><type><name>void</name></type> <name>writeCodeLink</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>,
+                       <param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>,
+					   <param><decl><type><name>const</name> <name>char</name> *</type><name>tooltip</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>l</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>col</name>+<name>l</name>&gt;80</expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\n      "</expr>;</expr_stmt>
+			<expr_stmt><expr><name>col</name>=0</expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><name>m_prettyCode</name> &amp;&amp; !<name>disableLinks</name> &amp;&amp; !<name>ref</name> &amp;&amp; <name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hyperlink{"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>file</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><name>file</name> &amp;&amp; <name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_"</expr>;</expr_stmt></then></if> 
+			<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if> 
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}{" &lt;&lt; <name>name</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; <name>name</name></expr>;</expr_stmt>
+		}</block></else></if>
+		<expr_stmt><expr><name>col</name>+=<name>l</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startTextLink</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>f</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>disableLinks</name> &amp;&amp; <call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hyperlink{"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>f</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>f</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_" &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if> 
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}{"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{\\bf "</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endTextLink</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startHtmlLink</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>url</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\href{"</expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; <name>url</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "{\\tt "</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endHtmlLink</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startTypewriter</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "{\\ttfamily "</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endTypewriter</name><parameter_list>()</parameter_list>   <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>      }</block></function>
+	<function><type><name>void</name></type> <name>startGroupHeader</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsubsection{"</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsection{"</expr>;</expr_stmt>
+		}</block></else></if>
+		<expr_stmt><expr><name>disableLinks</name>=<name>TRUE</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endGroupHeader</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>disableLinks</name>=<name>FALSE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startItemListItem</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\item " &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endItemListItem</name><parameter_list>()</parameter_list>   <block>{}</block></function>
+
+    <function><type><name>void</name></type> <name>startMemberSections</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endMemberSections</name><parameter_list>()</parameter_list> <block>{}</block></function> 
+	<function><type><name>void</name></type> <name>startMemberHeader</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsubsection*{"</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\subsection*{"</expr>;</expr_stmt>
+		}</block></else></if>
+		<expr_stmt><expr><name>disableLinks</name>=<name>TRUE</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberHeader</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>disableLinks</name>=<name>FALSE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startMemberSubtitle</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endMemberSubtitle</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startMemberDocList</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endMemberDocList</name><parameter_list>()</parameter_list> <block>{}</block></function>
+	<function><type><name>void</name></type> <name>startMemberList</name><parameter_list>()</parameter_list>  
+	<block>{ 
+		<if>if <condition>(<expr>!<name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{DoxyCompactItemize}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberList</name><parameter_list>()</parameter_list>    
+	<block>{
+		<comment type="line">//printf("LatexGenerator::endMemberList(%d)\n",insideTabbing);</comment>
+		<if>if <condition>(<expr>!<name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{DoxyCompactItemize}"   &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startAnonTypeScope</name><parameter_list>(<param><decl><type><name>int</name></type> <name>indent</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>indent</name>==0</expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{tabbing}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "xx\\=xx\\=xx\\=xx\\=xx\\=xx\\=xx\\=xx\\=xx\\=\\kill" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>insideTabbing</name>=<name>TRUE</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>m_indent</name>=<name>indent</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endAnonTypeScope</name><parameter_list>(<param><decl><type><name>int</name></type> <name>indent</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>indent</name>==0</expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name> &lt;&lt; "\\end{tabbing}"</expr>;</expr_stmt>
+			<expr_stmt><expr><name>insideTabbing</name>=<name>FALSE</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>m_indent</name>=<name>indent</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startMemberItem</name><parameter_list>(<param><decl><type><name>int</name></type> <name>annoType</name></decl></param>)</parameter_list> 
+	<block>{ 
+		<comment type="line">//printf("LatexGenerator::startMemberItem(%d)\n",annType);</comment>
+		<if>if <condition>(<expr>!<name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\item " &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+			<expr_stmt><expr><name>templateMemberItem</name> = (<name>annoType</name> == 3)</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberItem</name><parameter_list>()</parameter_list> 
+	<block>{
+		<if>if <condition>(<expr><name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\\\"</expr>;</expr_stmt>
+		}</block></then></if> 
+		<expr_stmt><expr><name>templateMemberItem</name> = <name>FALSE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+	}</block></function>
+	<function><type><name>void</name></type> <name>startMemberTemplateParams</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>templateMemberItem</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{\\footnotesize "</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberTemplateParams</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>templateMemberItem</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\\\\"</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startMemberGroupHeader</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>hasHeader</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>hasHeader</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{Indent}"</expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "{\\bf "</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberGroupHeader</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}\\par" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startMemberGroupDocs</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "{\\em "</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endMemberGroupDocs</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startMemberGroup</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endMemberGroup</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>hasHeader</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>hasHeader</name></expr>)</condition><then><expr_stmt><expr><name>t</name> &lt;&lt; "\\end{Indent}"</expr>;</expr_stmt></then></if> 
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    
+    <function><type><name>void</name></type> <name>insertMemberAlign</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+
+    <function><type><name>void</name></type> <name>writeRuler</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>writeAnchor</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>fileName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{ 
+		<comment type="line">//printf("LatexGenerator::writeAnchor(%s,%s)\n",fName,name);</comment>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\label{" &lt;&lt; <name>name</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<if>if <condition>(<expr><name>fileName</name></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{" &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call> &lt;&lt; "_" &lt;&lt; <name>name</name> &lt;&lt; "}{}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			}</block></then>
+			<else>else
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{" &lt;&lt; <name>name</name> &lt;&lt; "}{}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			}</block></else></if>
+		}</block></then></if>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startCodeFragment</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>m_prettyCode</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; <name>endl</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{footnotesize}\\begin{alltt}\n"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\n\\begin{DoxyCode}\n"</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endCodeFragment</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>m_prettyCode</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{alltt}\\end{footnotesize}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{DoxyCode}\n"</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>writeLineNumber</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>fileName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>,<param><decl><type><name>int</name></type> <name>l</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>m_prettyCode</name></expr>)</condition><then>
+		<block>{
+			<decl_stmt><decl><type><name>QCString</name></type> <name>lineNumber</name></decl>;</decl_stmt>
+			<expr_stmt><expr><name>lineNumber</name>.<call><name>sprintf</name><argument_list>(<argument><expr>"%05d"</expr></argument>,<argument><expr><name>l</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+			<if>if <condition>(<expr><name>fileName</name> &amp;&amp; !<name>sourceFileName</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+			<block>{
+				<decl_stmt><decl><type><name>QCString</name></type> <name>lineAnchor</name></decl>;</decl_stmt>
+				<expr_stmt><expr><name>lineAnchor</name>.<call><name>sprintf</name><argument_list>(<argument><expr>"_l%05d"</expr></argument>,<argument><expr><name>l</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>lineAnchor</name>.<call><name>prepend</name><argument_list>(<argument><expr><name>sourceFileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>startCodeAnchor</name><argument_list>(<argument><expr><name>lineAnchor</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>writeCodeLink</name><argument_list>(<argument><expr><name>ref</name></expr></argument>,<argument><expr><name>fileName</name></expr></argument>,<argument><expr><name>anchor</name></expr></argument>,<argument><expr><name>lineNumber</name></expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>endCodeAnchor</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+			}</block></then>
+			<else>else
+			<block>{ 
+				<expr_stmt><expr><call><name>codify</name><argument_list>(<argument><expr><name>lineNumber</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></else></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; " "</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; <name>l</name> &lt;&lt; " "</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startCodeLine</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>col</name>=0</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endCodeLine</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><call><name>codify</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startEmphasis</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "{\\em "</expr>;</expr_stmt>  }</block></function>
+    <function><type><name>void</name></type> <name>endEmphasis</name><parameter_list>()</parameter_list>   <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startBold</name><parameter_list>()</parameter_list>     <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "{\\bfseries "</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endBold</name><parameter_list>()</parameter_list>       <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startDescription</name><parameter_list>()</parameter_list> 
+	<block>{ 
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+	}</block></function>
+	<function><type><name>void</name></type> <name>endDescription</name><parameter_list>()</parameter_list>   
+	<block>{ 
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> 
+		<expr_stmt><expr><name>firstDescItem</name>=<name>TRUE</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startDescItem</name><parameter_list>()</parameter_list>    
+	<block>{ 
+		<expr_stmt><expr><name>firstDescItem</name>=<name>TRUE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\item["</expr>;</expr_stmt> 
+	}</block></function>
+	<function><type><name>void</name></type> <name>endDescItem</name><parameter_list>()</parameter_list>      
+	<block>{ 
+		<if>if <condition>(<expr><name>firstDescItem</name></expr>)</condition><then> 
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "]" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>firstDescItem</name>=<name>FALSE</name></expr>;</expr_stmt>
+		}</block></then> 
+		<else>else
+		<block>{
+			<expr_stmt><expr><call><name>lineBreak</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>lineBreak</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>style</name>=<init><expr>0</expr></init></decl></param>)</parameter_list> <block>{ <expr_stmt><expr>(<name>void</name>)<name>style</name></expr>;</expr_stmt> <expr_stmt><expr><name>t</name> &lt;&lt; "\\par\n"</expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startMemberDoc</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>clname</name></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>memname</name></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>title</name></decl></param>)</parameter_list>
+	<block>{ 
+		<if>if <condition>(<expr><name>memname</name> &amp;&amp; <name><name>memname</name><index>[<expr>0</expr>]</index></name>!='@'</expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\index{"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>clname</name></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>clname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>clname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}!"</expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>memname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>memname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\index{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>memname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>memname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>clname</name></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "!" &lt;&lt; <name>clname</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>clname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt> 
+			}</block></then></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\paragraph"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "\\subsubsection"</expr>;</expr_stmt></else></if>
+		<comment type="line">//if (Config_getBool("PDF_HYPERLINKS") &amp;&amp; memname) </comment>
+		<comment type="line">//</comment>{
+		<comment type="line">//  t &lt;&lt; "["; </comment>
+		<comment type="line">//  escapeMakeIndexChars(this,t,memname);</comment>
+		<comment type="line">//  t &lt;&lt; "]";</comment>
+		<comment type="line">//</comment>}
+		<expr_stmt><expr><name>t</name> &lt;&lt; "[{"</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>title</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}]"</expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "{\\setlength{\\rightskip}{0pt plus 5cm}"</expr>;</expr_stmt>
+		<expr_stmt><expr><name>disableLinks</name>=<name>TRUE</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberDoc</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> 
+	<block>{ 
+		<expr_stmt><expr><name>disableLinks</name>=<name>FALSE</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\hfill"</expr>;</expr_stmt></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startDoxyAnchor</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>fName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>fName</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>fName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_" &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}{" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endDoxyAnchor</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>fName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\label{"</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>fName</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <name>fName</name></expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_" &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startCodeAnchor</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list> 
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr>!<name>m_prettyCode</name></expr>)</condition><then> <return>return;</return></then></if>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{" &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call> &lt;&lt; "}{}"</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endCodeAnchor</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>writeChar</name><parameter_list>(<param><decl><type><name>char</name></type> <name>c</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>char</name></type> <name><name>cs</name><index>[<expr>2</expr>]</index></name></decl>;</decl_stmt>
+		<expr_stmt><expr><name><name>cs</name><index>[<expr>0</expr>]</index></name>=<name>c</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>cs</name><index>[<expr>1</expr>]</index></name>=0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>cs</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>writeLatexSpacing</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\hspace{0.3cm}"</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>writeStartAnnoItem</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>type</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>, 
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\item\\contentsline{section}{\\bf "</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>path</name></expr>)</condition><then> <expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>path</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> 
+		<expr_stmt><expr><name>t</name> &lt;&lt; "} "</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>writeEndAnnoItem</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}{\\pageref{" &lt;&lt; <name>name</name> &lt;&lt; "}}{}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startSubsection</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\subsection*{"</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endSubsection</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startSubsubsection</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\subsubsection*{"</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endSubsubsection</name><parameter_list>()</parameter_list> <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startCenter</name><parameter_list>()</parameter_list>      <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{center}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endCenter</name><parameter_list>()</parameter_list>        <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\end{center}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startSmall</name><parameter_list>()</parameter_list>       <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\footnotesize "</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endSmall</name><parameter_list>()</parameter_list>         <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\normalsize "</expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startMemberDescription</name><parameter_list>()</parameter_list> 
+	<block>{
+		<if>if <condition>(<expr>!<name>insideTabbing</name></expr>)</condition><then>
+		<block>{ 
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{DoxyCompactList}\\small\\item\\em "</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else
+		<block>{
+			<for>for (<init><decl><type><name>int</name></type> <name>i</name>=<init><expr>0</expr></init></decl>;</init><condition><expr><name>i</name>&lt;<name>m_indent</name>+2</expr>;</condition><incr><expr><name>i</name>++</expr></incr>) <expr_stmt><expr><name>t</name> &lt;&lt; "\\&gt;"</expr>;</expr_stmt></for>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{\\em "</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endMemberDescription</name><parameter_list>()</parameter_list> 
+	<block>{ 
+		<if>if <condition>(<expr>!<name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\item\\end{DoxyCompactList}"</expr>;</expr_stmt> 
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}\\\\\n"</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startDescList</name><parameter_list>(<param><decl><type><name>SectionTypes</name></type></decl></param>)</parameter_list>     <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{Desc}\n\\item["</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endDescList</name><parameter_list>()</parameter_list>       <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\end{Desc}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+	<function><type><name>void</name></type> <name>startSimpleSect</name><parameter_list>(<param><decl><type><name>SectionTypes</name></type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>title</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{Desc}\n\\item["</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>file</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><call><name>writeObjectLink</name><argument_list>(<argument><expr>0</expr></argument>,<argument><expr><name>file</name></expr></argument>,<argument><expr><name>anchor</name></expr></argument>,<argument><expr><name>title</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>title</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "]"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endSimpleSect</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{Desc}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startParamList</name><parameter_list>(<param><decl><type><name>ParamListTypes</name></type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>title</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{Desc}\n\\item["</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>title</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "]"</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endParamList</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{Desc}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startDescForItem</name><parameter_list>()</parameter_list>     <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\par" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endDescForItem</name><parameter_list>()</parameter_list>       <block>{}</block></function>
+	<function><type><name>void</name></type> <name>startSection</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>lab</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,<param><decl><type><name><name>SectionInfo</name>::<name>SectionType</name></name></type> <name>type</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>usePDFLatex</name> &amp;&amp; <name>pdfHyperlinks</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypertarget{" &lt;&lt; <call><name>stripPath</name><argument_list>(<argument><expr><name>lab</name></expr></argument>)</argument_list></call> &lt;&lt; "}{}"</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\"</expr>;</expr_stmt>
+		<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then>
+		<block>{
+			<switch>switch<condition>(<expr><name>type</name></expr>)</condition>
+			<block>{
+			<case>case <expr><name><name>SectionInfo</name>::<name>Page</name></name></expr>:          <expr_stmt><expr><name>t</name> &lt;&lt; "subsection"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Section</name></name></expr>:       <expr_stmt><expr><name>t</name> &lt;&lt; "subsubsection"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Subsection</name></name></expr>:    <expr_stmt><expr><name>t</name> &lt;&lt; "paragraph"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Subsubsection</name></name></expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "subparagraph"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Paragraph</name></name></expr>:     <expr_stmt><expr><name>t</name> &lt;&lt; "subparagraph"</expr>;</expr_stmt> <break>break;</break>
+			</case><default>default: <expr_stmt><expr><call><name>ASSERT</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt> <break>break;</break>
+			</default>}</block></switch>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+		<block>{
+			<switch>switch<condition>(<expr><name>type</name></expr>)</condition>
+			<block>{
+			<case>case <expr><name><name>SectionInfo</name>::<name>Page</name></name></expr>:          <expr_stmt><expr><name>t</name> &lt;&lt; "section"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Section</name></name></expr>:       <expr_stmt><expr><name>t</name> &lt;&lt; "subsection"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Subsection</name></name></expr>:    <expr_stmt><expr><name>t</name> &lt;&lt; "subsubsection"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Subsubsection</name></name></expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "paragraph"</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr><name><name>SectionInfo</name>::<name>Paragraph</name></name></expr>:     <expr_stmt><expr><name>t</name> &lt;&lt; "subparagraph"</expr>;</expr_stmt> <break>break;</break>
+			</case><default>default: <expr_stmt><expr><call><name>ASSERT</name><argument_list>(<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt> <break>break;</break>
+			</default>}</block></switch>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "{"</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endSection</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>lab</name></decl></param>,<param><decl><type><name><name>SectionInfo</name>::<name>SectionType</name></name></type></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}\\label{" &lt;&lt; <name>lab</name> &lt;&lt; "}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>addIndexItem</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>s1</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>s2</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>s1</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\index{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>s1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>s1</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>s2</name></expr>)</condition><then>
+			<block>{
+				<expr_stmt><expr><name>t</name> &lt;&lt; "!"</expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>escapeLabelName</name><argument_list>(<argument><expr><name>s2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "@{"</expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>escapeMakeIndexChars</name><argument_list>(<argument><expr><name>s2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startIndent</name><parameter_list>()</parameter_list>       <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endIndent</name><parameter_list>()</parameter_list>         <block>{}</block></function>
+    <function><type><name>void</name></type> <name>writeSynopsis</name><parameter_list>()</parameter_list>     <block>{}</block></function>
+	<function><type><name>void</name></type> <name>startClassDiagram</name><parameter_list>()</parameter_list>
+	<block>{
+		<comment type="line">//if (Config_getBool("COMPACT_LATEX")) t &lt;&lt; "\\subsubsection"; else t &lt;&lt; "\\subsection";</comment>
+		<comment type="line">//t &lt;&lt; "{";</comment>
+	}</block></function><empty_stmt>;</empty_stmt>
+	<function><type><name>void</name></type> <name>endClassDiagram</name><parameter_list>(<param><decl><type><name>const</name> <name>ClassDiagram</name> &amp;</type><name>d</name></decl></param>,
+		<param><decl><type><name>const</name> <name>char</name> *</type><name>fileName</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>d</name>.<call><name>writeFigure</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>dir</name></expr></argument>,<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startPageRef</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; " \\doxyref{}{"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endPageRef</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>clname</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}{"</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>clname</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; <name>clname</name></expr>;</expr_stmt></then></if> 
+		<if>if <condition>(<expr><name>anchor</name></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "_" &lt;&lt; <name>anchor</name></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>startQuickIndices</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endQuickIndices</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>writeQuickLinks</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>,<param><decl><type><name>HighlightedItem</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startContents</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endContents</name><parameter_list>()</parameter_list> <block>{}</block></function>
+	<function><type><name>void</name></type> <name>writeNonBreakableSpace</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>)</parameter_list> 
+	<block>{
+		<comment type="line">//printf("writeNonBreakbleSpace()\n");</comment>
+		<if>if <condition>(<expr><name>insideTabbing</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\&gt;"</expr>;</expr_stmt>
+		}</block></then>
+		<else>else
+			<expr_stmt><expr><name>t</name> &lt;&lt; "~"</expr>;</expr_stmt></else></if> 
+	}</block></function>
+    
+    <function><type><name>void</name></type> <name>startDescTable</name><parameter_list>()</parameter_list>
+    <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endDescTable</name><parameter_list>()</parameter_list>
+    <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\end{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startDescTableTitle</name><parameter_list>()</parameter_list>
+    <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "\\item[{\\em " &lt;&lt; <name>endl</name></expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>endDescTableTitle</name><parameter_list>()</parameter_list>
+    <block>{ <expr_stmt><expr><name>t</name> &lt;&lt; "}]"</expr>;</expr_stmt> }</block></function>
+    <function><type><name>void</name></type> <name>startDescTableData</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endDescTableData</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>lastIndexPage</name><parameter_list>()</parameter_list> <block>{}</block></function>
+
+	<function><type><name>void</name></type> <name>startDotGraph</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endDotGraph</name><parameter_list>(<param><decl><type><name>const</name> <name>DotClassGraph</name> &amp;</type><name>g</name></decl></param>)</parameter_list> 
+	<block>{
+		<expr_stmt><expr><name>g</name>.<call><name>writeGraph</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>EPS</name></expr></argument>,<argument><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>relPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startInclDepGraph</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endInclDepGraph</name><parameter_list>(<param><decl><type><name>const</name> <name>DotInclDepGraph</name> &amp;</type><name>g</name></decl></param>)</parameter_list> 
+	<block>{
+		<expr_stmt><expr><name>g</name>.<call><name>writeGraph</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>EPS</name></expr></argument>,<argument><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>relPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startCallGraph</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>startGroupCollaboration</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endGroupCollaboration</name><parameter_list>(<param><decl><type><name>const</name> <name>DotGroupCollaboration</name> &amp;</type><name>g</name></decl></param>)</parameter_list> 
+	<block>{
+		<expr_stmt><expr><name>g</name>.<call><name>writeGraph</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>EPS</name></expr></argument>,<argument><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>relPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endCallGraph</name><parameter_list>(<param><decl><type><name>const</name> <name>DotCallGraph</name> &amp;</type><name>g</name></decl></param>)</parameter_list> 
+	<block>{
+		<expr_stmt><expr><name>g</name>.<call><name>writeGraph</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>EPS</name></expr></argument>,<argument><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>relPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startDirDepGraph</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endDirDepGraph</name><parameter_list>(<param><decl><type><name>const</name> <name>DotDirDeps</name> &amp;</type><name>g</name></decl></param>)</parameter_list> 
+	<block>{
+		<expr_stmt><expr><name>g</name>.<call><name>writeGraph</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name>EPS</name></expr></argument>,<argument><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"LATEX_OUTPUT"</expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>relPath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></function>
+    <function><type><name>void</name></type> <name>writeGraphicalHierarchy</name><parameter_list>(<param><decl><type><name>const</name> <name>DotGfxHierarchyTable</name> &amp;</type></decl></param>)</parameter_list> <block>{}</block></function>
+
+    <function><type><name>void</name></type> <name>startTextBlock</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endTextBlock</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+
+    <function><type><name>void</name></type> <name>startMemberDocPrefixItem</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endMemberDocPrefixItem</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startMemberDocName</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endMemberDocName</name><parameter_list>()</parameter_list> <block>{}</block></function>
+	<function><type><name>void</name></type> <name>startParameterType</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>first</name></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type><name>key</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>first</name></expr>)</condition><then>
+		<block>{
+			<expr_stmt><expr><name>t</name> &lt;&lt; "\\/ " &lt;&lt; <name>key</name> &lt;&lt; " "</expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></function>
+    <function><type><name>void</name></type> <name>endParameterType</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startParameterName</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endParameterName</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>,<param><decl><type><name>bool</name></type></decl></param>,<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>startParameterList</name><parameter_list>(<param><decl><type><name>bool</name></type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>endParameterList</name><parameter_list>()</parameter_list> <block>{}</block></function>
+
+	<function><type><name>void</name></type> <name>startConstraintList</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>header</name></decl></param>)</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{Desc}\n\\item["</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>header</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "]"</expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startConstraintParam</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\item[{\\em "</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endConstraintParam</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>startConstraintType</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "} : {\\em "</expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>endConstraintType</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}]"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>startConstraintDocs</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endConstraintDocs</name><parameter_list>()</parameter_list> <block>{ }</block></function>
+	<function><type><name>void</name></type> <name>endConstraintList</name><parameter_list>()</parameter_list>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{description}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\end{Desc}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></function>
+
+	<function><type><name>void</name></type> <name>startFontClass</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>m_prettyCode</name></expr>)</condition><then> <return>return;</return></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\textcolor{" &lt;&lt; <name>name</name> &lt;&lt; "}{"</expr>;</expr_stmt>
+	}</block></function>
+	<function><type><name>void</name></type> <name>endFontClass</name><parameter_list>()</parameter_list>
+	<block>{
+		<if>if <condition>(<expr>!<name>m_prettyCode</name></expr>)</condition><then> <return>return;</return></then></if>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "}"</expr>;</expr_stmt>
+	}</block></function>
+
+    <function><type><name>void</name></type> <name>writeCodeAnchor</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>linkableSymbol</name><parameter_list>(<param><decl><type><name>int</name></type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,<param><decl><type><name>Definition</name> *</type></decl></param>,<param><decl><type><name>Definition</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+
+  </public><private>private:
+    <constructor_decl><name>LatexGenerator</name><parameter_list>(<param><decl><type><name>const</name> <name>LatexGenerator</name> &amp;</type></decl></param>)</parameter_list>;</constructor_decl>
+    <function_decl><type><name>LatexGenerator</name> &amp;</type><name>operator=</name><parameter_list>(<param><decl><type><name>const</name> <name>LatexGenerator</name> &amp;</type></decl></param>)</parameter_list>;</function_decl>
+	<function><type><name>void</name></type> <name>escapeLabelName</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>s</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>p</name>=<init><expr><name>s</name></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name></type> <name><name>str</name><index>[<expr>2</expr>]</index></name></decl>;</decl_stmt>
+		<expr_stmt><expr><name><name>str</name><index>[<expr>1</expr>]</index></name>=0</expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>char</name></type> <name>c</name></decl>;</decl_stmt>
+		<while>while <condition>(<expr>(<name>c</name>=*<name>p</name>++)</expr>)</condition>
+		<block>{
+			<switch>switch <condition>(<expr><name>c</name></expr>)</condition>
+			<block>{
+			<case>case <expr>'%'</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "\\%"</expr>;</expr_stmt>       <break>break;</break>
+				<comment type="line">//case '|': t &lt;&lt; "\\tt{\"|}"; break;</comment>
+				<comment type="line">//case '!': t &lt;&lt; "\"!";       break;</comment>
+			</case><default>default:  <expr_stmt><expr><name><name>str</name><index>[<expr>0</expr>]</index></name>=<name>c</name></expr>;</expr_stmt> <expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>str</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <break>break;</break>
+			</default>}</block></switch>
+		}</block></while>
+	}</block></function>
+	<function><type><name>void</name></type> <name>escapeMakeIndexChars</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>s</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>p</name>=<init><expr><name>s</name></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name></type> <name><name>str</name><index>[<expr>2</expr>]</index></name></decl>;</decl_stmt>
+		<expr_stmt><expr><name><name>str</name><index>[<expr>1</expr>]</index></name>=0</expr>;</expr_stmt>
+		<decl_stmt><decl><type><name>char</name></type> <name>c</name></decl>;</decl_stmt>
+		<while>while <condition>(<expr>(<name>c</name>=*<name>p</name>++)</expr>)</condition>
+		<block>{
+			<switch>switch <condition>(<expr><name>c</name></expr>)</condition>
+			<block>{
+				<comment type="line">//case '!': t &lt;&lt; "\"!"; break;</comment>
+			<case>case <expr>'"'</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "\"\""</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr>'@'</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "\"@"</expr>;</expr_stmt> <break>break;</break>
+				<comment type="line">//case '|': t &lt;&lt; "\\tt{\"|}"; break;</comment>
+			</case><case>case <expr>'['</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "["</expr>;</expr_stmt> <break>break;</break>
+			</case><case>case <expr>']'</expr>: <expr_stmt><expr><name>t</name> &lt;&lt; "]"</expr>;</expr_stmt> <break>break;</break>
+			</case><default>default:  <expr_stmt><expr><name><name>str</name><index>[<expr>0</expr>]</index></name>=<name>c</name></expr>;</expr_stmt> <expr_stmt><expr><call><name>docify</name><argument_list>(<argument><expr><name>str</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <break>break;</break>
+			</default>}</block></switch>
+		}</block></while>
+	}</block></function>
+    <decl_stmt><decl><type><name>int</name></type> <name>col</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>insideTabbing</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>firstDescItem</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>disableLinks</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>QCString</name></type> <name>relPath</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>QCString</name></type> <name>sourceFileName</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>m_indent</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>templateMemberItem</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>m_prettyCode</name></decl>;</decl_stmt>
+</private>}</block>;</class>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart1</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// part 1</comment>
+
+	<decl_stmt><decl><type><name>QCString</name></type> <name>paperName</name></decl>;</decl_stmt>
+	<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"LATEX_BATCHMODE"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\batchmode" &lt;&lt; <name>endl</name></expr>;</expr_stmt></then></if>
+	<decl_stmt><decl><type><name>QCString</name> &amp;</type><name>paperType</name>=<init><expr><call><name>Config_getEnum</name><argument_list>(<argument><expr>"PAPER_TYPE"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>paperType</name>=="a4wide"</expr>)</condition><then> 
+		<expr_stmt><expr><name>paperName</name>="a4"</expr>;</expr_stmt></then> 
+	<else>else 
+		<expr_stmt><expr><name>paperName</name>=<name>paperType</name></expr>;</expr_stmt></else></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\documentclass[" &lt;&lt; <name>paperName</name> &lt;&lt; "paper"</expr>;</expr_stmt>
+	<comment type="line">//if (Config_getBool("PDF_HYPERLINKS")) t &lt;&lt; ",ps2pdf";</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "]{"</expr>;</expr_stmt>
+	<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "article"</expr>;</expr_stmt></then> <else>else <expr_stmt><expr><name>t</name> &lt;&lt; "book"</expr>;</expr_stmt></else></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>paperType</name>=="a4wide"</expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{a4wide}\n"</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{makeidx}\n"
+		"\\usepackage{graphicx}\n"
+		"\\usepackage{multicol}\n"
+		"\\usepackage{float}\n"
+		"\\usepackage{listings}\n"
+		"\\usepackage{color}\n"
+		"\\usepackage{textcomp}\n"
+		"\\usepackage{alltt}\n"</expr>
+		<comment type="line">//"\\usepackage{ae,aecompl,aeguill}\n"</comment>
+		;</expr_stmt>
+	<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr>)</condition><then>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{times}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></then></if>
+	<if>if <condition>(<expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{ifpdf}" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\ifpdf" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\usepackage[pdftex," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            pagebackref=true," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            colorlinks=true," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            linkcolor=blue," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            unicode" &lt;&lt; <name>endl</name>
+			&lt;&lt; "           ]{hyperref}" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\else" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\usepackage[ps2pdf," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            pagebackref=true," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            colorlinks=true," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            linkcolor=blue," &lt;&lt; <name>endl</name>
+			&lt;&lt; "            unicode" &lt;&lt; <name>endl</name>
+			&lt;&lt; "           ]{hyperref}" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\usepackage{pspicture}" &lt;&lt; <name>endl</name>
+			&lt;&lt; "\\fi" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></then></if>
+	<comment type="line">// Try to get the command for switching on the language</comment>
+	<comment type="line">// support</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage[utf8]{inputenc}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	<decl_stmt><decl><type><name>QCString</name></type> <name>sLanguageSupportCommand</name><argument_list>(
+		<argument><expr><name>theTranslator</name>-&gt;<call><name>latexLanguageSupportCommand</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></decl>;</decl_stmt>
+
+	<if>if <condition>(<expr>!<name>sLanguageSupportCommand</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+	<block>{
+		<comment type="line">// The command is not empty.  Put it to the output.</comment>
+		<comment type="line">// if the command is empty, no output is needed.</comment>
+		<expr_stmt><expr><name>t</name> &lt;&lt; <name>sLanguageSupportCommand</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{doxygen}\n"</expr>;</expr_stmt>
+
+	<comment type="line">// define option for listings</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\lstset{language=C++,"
+		"inputencoding=utf8,"
+		"basicstyle=\\footnotesize,"
+		"breaklines=true,"
+		"breakatwhitespace=true,"
+		"tabsize=" &lt;&lt; <call><name>Config_getInt</name><argument_list>(<argument><expr>"TAB_SIZE"</expr></argument>)</argument_list></call> &lt;&lt;","
+		"numbers=left }" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+
+	<decl_stmt><decl><type><name>QStrList</name> &amp;</type><name>extraPackages</name> =<init> <expr><call><name>Config_getList</name><argument_list>(<argument><expr>"EXTRA_PACKAGES"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>s</name>=<init><expr><name>extraPackages</name>.<call><name>first</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+	<while>while <condition>(<expr><name>s</name></expr>)</condition>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage{" &lt;&lt; <name>s</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+		<expr_stmt><expr><name>s</name>=<name>extraPackages</name>.<call><name>next</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+	}</block></while>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\makeindex\n"
+		"\\setcounter{tocdepth}{3}\n"
+		"\\renewcommand{\\footrulewidth}{0.4pt}\n"
+		"\\begin{document}\n"</expr>;</expr_stmt>
+	<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>pdfHyperlinks</name> &amp;&amp; <name>usePDFLatex</name></expr>)</condition><then>
+	<block>{
+		<comment type="line">// to avoid duplicate page anchors due to reuse of same numbers for</comment>
+		<comment type="line">// the index (be it as roman numbers)</comment>
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypersetup{pageanchor=false}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></then></if>
+	<if>if <condition>(<expr><name>theTranslator</name>-&gt;<call><name>idLanguage</name><argument_list>()</argument_list></call>=="greek"</expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\selectlanguage{greek}\n"</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\begin{titlepage}\n"
+		"\\vspace*{7cm}\n"
+		"\\begin{center}\n"
+		"{\\Large "</expr>;</expr_stmt>
+
+}</block></function>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart2</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// part 2</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}\\\\" &lt;&lt; <name>endl</name>
+		&lt;&lt; "\\vspace*{1cm}" &lt;&lt; <name>endl</name>
+		&lt;&lt; "{\\large "</expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultHeaderPart3</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// part 3</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; " Doxygen " &lt;&lt; <name>versionString</name> &lt;&lt; "}\\\\" &lt;&lt; <name>endl</name>
+		&lt;&lt; "\\vspace*{0.5cm}" &lt;&lt; <name>endl</name>
+		&lt;&lt; "{\\small " &lt;&lt; <call><name>dateToString</name><argument_list>(<argument><expr><name>TRUE</name></expr></argument>)</argument_list></call> &lt;&lt; "}\\\\" &lt;&lt; <name>endl</name>
+		&lt;&lt; "\\end{center}" &lt;&lt; <name>endl</name>
+		&lt;&lt; "\\end{titlepage}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\clearemptydoublepage\n"</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\pagenumbering{roman}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\tableofcontents\n"</expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>t</name> &lt;&lt; "\\clearemptydoublepage\n"</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\pagenumbering{arabic}\n"</expr>;</expr_stmt>
+	<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>pdfHyperlinks</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"PDF_HYPERLINKS"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>usePDFLatex</name>   =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"USE_PDFLATEX"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>pdfHyperlinks</name> &amp;&amp; <name>usePDFLatex</name></expr>)</condition><then>
+	<block>{
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\hypersetup{pageanchor=true}" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+	}</block></then></if>
+}</block></function>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart1</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// part 1</comment>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\NeedsTeXFormat{LaTeX2e}\n"
+		"\\ProvidesPackage{doxygen}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Packages used by this style file\n"
+		"\\RequirePackage{alltt}\n"
+		"\\RequirePackage{array}\n"
+		"\\RequirePackage{calc}\n"
+		"\\RequirePackage{color}\n"
+		"\\RequirePackage{fancyhdr}\n"
+		"\\RequirePackage{verbatim}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Setup fancy headings\n"
+		"\\pagestyle{fancyplain}\n"
+		"\\newcommand{\\clearemptydoublepage}{%\n"
+		"  \\newpage{\\pagestyle{empty}\\cleardoublepage}%\n"
+		"}\n"</expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<call><name>Config_getBool</name><argument_list>(<argument><expr>"COMPACT_LATEX"</expr></argument>)</argument_list></call></expr>)</condition><then> 
+		<expr_stmt><expr><name>t</name> &lt;&lt; "\\renewcommand{\\chaptermark}[1]{%\n"
+		"  \\markboth{#1}{}%\n"
+		"}\n"</expr>;</expr_stmt></then></if>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\renewcommand{\\sectionmark}[1]{%\n"
+		"  \\markright{\\thesection\\ #1}%\n"
+		"}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\lhead[\\fancyplain{}{\\bfseries\\thepage}]{%\n"
+		"  \\fancyplain{}{\\bfseries\\rightmark}%\n"
+		"}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\rhead[\\fancyplain{}{\\bfseries\\leftmark}]{%\n"
+		"  \\fancyplain{}{\\bfseries\\thepage}%\n"
+		"}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\rfoot[\\fancyplain{}{\\bfseries\\scriptsize%\n  "</expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart2</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\lfoot[]{\\fancyplain{}{\\bfseries\\scriptsize%\n  "</expr>;</expr_stmt>
+}</block></function>
+
+<function><type><name>static</name> <name>void</name></type> <name>writeDefaultStyleSheetPart3</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>)</parameter_list>
+<block>{
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\cfoot{}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "%---------- Internal commands used in this style file ----------------\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Generic environment used by all paragraph-based environments defined\n"
+		"% below. Note that the command \\title{...} needs to be defined inside\n"
+		"% those environments!\n"
+		"\\newenvironment{DoxyDesc}[1]{%\n"
+		"  \\begin{list}{}%\n"
+		"  {%\n"
+		"    \\settowidth{\\labelwidth}{40pt}%\n"
+		"    \\setlength{\\leftmargin}{\\labelwidth}%\n"
+		"    \\setlength{\\parsep}{0pt}%\n"
+		"    \\setlength{\\itemsep}{-4pt}%\n"
+		"    \\renewcommand{\\makelabel}{\\entrylabel}%\n"
+		"  }%\n"
+		"  \\item[#1:]%\n"
+		"}{%\n"
+		"  \\end{list}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "%---------- Commands used by doxygen LaTeX output generator ----------\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by &lt;pre&gt; ... &lt;/pre&gt;\n"
+		"\\newenvironment{DoxyPre}{%\n"
+		"  \\small%\n"
+		"  \\begin{alltt}%\n"
+		"}{%\n"
+		"  \\end{alltt}%\n"
+		"  \\normalsize%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @code ... @endcode\n"
+		"\\newenvironment{DoxyCode}{%\n"
+		"  \\footnotesize%\n"
+		"  \\verbatim%\n"
+		"}{%\n"
+		"  \\endverbatim%\n"
+		"  \\normalsize%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @example, @include, @includelineno and @dontinclude\n"
+		"\\newenvironment{DoxyCodeInclude}{%\n"
+		"  \\DoxyCode%\n"
+		"}{%\n"
+		"  \\endDoxyCode%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @verbatim ... @endverbatim\n"
+		"\\newenvironment{DoxyVerb}{%\n"
+		"  \\footnotesize%\n"
+		"  \\verbatim%\n"
+		"}{%\n"
+		"  \\endverbatim%\n"
+		"  \\normalsize%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @verbinclude\n"
+		"\\newenvironment{DoxyVerbInclude}{%\n"
+		"  \\DoxyVerb%\n"
+		"}{%\n"
+		"  \\endDoxyVerb%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by numbered lists (using '-#' or &lt;ol&gt; ... &lt;/ol&gt;)\n"
+		"\\newenvironment{DoxyEnumerate}{%\n"
+		"  \\enumerate%\n"
+		"}{%\n"
+		"  \\endenumerate%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by bullet lists (using '-', @li, @arg, or &lt;ul&gt; ... &lt;/ul&gt;)\n"
+		"\\newenvironment{DoxyItemize}{%\n"
+		"  \\itemize%\n"
+		"}{%\n"
+		"  \\enditemize%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by description lists (using &lt;dl&gt; ... &lt;/dl&gt;)\n"
+		"\\newenvironment{DoxyDescription}{%\n"
+		"  \\description%\n"
+		"}{%\n"
+		"  \\enddescription%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @image, @dotfile, and @dot ... @enddot\n"
+		"% (only if caption is specified)\n"
+		"\\newenvironment{DoxyImage}{%\n"
+		"  \\begin{figure}[H]%\n"
+		"  \\begin{center}%\n"
+		"}{%\n"
+		"  \\end{center}%\n"
+		"  \\end{figure}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @image, @dotfile, @dot ... @enddot, and @msc ... @endmsc\n"
+		"% (only if no caption is specified)\n"
+		"\\newenvironment{DoxyImageNoCaption}{%\n"
+		"}{%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @attention\n"
+		"\\newenvironment{DoxyAttention}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @author and @authors\n"
+		"\\newenvironment{DoxyAuthor}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @date\n"
+		"\\newenvironment{DoxyDate}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @invariant\n"
+		"\\newenvironment{DoxyInvariant}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @note\n"
+		"\\newenvironment{DoxyNote}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @post\n"
+		"\\newenvironment{DoxyPostcond}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @pre\n"
+		"\\newenvironment{DoxyPrecond}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @remark\n"
+		"\\newenvironment{DoxyRemark}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @return\n"
+		"\\newenvironment{DoxyReturn}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @since\n"
+		"\\newenvironment{DoxySince}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @see\n"
+		"\\newenvironment{DoxySeeAlso}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @version\n"
+		"\\newenvironment{DoxyVersion}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @warning\n"
+		"\\newenvironment{DoxyWarning}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @internal\n"
+		"\\newenvironment{DoxyInternal}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"}{%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by @par and @paragraph\n"
+		"\\newenvironment{DoxyParagraph}[1]{%\n"
+		"  \\begin{list}{}%\n"
+		"  {%\n"
+		"    \\settowidth{\\labelwidth}{40pt}%\n"
+		"    \\setlength{\\leftmargin}{\\labelwidth}%\n"
+		"    \\setlength{\\parsep}{0pt}%\n"
+		"    \\setlength{\\itemsep}{-4pt}%\n"
+		"    \\renewcommand{\\makelabel}{\\entrylabel}%\n"
+		"  }%\n"
+		"  \\item[#1]%\n"
+		"}{%\n"
+		"  \\end{list}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by parameter lists\n"
+		"\\newenvironment{DoxyParams}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"    \\begin{description}%\n"
+		"}{%\n"
+		"    \\end{description}%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by return value lists\n"
+		"\\newenvironment{DoxyRetVals}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"    \\begin{description}%\n"
+		"}{%\n"
+		"    \\end{description}%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by exception lists\n"
+		"\\newenvironment{DoxyExceptions}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"    \\begin{description}%\n"
+		"}{%\n"
+		"    \\end{description}%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "% Used by template parameter lists\n"
+		"\\newenvironment{DoxyTemplParams}[1]{%\n"
+		"  \\begin{DoxyDesc}{#1}%\n"
+		"    \\begin{description}%\n"
+		"}{%\n"
+		"    \\end{description}%\n"
+		"  \\end{DoxyDesc}%\n"
+		"}\n\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newcommand{\\doxyref}[3]{\\textbf{#1} (\\textnormal{#2}\\,\\pageref{#3})}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newenvironment{DoxyCompactList}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\begin{list}{}{\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\leftmargin}{0.5cm}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\itemsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\parsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\topsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\renewcommand{\\makelabel}{\\hfill}}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\end{list}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newenvironment{DoxyCompactItemize}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\begin{itemize}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\itemsep}{-3pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\parsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\topsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  \\setlength{\\partopsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\end{itemize}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newcommand{\\PBS}[1]{\\let\\temp=\\\\#1\\let\\\\=\\temp}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newlength{\\tmplength}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newenvironment{TabularC}[1]\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\setlength{\\tmplength}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "     {\\linewidth/(#1)-\\tabcolsep*2-\\arrayrulewidth*(#1+1)/(#1)}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "      \\par\\begin{tabular*}{\\linewidth}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "             {*{#1}{|&gt;{\\PBS\\raggedright\\hspace{0pt}}p{\\the\\tmplength}}|}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\end{tabular*}\\par}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newcommand{\\entrylabel}[1]{\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "   {\\parbox[b]{\\labelwidth-4pt}{\\makebox[0pt][l]{\\textbf{#1}}\\vspace{1.5\\baselineskip}}}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newenvironment{Desc}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\begin{list}{}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  {\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "    \\settowidth{\\labelwidth}{40pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "    \\setlength{\\leftmargin}{\\labelwidth}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "    \\setlength{\\parsep}{0pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "    \\setlength{\\itemsep}{-4pt}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "    \\renewcommand{\\makelabel}{\\entrylabel}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  }\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "{\\end{list}}\n"</expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\newenvironment{Indent}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  {\\begin{list}{}{\\setlength{\\leftmargin}{0.5cm}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "      \\item[]\\ignorespaces}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "  {\\unskip\\end{list}}\n"</expr>;</expr_stmt>
+
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\setlength{\\parindent}{0cm}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\setlength{\\parskip}{0.2cm}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\addtocounter{secnumdepth}{1}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\sloppy\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\usepackage[T1]{fontenc}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\makeatletter\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\renewcommand{\\paragraph}{\\@startsection{paragraph}{4}{0ex}%\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "   {-3.25ex plus -1ex minus -0.2ex}%\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "   {1.5ex plus 0.2ex}%\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "   {\\normalfont\\normalsize\\bfseries}}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\makeatother\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\stepcounter{secnumdepth}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\stepcounter{tocdepth}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{comment}{rgb}{0.5,0.0,0.0}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{keyword}{rgb}{0.0,0.5,0.0}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{keywordtype}{rgb}{0.38,0.25,0.125}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{keywordflow}{rgb}{0.88,0.5,0.0}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{preprocessor}{rgb}{0.5,0.38,0.125}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{stringliteral}{rgb}{0.0,0.125,0.25}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{charliteral}{rgb}{0.0,0.5,0.5}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{vhdldigit}{rgb}{1.0,0.0,1.0}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{vhdlkeyword}{rgb}{0.43,0.0,0.43}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{vhdllogic}{rgb}{1.0,0.0,0.0}\n"</expr>;</expr_stmt>
+	<expr_stmt><expr><name>t</name> &lt;&lt; "\\definecolor{vhdlchar}{rgb}{0.0,0.0,0.0}\n"</expr>;</expr_stmt>
+}</block></function>
+</unit>

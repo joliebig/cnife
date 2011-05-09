@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashFunc.h" language="C++"><comment type="block">/*-
+* See the file LICENSE for redistribution information.
+*
+* Copyright (c) 1996-2005
+*	Sleepycat Software.  All rights reserved.
+*/</comment>
+<comment type="block">/*
+* Copyright (c) 1990, 1993
+*	Margo Seltzer.  All rights reserved.
+*/</comment>
+<comment type="block">/*
+* Copyright (c) 1990, 1993
+*	The Regents of the University of California.  All rights reserved.
+*
+* This code is derived from software contributed to Berkeley by
+* Margo Seltzer.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met:
+* 1. Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright
+*    notice, this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the University nor the names of its contributors
+*    may be used to endorse or promote products derived from this software
+*    without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+* OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+* OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+* SUCH DAMAGE.
+*
+* $Id: HashFunc.cpp,v 1.1 2006/08/11 09:33:20 rosenmue Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"hash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashFunc.h"</cpp:file></cpp:include>
+
+<comment type="block">/*
+* __ham_func2 --
+*	Phong Vo's linear congruential hash.
+*
+* PUBLIC: u_int32_t __ham_func2 __P((DB *, const void *, u_int32_t));
+*/</comment>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>DCHARHASH</name>(h, c)	((h) = 0x63c63cd9*(h) + 0x9c39c33d + (c))</cpp:define>
+
+
+
+
+<class>class <name>CHashFunc</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_func2</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>u_int8_t</name> *</type><name>e</name>, *<name>k</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>h</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int8_t</name></type> <name>c</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
+			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
+		<expr_stmt><expr><name>e</name> = <name>k</name> + <name>len</name></expr>;</expr_stmt>
+		<for>for (<init><expr><name>h</name> = 0</expr>;</init> <condition><expr><name>k</name> != <name>e</name></expr>;</condition><incr/>) <block>{
+			<expr_stmt><expr><name>c</name> = *<name>k</name>++</expr>;</expr_stmt>
+			<if>if <condition>(<expr>!<name>c</name> &amp;&amp; <name>k</name> &gt; <name>e</name></expr>)</condition><then>
+				<break>break;</break></then></if>
+			<constructor_decl><name>DCHARHASH</name><parameter_list>(<param><decl><type><name>h</name></type></decl></param>, <param><decl><type><name>c</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		}</block></for>
+		<return>return <expr>(<name>h</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_func3 --
+	*	Ozan Yigit's original sdbm hash.
+	*
+	* Ugly, but fast.  Break the string up into 8 byte units.  On the first time
+	* through the loop get the "leftover bytes" (strlen % 8).  On every other
+	* iteration, perform 8 HASHC's so we handle all 8 bytes.  Essentially, this
+	* saves us 7 cmp &amp; branch instructions.
+	*
+	* PUBLIC: u_int32_t __ham_func3 __P((DB *, const void *, u_int32_t));
+	*/</comment>
+
+	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_func3</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>u_int8_t</name> *</type><name>k</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>n</name>, <name>loop</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
+			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+		<if>if <condition>(<expr><name>len</name> == 0</expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>HASHC</name>	<name>n</name> = *k++ + 65599 * n</cpp:define>
+		<expr_stmt><expr><name>n</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>loop</name> = (<name>len</name> + 8 - 1) &gt;&gt; 3</expr>;</expr_stmt>
+		<switch>switch <condition>(<expr><name>len</name> &amp; (8 - 1)</expr>)</condition> <block>{
+<case>case <expr>0</expr>:
+	<do>do <block>{
+		<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+<case>case <expr>7</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>6</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>5</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>4</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>3</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>2</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+</case><case>case <expr>1</expr>:
+	<expr_stmt><expr><name>HASHC</name></expr>;</expr_stmt>
+	</case>}</block> while <condition>(<expr>--<name>loop</name></expr>)</condition>;</do>
+		</case>}</block></switch>
+		<return>return <expr>(<name>n</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_func4 --
+	*	Chris Torek's hash function.  Although this function performs only
+	*	slightly worse than __ham_func5 on strings, it performs horribly on
+	*	numbers.
+	*
+	* PUBLIC: u_int32_t __ham_func4 __P((DB *, const void *, u_int32_t));
+	*/</comment>
+
+	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_func4</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>u_int8_t</name> *</type><name>k</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>h</name>, <name>loop</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
+			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+		<if>if <condition>(<expr><name>len</name> == 0</expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>HASH4a</name>	<name>h</name> = (h &lt;&lt; 5) - h + *k++;</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>HASH4b</name>	<name>h</name> = (h &lt;&lt; 5) + h + *k++;</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>HASH4</name>	<name>HASH4b</name></cpp:define>
+		<expr_stmt><expr><name>h</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>loop</name> = (<name>len</name> + 8 - 1) &gt;&gt; 3</expr>;</expr_stmt>
+		<switch>switch <condition>(<expr><name>len</name> &amp; (8 - 1)</expr>)</condition> <block>{
+<case>case <expr>0</expr>:
+	<do>do <block>{
+		<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+<case>case <expr>7</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>6</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>5</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>4</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>3</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>2</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+</case><case>case <expr>1</expr>:
+	<expr_stmt><expr><name>HASH4</name></expr>;</expr_stmt>
+	</case>}</block> while <condition>(<expr>--<name>loop</name></expr>)</condition>;</do>
+		</case>}</block></switch>
+		<return>return <expr>(<name>h</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* Fowler/Noll/Vo hash
+	*
+	* The basis of the hash algorithm was taken from an idea sent by email to the
+	* IEEE Posix P1003.2 mailing list from Phong Vo (kpv@research.att.com) and
+	* Glenn Fowler (gsf@research.att.com).  Landon Curt Noll (chongo@toad.com)
+	* later improved on their algorithm.
+	*
+	* The magic is in the interesting relationship between the special prime
+	* 16777619 (2^24 + 403) and 2^32 and 2^8.
+	*
+	* This hash produces the fewest collisions of any function that we've seen so
+	* far, and works well on both numbers and strings.
+	*
+	* PUBLIC: u_int32_t __ham_func5 __P((DB *, const void *, u_int32_t));
+	*/</comment>
+
+	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_func5</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>const</name> <name>u_int8_t</name> *</type><name>k</name>, *<name>e</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>h</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
+			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+
+		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
+		<expr_stmt><expr><name>e</name> = <name>k</name> + <name>len</name></expr>;</expr_stmt>
+		<for>for (<init><expr><name>h</name> = 0</expr>;</init> <condition><expr><name>k</name> &lt; <name>e</name></expr>;</condition> <incr><expr>++<name>k</name></expr></incr>) <block>{
+			<expr_stmt><expr><name>h</name> *= 16777619</expr>;</expr_stmt>
+			<expr_stmt><expr><name>h</name> ^= *<name>k</name></expr>;</expr_stmt>
+		}</block></for>
+		<return>return <expr>(<name>h</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_test --
+	*
+	* PUBLIC: u_int32_t __ham_test __P((DB *, const void *, u_int32_t));
+	*/</comment>
+
+	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_test</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>len</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>((<name>u_int32_t</name>)*(<name>char</name> *)<name>key</name>)</expr>;</return>
+	}</block></function>
+
+</public>}</block>;</class>
+</unit>

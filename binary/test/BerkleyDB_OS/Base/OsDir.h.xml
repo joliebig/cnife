@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsDir.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_DIRENT_H</name></expr></cpp:if>
+<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>&lt;dirent.h&gt;</cpp:file></cpp:include>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>NAMLEN</name>(dirent) strlen((dirent)-&gt;d_name)</cpp:define>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>dirent</name> <name>direct</name></cpp:define>
+<cpp:define># <cpp:directive>define</cpp:directive> <name>NAMLEN</name>(dirent) (dirent)-&gt;d_namlen</cpp:define>
+<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_SYS_NDIR_H</name></expr></cpp:if>
+<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/ndir.h&gt;</cpp:file></cpp:include>
+<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_SYS_DIR_H</name></expr></cpp:if>
+<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/dir.h&gt;</cpp:file></cpp:include>
+<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_NDIR_H</name></expr></cpp:if>
+<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;ndir.h&gt;</cpp:file></cpp:include>
+<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsDir.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsErrno.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsAlloc.h"</cpp:file></cpp:include>
+
+
+
+<class>class <name>COsDir</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_dirlist</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>dir</name></decl></param>, <param><decl><type><name>char</name> ***</type><name>namesp</name></decl></param>, <param><decl><type><name>int</name> *</type><name>cntp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type>struct <name>dirent</name> *</type><name>dp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DIR</name> *</type><name>dirp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>arraysz</name>, <name>cnt</name>, <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name> **</type><name>names</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_dirlist</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+			<return>return <expr>(<call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_dirlist</name></expr></argument>)</argument_list></call>(<name>dir</name>, <name>namesp</name>, <name>cntp</name>))</expr>;</return></then></if>
+	
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		<if>if <condition>(<expr>(<name>dirp</name> = <call><name>opendir</name><argument_list>(<argument><expr>(<name>char</name> *)<name>dir</name></expr></argument>)</argument_list></call>) == <name>NULL</name></expr>)</condition><then>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<if>if <condition>(<expr>(<name>dirp</name> = <call><name>opendir</name><argument_list>(<argument><expr><name>dir</name></expr></argument>)</argument_list></call>) == <name>NULL</name></expr>)</condition><then>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			<return>return <expr>(<call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call>)</expr>;</return></then></if></then></if>
+		<expr_stmt><expr><name>names</name> = <name>NULL</name></expr>;</expr_stmt>
+		<for>for (<init><expr><name>arraysz</name> = <name>cnt</name> = 0</expr>;</init> <condition><expr>(<name>dp</name> = <call><name>readdir</name><argument_list>(<argument><expr><name>dirp</name></expr></argument>)</argument_list></call>) != <name>NULL</name></expr>;</condition> <incr><expr>++<name>cnt</name></expr></incr>) <block>{
+			<if>if <condition>(<expr><name>cnt</name> &gt;= <name>arraysz</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>arraysz</name> += 100</expr>;</expr_stmt>
+				<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_realloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
+				    <argument><expr>(<name>u_int</name>)<name>arraysz</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name><name>names</name><index>[<expr>0</expr>]</index></name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>names</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<goto>goto <name>nomem</name>;</goto></then></if>
+			}</block></then></if>
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>d_name</name></expr></argument>, <argument><expr>&amp;<name><name>names</name><index>[<expr><name>cnt</name></expr>]</index></name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>nomem</name>;</goto></then></if>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>closedir</name><argument_list>(<argument><expr><name>dirp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<expr_stmt><expr>*<name>namesp</name> = <name>names</name></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>cntp</name> = <name>cnt</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	
+	<label><name>nomem</name>:</label>	<if>if <condition>(<expr><name>names</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name>os_dirfree</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>names</name></expr></argument>, <argument><expr><name>cnt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr><name>dirp</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name>closedir</name><argument_list>(<argument><expr><name>dirp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+	<function><type><name>static</name> <name>void</name></type> <name>os_dirfree</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>char</name> **</type><name>names</name></decl></param>, <param><decl><type><name>int</name></type> <name>cnt</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_dirfree</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+			<function_decl><type><name>DB_GLOBAL</name></type>(<name>j_dirfree</name>)<parameter_list>(<param><decl><type><name>names</name></type></decl></param>, <param><decl><type><name>cnt</name></type></decl></param>)</parameter_list>;</function_decl></then>
+		<else>else <block>{
+			<while>while <condition>(<expr><name>cnt</name> &gt; 0</expr>)</condition>
+				<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name><name>names</name><index>[<expr>--<name>cnt</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></while>
+			<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>names</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></function>
+</public>}</block>;</class>
+
+</unit>

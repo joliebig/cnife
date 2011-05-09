@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsUnlink.h">
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsUnlink.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"env/EnvFile.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<class>class <name>COsUnlink</name>
+<block>{<private type="default">
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>os_region_unlink</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>)</parameter_list>
+	<block>{
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_QNX</name></cpp:ifdef>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name> *</type><name>newname</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name>__os_shmname</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>path</name></expr></argument>, <argument><expr>&amp;<name>newname</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+	
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name>shm_unlink</name><argument_list>(<argument><expr><name>newname</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>ret</name> != <name>ENOENT</name></expr>)</condition><then>
+				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"shm_unlink: %s: %s"</expr></argument>,
+				    <argument><expr><name>newname</name></expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		}</block></then></if>
+	<label><name>err</name>:</label>
+		<if>if <condition>(<expr><name>newname</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>newname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>DB_ENV_OVERWRITE</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CEnvFile</name>::<name>db_file_multi_write</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>path</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+		<return>return <expr>(<call><name>os_unlink</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>path</name></expr></argument>)</argument_list></call>)</expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	}</block></function>
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_unlink</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>path</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_unlink</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr><name>ret</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_unlink</name></expr></argument>)</argument_list></call>(<name>path</name>)</expr>;</expr_stmt></then>
+		<else>else
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		    <expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>unlink</name><argument_list>(<argument><expr>(<name>char</name> *)<name>path</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		    <expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>unlink</name><argument_list>(<argument><expr><name>path</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<comment type="block">/*
+		 * !!!
+		 * The results of unlink are file system driver specific on VxWorks.
+		 * In the case of removing a file that did not exist, some, at least,
+		 * return an error, but with an errno of 0, not ENOENT.  We do not
+		 * have to test for the explicitly, the RETRY_CHK macro resets "ret"
+		 * to be the errno, and so we'll just slide right on through.
+		 *
+		 * XXX
+		 * We shouldn't be testing for an errno of ENOENT here, but ENOENT
+		 * signals that a file is missing, and we attempt to unlink things
+		 * (such as v. 2.x environment regions, in DB_ENV-&gt;remove) that we
+		 * are expecting not to be there.  Reporting errors in these cases
+		 * is annoying.
+		 */</comment>
+		<if>if <condition>(<expr><name>ret</name> != 0 &amp;&amp; <name>ret</name> != <name>ENOENT</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"unlink: %s: %s"</expr></argument>, <argument><expr><name>path</name></expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+</public>}</block>;</class>
+
+
+</unit>

@@ -1,0 +1,991 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="hashmgr.hxx"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"htypes.hxx"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"filemgr.hxx"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"atypes.hxx"</cpp:file></cpp:include>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>TESTAFF</name>( a, b , c ) flag_bsearch((unsigned short *) a, (unsigned short) b, c)</cpp:define>
+
+<enum>enum <name>flag</name> <block>{ <expr><name>FLAG_CHAR</name></expr>, <expr><name>FLAG_LONG</name></expr>, <expr><name>FLAG_NUM</name></expr>, <expr><name>FLAG_UNI</name></expr> }</block>;</enum>
+
+<class>class <name>HashMgr</name>
+<block>{<private type="default">
+  <decl_stmt><decl><type><name>int</name></type>               <name>tablesize</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>hentry</name> **</type>  <name>tableptr</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>userword</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>flag</name></type>              <name>flag_mode</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>complexprefixes</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>utf8</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>short</name></type>    <name>forbiddenword</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>langnum</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type>            <name>enc</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type>            <name>lang</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type>struct <name>cs_info</name> *</type>  <name>csconv</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>char</name> *</type>            <name>ignorechars</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type>  <name>ignorechars_utf16</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>ignorechars_utf16_len</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>numaliasf</name></decl>;</decl_stmt> <comment type="line">// flag vector `compression' with aliases</comment>
+  <decl_stmt><decl><type><name>unsigned</name> <name>short</name> **</type> <name>aliasf</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type>  <name>aliasflen</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>int</name></type>               <name>numaliasm</name></decl>;</decl_stmt> <comment type="line">// morphological desciption `compression' with aliases</comment>
+  <decl_stmt><decl><type><name>char</name> **</type>           <name>aliasm</name></decl>;</decl_stmt>
+
+
+</private><public>public:
+  <constructor_decl><name>HashMgr</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>tpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>apath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>;</constructor_decl>
+  <destructor_decl><name>~<name>HashMgr</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+
+  <function_decl><type>struct <name>hentry</name> *</type> <name>lookup</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <specifier>const</specifier>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>hash</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <specifier>const</specifier>;</function_decl>
+  <function_decl><type>struct <name>hentry</name> *</type> <name>walk_hashtable</name><parameter_list>(<param><decl><type><name>int</name> &amp;</type> <name>col</name></decl></param>, <param><decl><type>struct <name>hentry</name> *</type> <name>hp</name></decl></param>)</parameter_list> <specifier>const</specifier>;</function_decl>
+
+  <function_decl><type><name>int</name></type> <name>add</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>add_with_affix</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>pattern</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>remove</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>decode_flags</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>short</name> **</type> <name>result</name></decl></param>, <param><decl><type><name>char</name> *</type> <name>flags</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>unsigned</name> <name>short</name></type>        <name>decode_flag</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>flag</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>char</name> *</type>                <name>encode_flag</name><parameter_list>(<param><decl><type><name>unsigned</name> <name>short</name></type> <name>flag</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>is_aliasf</name><parameter_list>()</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>get_aliasf</name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>, <param><decl><type><name>unsigned</name> <name>short</name> **</type> <name>fvec</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>is_aliasm</name><parameter_list>()</parameter_list>;</function_decl>
+  <function_decl><type><name>char</name> *</type> <name>get_aliasm</name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>)</parameter_list>;</function_decl>
+
+</public><private>private:
+  <function_decl><type><name>int</name></type> <name>get_clen_and_captype</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name> *</type> <name>captype</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>load_tables</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>tpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>add_word</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name></type> <name>wcl</name></decl></param>, <param><decl><type><name>unsigned</name> <name>short</name> *</type> <name>ap</name></decl></param>,
+    <param><decl><type><name>int</name></type> <name>al</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>desc</name></decl></param>, <param><decl><type><name>bool</name></type> <name>onlyupcase</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>load_config</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>affpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>parse_aliasf</name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>line</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>add_hidden_capitalized_word</name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name></type> <name>wcl</name></decl></param>,
+    <param><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>al</name></decl></param>, <param><decl><type><name>char</name> *</type> <name>dp</name></decl></param>, <param><decl><type><name>int</name></type> <name>captype</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>parse_aliasm</name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>line</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>;</function_decl>
+  <function_decl><type><name>int</name></type> <name>remove_forbidden_flag</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>;</function_decl>
+
+</private>}</block>;</class>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"license.hunspell"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"license.myspell"</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include> 
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include> 
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+
+<comment type="line">//#include "hashmgr.hxx"</comment>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"csutil.hxx"</cpp:file></cpp:include>
+
+<comment type="line">// build a hash table from a munched word list</comment>
+
+<constructor><name><name>HashMgr</name>::<name>HashMgr</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>tpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>apath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>
+<block>{
+	<expr_stmt><expr><name>tablesize</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>tableptr</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>flag_mode</name> = <name>FLAG_CHAR</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>complexprefixes</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>utf8</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>langnum</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>lang</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>enc</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>csconv</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>ignorechars</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ignorechars_utf16</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>ignorechars_utf16_len</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+	<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>forbiddenword</name> = <name>FORBIDDENWORD</name></expr>;</expr_stmt> <comment type="line">// forbidden word signing flag</comment>
+	<expr_stmt><expr><call><name>load_config</name><argument_list>(<argument><expr><name>apath</name></expr></argument>, <argument><expr><name>key</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>ec</name> =<init> <expr><call><name>load_tables</name><argument_list>(<argument><expr><name>tpath</name></expr></argument>, <argument><expr><name>key</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>ec</name></expr>)</condition><then> <block>{
+		<comment type="block">/* error condition - what should we do here */</comment>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"Hash Manager Error : %d\n"</expr></argument>,<argument><expr><name>ec</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>tableptr</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>tableptr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>tableptr</name> = <name>NULL</name></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>tablesize</name> = 0</expr>;</expr_stmt>
+	}</block></then></if>
+}</block></constructor>
+
+
+<destructor><name><name>HashMgr</name>::~<name>HashMgr</name></name><parameter_list>()</parameter_list>
+<block>{
+	<if>if <condition>(<expr><name>tableptr</name></expr>)</condition><then> <block>{
+		<comment type="line">// now pass through hash table freeing up everything</comment>
+		<comment type="line">// go through column by column of the table</comment>
+		<for>for (<init><decl><type><name>int</name></type> <name>i</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; <name>tablesize</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>pt</name> =<init> <expr><name><name>tableptr</name><index>[<expr><name>i</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+			<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>nt</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+			<while>while<condition>(<expr><name>pt</name></expr>)</condition> <block>{
+				<expr_stmt><expr><name>nt</name> = <name>pt</name>-&gt;<name>next</name></expr>;</expr_stmt>
+				<if>if <condition>(<expr><name>pt</name>-&gt;<name>astr</name> &amp;&amp; (!<name>aliasf</name> || <call><name>TESTAFF</name><argument_list>(<argument><expr><name>pt</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>ONLYUPCASEFLAG</name></expr></argument>, <argument><expr><name>pt</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call>)</expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>pt</name>-&gt;<name>astr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+				<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>pt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>pt</name> = <name>nt</name></expr>;</expr_stmt>
+			}</block></while>
+		}</block></for>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>tableptr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then></if>
+	<expr_stmt><expr><name>tablesize</name> = 0</expr>;</expr_stmt>
+
+	<if>if <condition>(<expr><name>aliasf</name></expr>)</condition><then> <block>{
+		<for>for (<init><decl><type><name>int</name></type> <name>j</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>j</name> &lt; (<name>numaliasf</name>)</expr>;</condition> <incr><expr><name>j</name>++</expr></incr>) <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name><name>aliasf</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></for>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>aliasflen</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasflen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+		}</block></then></if>
+	}</block></then></if>
+	<if>if <condition>(<expr><name>aliasm</name></expr>)</condition><then> <block>{
+		<for>for (<init><decl><type><name>int</name></type> <name>j</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>j</name> &lt; (<name>numaliasm</name>)</expr>;</condition> <incr><expr><name>j</name>++</expr></incr>) <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name><name>aliasm</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></for>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+	}</block></then></if>  
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>OPENOFFICEORG</name></cpp:ifndef>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>MOZILLA_CLIENT</name></cpp:ifndef>
+	<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>free_utf_tbl</name><argument_list>()</argument_list></call></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+	<if>if <condition>(<expr><name>enc</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>enc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<if>if <condition>(<expr><name>lang</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>lang</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+	<if>if <condition>(<expr><name>ignorechars</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>ignorechars</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<if>if <condition>(<expr><name>ignorechars_utf16</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>ignorechars_utf16</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+}</block></destructor>
+
+<comment type="line">// lookup a root word in the hashtable</comment>
+
+<function><type>struct <name>hentry</name> *</type> <name><name>HashMgr</name>::<name>lookup</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>word</name></decl></param>)</parameter_list> <specifier>const</specifier>
+<block>{
+	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>dp</name></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>tableptr</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>dp</name> = <name><name>tableptr</name><index>[<expr><call><name>hash</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr>]</index></name></expr>;</expr_stmt>
+		<if>if <condition>(<expr>!<name>dp</name></expr>)</condition><then> <return>return <expr><name>NULL</name></expr>;</return></then></if>
+		<for>for (  <init>;</init>  <condition><expr><name>dp</name> != <name>NULL</name></expr>;</condition>  <incr><expr><name>dp</name> = <name>dp</name>-&gt;<name>next</name></expr></incr>) <block>{
+			<if>if <condition>(<expr><call><name>strcmp</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>word</name></expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <return>return <expr><name>dp</name></expr>;</return></then></if>
+		}</block></for>
+	}</block></then></if>
+	<return>return <expr><name>NULL</name></expr>;</return>
+}</block></function>
+
+<comment type="line">// add a word to the hash table (private)</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>add_word</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name></type> <name>wcl</name></decl></param>, <param><decl><type><name>unsigned</name> <name>short</name> *</type> <name>aff</name></decl></param>,
+					  <param><decl><type><name>int</name></type> <name>al</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>desc</name></decl></param>, <param><decl><type><name>bool</name></type> <name>onlyupcase</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>bool</name></type> <name>upcasehomonym</name> =<init> <expr>false</expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>descl</name> =<init> <expr><name>desc</name> ? (<name>aliasm</name> ? <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call> : <call><name>strlen</name><argument_list>(<argument><expr><name>desc</name></expr></argument>)</argument_list></call> + 1) : 0</expr></init></decl>;</decl_stmt>
+	<comment type="line">// variable-length hash record with word and optional fields</comment>
+	<decl_stmt><decl><type>struct <name>hentry</name>*</type> <name>hp</name> =<init> 
+		<expr>(struct <name>hentry</name> *) <call><name>malloc</name> <argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument>struct <expr><name>hentry</name></expr></argument>)</argument_list></call> + <name>wbl</name> + <name>descl</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr>!<name>hp</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>hpw</name> =<init> <expr><name>hp</name>-&gt;<name>word</name></expr></init></decl>;</decl_stmt>
+	<expr_stmt><expr><call><name>strcpy</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>, <argument><expr><name>word</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>ignorechars</name> != <name>NULL</name></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>remove_ignored_chars_utf</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>, <argument><expr><name>ignorechars_utf16</name></expr></argument>, <argument><expr><name>ignorechars_utf16_len</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then> <else>else <block>{
+			<expr_stmt><expr><call><name>remove_ignored_chars</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>, <argument><expr><name>ignorechars</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></then></if>
+	<if>if <condition>(<expr><name>complexprefixes</name></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>reverseword_utf</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then> <else>else <expr_stmt><expr><call><name>reverseword</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+	}</block></then></if>
+
+	<decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr><call><name>hash</name><argument_list>(<argument><expr><name>hpw</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+
+	<expr_stmt><expr><name>hp</name>-&gt;<name>blen</name> = (<name>unsigned</name> <name>char</name>) <name>wbl</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hp</name>-&gt;<name>clen</name> = (<name>unsigned</name> <name>char</name>) <name>wcl</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hp</name>-&gt;<name>alen</name> = (<name>short</name>) <name>al</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hp</name>-&gt;<name>astr</name> = <name>aff</name></expr>;</expr_stmt>
+	<expr_stmt><expr><name>hp</name>-&gt;<name>next</name> = <name>NULL</name></expr>;</expr_stmt>      
+	<expr_stmt><expr><name>hp</name>-&gt;<name>next_homonym</name> = <name>NULL</name></expr>;</expr_stmt>
+
+	<comment type="line">// store the description string or its pointer</comment>
+	<if>if <condition>(<expr><name>desc</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>hp</name>-&gt;<name>var</name> = <name>H_OPT</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>aliasm</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>hp</name>-&gt;<name>var</name> += <name>H_OPT_ALIASM</name></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>store_pointer</name><argument_list>(<argument><expr><name>hpw</name> + <name>wbl</name> + 1</expr></argument>, <argument><expr><call><name>get_aliasm</name><argument_list>(<argument><expr><call><name>atoi</name><argument_list>(<argument><expr><name>desc</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then> <else>else <block>{
+			<expr_stmt><expr><call><name>strcpy</name><argument_list>(<argument><expr><name>hpw</name> + <name>wbl</name> + 1</expr></argument>, <argument><expr><name>desc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>complexprefixes</name></expr>)</condition><then> <block>{
+				<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>reverseword_utf</name><argument_list>(<argument><expr><call><name>HENTRY_DATA</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then>
+				<else>else <expr_stmt><expr><call><name>reverseword</name><argument_list>(<argument><expr><call><name>HENTRY_DATA</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+			}</block></then></if>
+		}</block></else></if>
+		<if>if <condition>(<expr><call><name>strstr</name><argument_list>(<argument><expr><call><name>HENTRY_DATA</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>MORPH_PHON</name></expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>hp</name>-&gt;<name>var</name> += <name>H_OPT_PHON</name></expr>;</expr_stmt></then></if>
+	}</block></then> <else>else <expr_stmt><expr><name>hp</name>-&gt;<name>var</name> = 0</expr>;</expr_stmt></else></if>
+
+	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>dp</name> =<init> <expr><name><name>tableptr</name><index>[<expr><name>i</name></expr>]</index></name></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr>!<name>dp</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name><name>tableptr</name><index>[<expr><name>i</name></expr>]</index></name> = <name>hp</name></expr>;</expr_stmt>
+		<return>return <expr>0</expr>;</return>
+	}</block></then></if>
+	<while>while <condition>(<expr><name>dp</name>-&gt;<name>next</name> != <name>NULL</name></expr>)</condition> <block>{
+		<if>if <condition>(<expr>(!<name>dp</name>-&gt;<name>next_homonym</name>) &amp;&amp; (<call><name>strcmp</name><argument_list>(<argument><expr><name>hp</name>-&gt;<name>word</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>word</name></expr></argument>)</argument_list></call> == 0)</expr>)</condition><then> <block>{
+			<comment type="line">// remove hidden onlyupcase homonym</comment>
+			<if>if <condition>(<expr>!<name>onlyupcase</name></expr>)</condition><then> <block>{
+				<if>if <condition>(<expr>(<name>dp</name>-&gt;<name>astr</name>) &amp;&amp; <call><name>TESTAFF</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>ONLYUPCASEFLAG</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+					<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr><name>dp</name>-&gt;<name>astr</name> = <name>hp</name>-&gt;<name>astr</name></expr>;</expr_stmt>
+					<expr_stmt><expr><name>dp</name>-&gt;<name>alen</name> = <name>hp</name>-&gt;<name>alen</name></expr>;</expr_stmt>
+					<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<return>return <expr>0</expr>;</return>
+				}</block></then> <else>else <block>{
+					<expr_stmt><expr><name>dp</name>-&gt;<name>next_homonym</name> = <name>hp</name></expr>;</expr_stmt>
+				}</block></else></if>
+			}</block></then> <else>else <block>{
+				<expr_stmt><expr><name>upcasehomonym</name> = true</expr>;</expr_stmt>
+			}</block></else></if>
+		}</block></then></if>
+		<expr_stmt><expr><name>dp</name>=<name>dp</name>-&gt;<name>next</name></expr>;</expr_stmt>
+	}</block></while>
+	<if>if <condition>(<expr><call><name>strcmp</name><argument_list>(<argument><expr><name>hp</name>-&gt;<name>word</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>word</name></expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+		<comment type="line">// remove hidden onlyupcase homonym</comment>
+		<if>if <condition>(<expr>!<name>onlyupcase</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>dp</name>-&gt;<name>astr</name>) &amp;&amp; <call><name>TESTAFF</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>ONLYUPCASEFLAG</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><name>dp</name>-&gt;<name>astr</name> = <name>hp</name>-&gt;<name>astr</name></expr>;</expr_stmt>
+				<expr_stmt><expr><name>dp</name>-&gt;<name>alen</name> = <name>hp</name>-&gt;<name>alen</name></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>0</expr>;</return>
+			}</block></then> <else>else <block>{
+				<expr_stmt><expr><name>dp</name>-&gt;<name>next_homonym</name> = <name>hp</name></expr>;</expr_stmt>
+			}</block></else></if>
+		}</block></then> <else>else <block>{
+			<expr_stmt><expr><name>upcasehomonym</name> = true</expr>;</expr_stmt>
+		}</block></else></if>
+	}</block></then></if>
+	<if>if <condition>(<expr>!<name>upcasehomonym</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>dp</name>-&gt;<name>next</name> = <name>hp</name></expr>;</expr_stmt>
+	}</block></then> <else>else <block>{
+		<comment type="line">// remove hidden onlyupcase homonym</comment>
+		<if>if <condition>(<expr><name>hp</name>-&gt;<name>astr</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>hp</name>-&gt;<name>astr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>hp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></else></if>
+	<return>return <expr>0</expr>;</return>
+}</block></function>     
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>add_hidden_capitalized_word</name></name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name></type> <name>wcl</name></decl></param>,
+										 <param><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>al</name></decl></param>, <param><decl><type><name>char</name> *</type> <name>dp</name></decl></param>, <param><decl><type><name>int</name></type> <name>captype</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// add inner capitalized forms to handle the following allcap forms:</comment>
+	<comment type="line">// Mixed caps: OpenOffice.org -&gt; OPENOFFICE.ORG</comment>
+	<comment type="line">// Allcaps with suffixes: CIA's -&gt; CIA'S    </comment>
+	<if>if <condition>(<expr>((<name>captype</name> == <name>HUHCAP</name>) || (<name>captype</name> == <name>HUHINITCAP</name>) ||
+		((<name>captype</name> == <name>ALLCAP</name>) &amp;&amp; (<name>flags</name> != <name>NULL</name>))) &amp;&amp;
+		!((<name>flags</name> != <name>NULL</name>) &amp;&amp; <call><name>TESTAFF</name><argument_list>(<argument><expr><name>flags</name></expr></argument>, <argument><expr><name>forbiddenword</name></expr></argument>, <argument><expr><name>al</name></expr></argument>)</argument_list></call>)</expr>)</condition><then> <block>{
+			<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags2</name> =<init> <expr>(<name>unsigned</name> <name>short</name> *) <macro><name>malloc</name> <argument_list>(<argument>sizeof(unsigned short) * (al+1)</argument>)</argument_list></macro></expr></init></decl>;</decl_stmt>
+			<if>if <condition>(<expr>!<name>flags2</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+			<if>if <condition>(<expr><name>al</name></expr>)</condition><then> <macro><name>memcpy</name><argument_list>(<argument>flags2</argument>, <argument>flags</argument>, <argument>al * sizeof(unsigned short)</argument>)</argument_list></macro><empty_stmt>;</empty_stmt></then></if>
+			<expr_stmt><expr><name><name>flags2</name><index>[<expr><name>al</name></expr>]</index></name> = <name>ONLYUPCASEFLAG</name></expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <block>{
+				<decl_stmt><decl><type><name>char</name></type> <name><name>st</name><index>[<expr><name>BUFSIZE</name></expr>]</index></name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>w_char</name></type> <name><name>w</name><index>[<expr><name>BUFSIZE</name></expr>]</index></name></decl>;</decl_stmt>
+				<decl_stmt><decl><type><name>int</name></type> <name>wlen</name> =<init> <expr><call><name>u8_u16</name><argument_list>(<argument><expr><name>w</name></expr></argument>, <argument><expr><name>BUFSIZE</name></expr></argument>, <argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+				<expr_stmt><expr><call><name>mkallsmall_utf</name><argument_list>(<argument><expr><name>w</name></expr></argument>, <argument><expr><name>wlen</name></expr></argument>, <argument><expr><name>langnum</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>mkallcap_utf</name><argument_list>(<argument><expr><name>w</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>langnum</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>u16_u8</name><argument_list>(<argument><expr><name>st</name></expr></argument>, <argument><expr><name>BUFSIZE</name></expr></argument>, <argument><expr><name>w</name></expr></argument>, <argument><expr><name>wlen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr><call><name>add_word</name><argument_list>(<argument><expr><name>st</name></expr></argument>,<argument><expr><name>wbl</name></expr></argument>,<argument><expr><name>wcl</name></expr></argument>,<argument><expr><name>flags2</name></expr></argument>,<argument><expr><name>al</name>+1</expr></argument>,<argument><expr><name>dp</name></expr></argument>, <argument><expr>true</expr></argument>)</argument_list></call></expr>;</return>
+			}</block></then> <else>else <block>{
+				<expr_stmt><expr><call><name>mkallsmall</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>csconv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>mkinitcap</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>csconv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr><call><name>add_word</name><argument_list>(<argument><expr><name>word</name></expr></argument>,<argument><expr><name>wbl</name></expr></argument>,<argument><expr><name>wcl</name></expr></argument>,<argument><expr><name>flags2</name></expr></argument>,<argument><expr><name>al</name>+1</expr></argument>,<argument><expr><name>dp</name></expr></argument>, <argument><expr>true</expr></argument>)</argument_list></call></expr>;</return>
+			}</block></else></if>
+	}</block></then></if>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="line">// detect captype and modify word length for UTF-8 encoding</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>get_clen_and_captype</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wbl</name></decl></param>, <param><decl><type><name>int</name> *</type> <name>captype</name></decl></param>)</parameter_list> <block>{
+	<decl_stmt><decl><type><name>int</name></type> <name>len</name></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <block>{
+		<decl_stmt><decl><type><name>w_char</name></type> <name><name>dest_utf</name><index>[<expr><name>BUFSIZE</name></expr>]</index></name></decl>;</decl_stmt>
+		<expr_stmt><expr><name>len</name> = <call><name>u8_u16</name><argument_list>(<argument><expr><name>dest_utf</name></expr></argument>, <argument><expr><name>BUFSIZE</name></expr></argument>, <argument><expr><name>word</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>captype</name> = <call><name>get_captype_utf8</name><argument_list>(<argument><expr><name>dest_utf</name></expr></argument>, <argument><expr><name>len</name></expr></argument>, <argument><expr><name>langnum</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then> <else>else <block>{
+		<expr_stmt><expr><name>len</name> = <name>wbl</name></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>captype</name> = <call><name>get_captype</name><argument_list>(<argument><expr>(<name>char</name> *) <name>word</name></expr></argument>, <argument><expr><name>len</name></expr></argument>, <argument><expr><name>csconv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></else></if>
+	<return>return <expr><name>len</name></expr>;</return>
+}</block></function>
+
+<comment type="line">// remove word (personal dictionary function for standalone applications)</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>remove</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>dp</name> =<init> <expr><call><name>lookup</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<while>while <condition>(<expr><name>dp</name></expr>)</condition> <block>{
+		<if>if <condition>(<expr><name>dp</name>-&gt;<name>alen</name> == 0 || !<call><name>TESTAFF</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>forbiddenword</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name> =<init>
+				<expr>(<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call> * (<name>dp</name>-&gt;<name>alen</name> + 1)</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+			<if>if <condition>(<expr>!<name>flags</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+			<for>for (<init><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; <name>dp</name>-&gt;<name>alen</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <expr_stmt><expr><name><name>flags</name><index>[<expr><name>i</name></expr>]</index></name> = <name>dp</name>-&gt;<name><name>astr</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt></for>
+			<expr_stmt><expr><name><name>flags</name><index>[<expr><name>dp</name>-&gt;<name>alen</name></expr>]</index></name> = <name>forbiddenword</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>dp</name>-&gt;<name>astr</name> = <name>flags</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>dp</name>-&gt;<name>alen</name>++</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>flag_qsort</name><argument_list>(<argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>dp</name> = <name>dp</name>-&gt;<name>next_homonym</name></expr>;</expr_stmt>
+	}</block></while>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/* remove forbidden flag to add a personal word to the hash */</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>remove_forbidden_flag</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list> <block>{
+	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>dp</name> =<init> <expr><call><name>lookup</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr>!<name>dp</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+	<while>while <condition>(<expr><name>dp</name></expr>)</condition> <block>{
+		<if>if <condition>(<expr><name>dp</name>-&gt;<name>astr</name> &amp;&amp; <call><name>TESTAFF</name><argument_list>(<argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>forbiddenword</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>dp</name>-&gt;<name>alen</name> == 1</expr>)</condition><then> <expr_stmt><expr><name>dp</name>-&gt;<name>alen</name> = 0</expr>;</expr_stmt></then> <comment type="line">// XXX forbidden words of personal dic.</comment>
+			<else>else <block>{
+				<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags2</name> =<init>
+					<expr>(<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>short</name> *</expr></argument>)</argument_list></call> * (<name>dp</name>-&gt;<name>alen</name> - 1)</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+				<if>if <condition>(<expr>!<name>flags2</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+				<decl_stmt><decl><type><name>int</name></type> <name>i</name>, <name>j</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+				<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>dp</name>-&gt;<name>alen</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+					<if>if <condition>(<expr><name>dp</name>-&gt;<name><name>astr</name><index>[<expr><name>i</name></expr>]</index></name> != <name>forbiddenword</name></expr>)</condition><then> <expr_stmt><expr><name><name>flags2</name><index>[<expr><name>j</name>++</expr>]</index></name> = <name>dp</name>-&gt;<name><name>astr</name><index>[<expr><name>i</name></expr>]</index></name></expr>;</expr_stmt></then></if>
+				}</block></for>
+				<expr_stmt><expr><name>dp</name>-&gt;<name>alen</name>--</expr>;</expr_stmt>
+				<expr_stmt><expr><name>dp</name>-&gt;<name>astr</name> = <name>flags2</name></expr>;</expr_stmt> <comment type="line">// XXX allowed forbidden words</comment>
+			}</block></else></if>
+		}</block></then></if>
+		<expr_stmt><expr><name>dp</name> = <name>dp</name>-&gt;<name>next_homonym</name></expr>;</expr_stmt>
+	}</block></while>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="line">// add a custom dic. word to the hash table (public)</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>add</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>al</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><call><name>remove_forbidden_flag</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>captype</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wbl</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wcl</name> =<init> <expr><call><name>get_clen_and_captype</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr>&amp;<name>captype</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<expr_stmt><expr><call><name>add_word</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>al</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>false</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr><call><name>add_hidden_capitalized_word</name><argument_list>(<argument><expr>(<name>char</name> *) <name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>al</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>captype</name></expr></argument>)</argument_list></call></expr>;</return>
+	}</block></then></if>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>add_with_affix</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>example</name></decl></param>)</parameter_list>
+<block>{
+	<comment type="line">// detect captype and modify word length for UTF-8 encoding</comment>
+	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>dp</name> =<init> <expr><call><name>lookup</name><argument_list>(<argument><expr><name>example</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<expr_stmt><expr><call><name>remove_forbidden_flag</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>dp</name> &amp;&amp; <name>dp</name>-&gt;<name>astr</name></expr>)</condition><then> <block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>captype</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wbl</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wcl</name> =<init> <expr><call><name>get_clen_and_captype</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr>&amp;<name>captype</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<if>if <condition>(<expr><name>aliasf</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>add_word</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>false</expr></argument>)</argument_list></call></expr>;</expr_stmt>	
+		}</block></then> <else>else <block>{
+			<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name> =<init> <expr>(<name>unsigned</name> <name>short</name> *) <call><name>malloc</name> <argument_list>(<argument><expr><name>dp</name>-&gt;<name>alen</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+			<if>if <condition>(<expr><name>flags</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>(<name>void</name> *) <name>flags</name></expr></argument>, <argument><expr>(<name>void</name> *) <name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr><call><name>add_word</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr>false</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then> <else>else <return>return <expr>1</expr>;</return></else></if>
+		}</block></else></if>
+		<return>return <expr><call><name>add_hidden_capitalized_word</name><argument_list>(<argument><expr>(<name>char</name> *) <name>word</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>dp</name>-&gt;<name>alen</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>captype</name></expr></argument>)</argument_list></call></expr>;</return>
+	}</block></then></if>
+	<return>return <expr>1</expr>;</return>
+}</block></function>
+
+<comment type="line">// walk the hash table entry by entry - null at end</comment>
+<comment type="line">// initialize: col=-1; hp = NULL; hp = walk_hashtable(&amp;col, hp);</comment>
+<function><type>struct <name>hentry</name> *</type> <name><name>HashMgr</name>::<name>walk_hashtable</name></name><parameter_list>(<param><decl><type><name>int</name> &amp;</type><name>col</name></decl></param>, <param><decl><type>struct <name>hentry</name> *</type> <name>hp</name></decl></param>)</parameter_list> <specifier>const</specifier>
+<block>{  
+	<if>if <condition>(<expr><name>hp</name> &amp;&amp; <name>hp</name>-&gt;<name>next</name> != <name>NULL</name></expr>)</condition><then> <return>return <expr><name>hp</name>-&gt;<name>next</name></expr>;</return></then></if>
+	<for>for (<init><expr><name>col</name>++</expr>;</init> <condition><expr><name>col</name> &lt; <name>tablesize</name></expr>;</condition> <incr><expr><name>col</name>++</expr></incr>) <block>{
+		<if>if <condition>(<expr><name><name>tableptr</name><index>[<expr><name>col</name></expr>]</index></name></expr>)</condition><then> <return>return <expr><name><name>tableptr</name><index>[<expr><name>col</name></expr>]</index></name></expr>;</return></then></if>
+	}</block></for>
+	<comment type="line">// null at end and reset to start</comment>
+	<expr_stmt><expr><name>col</name> = -1</expr>;</expr_stmt>
+	<return>return <expr><name>NULL</name></expr>;</return>
+}</block></function>
+
+<comment type="line">// load a munched word list and build a hash table on the fly</comment>
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>load_tables</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>tpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>int</name></type> <name>al</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>ap</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>dp</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>dp2</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>flags</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>ts</name></decl>;</decl_stmt>
+
+	<comment type="line">// open dictionary file</comment>
+	<decl_stmt><decl><type><name>FileMgr</name> *</type> <name>dict</name> =<init> <expr>new <call><name>FileMgr</name><argument_list>(<argument><expr><name>tpath</name></expr></argument>, <argument><expr><name>key</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>dict</name> == <name>NULL</name></expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+
+	<comment type="line">// first read the first line of file to get hash table size */</comment>
+	<if>if <condition>(<expr>!(<name>ts</name> = <name>dict</name>-&gt;<call><name>getline</name><argument_list>()</argument_list></call>)</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: empty dic file\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>delete <name>dict</name></expr>;</expr_stmt>
+		<return>return <expr>2</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><call><name>mychomp</name><argument_list>(<argument><expr><name>ts</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+	<comment type="block">/* remove byte order mark */</comment>
+	<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>ts</name></expr></argument>,<argument><expr>"\xEF\xBB\xBF"</expr></argument>,<argument><expr>3</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>memmove</name><argument_list>(<argument><expr><name>ts</name></expr></argument>, <argument><expr><name>ts</name>+3</expr></argument>, <argument><expr><call><name>strlen</name><argument_list>(<argument><expr><name>ts</name>+3</expr></argument>)</argument_list></call>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"warning: dic file begins with byte order mark: possible incompatibility with old Hunspell versions\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then></if>
+
+	<expr_stmt><expr><name>tablesize</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>ts</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>tablesize</name> == 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line 1: missing or bad word count in the dic file\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>delete <name>dict</name></expr>;</expr_stmt>
+		<return>return <expr>4</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><name>tablesize</name> = <name>tablesize</name> + 5 + <name>USERWORD</name></expr>;</expr_stmt>
+	<if>if <condition>(<expr>(<name>tablesize</name> %2) == 0</expr>)</condition><then> <expr_stmt><expr><name>tablesize</name>++</expr>;</expr_stmt></then></if>
+
+	<comment type="line">// allocate the hash table</comment>
+	<expr_stmt><expr><name>tableptr</name> = (struct <name>hentry</name> **) <call><name>malloc</name><argument_list>(<argument><expr><name>tablesize</name> * <call><name>sizeof</name><argument_list>(<argument>struct <expr><name>hentry</name> *</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr>! <name>tableptr</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr>delete <name>dict</name></expr>;</expr_stmt>
+		<return>return <expr>3</expr>;</return>
+	}</block></then></if>
+	<for>for (<init><decl><type><name>int</name></type> <name>i</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>i</name>&lt;<name>tablesize</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <expr_stmt><expr><name><name>tableptr</name><index>[<expr><name>i</name></expr>]</index></name> = <name>NULL</name></expr>;</expr_stmt></for>
+
+	<comment type="line">// loop through all words on much list and add to hash</comment>
+	<comment type="line">// table and create word and affix strings</comment>
+
+	<while>while <condition>(<expr>(<name>ts</name> = <name>dict</name>-&gt;<call><name>getline</name><argument_list>()</argument_list></call>)</expr>)</condition> <block>{
+		<expr_stmt><expr><call><name>mychomp</name><argument_list>(<argument><expr><name>ts</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<comment type="line">// split each line into word and morphological description</comment>
+		<expr_stmt><expr><name>dp</name> = <name>ts</name></expr>;</expr_stmt>
+		<while>while <condition>(<expr>(<name>dp</name> = <call><name>strchr</name><argument_list>(<argument><expr><name>dp</name></expr></argument>, <argument><expr>':'</expr></argument>)</argument_list></call>)</expr>)</condition> <block>{
+			<if>if <condition>(<expr>(<name>dp</name> &gt; <name>ts</name> + 3) &amp;&amp; (*(<name>dp</name> - 3) == ' ' || *(<name>dp</name> - 3) == '\t')</expr>)</condition><then> <block>{
+				<for>for (<init><expr><name>dp</name> -= 4</expr>;</init> <condition><expr><name>dp</name> &gt;= <name>ts</name> &amp;&amp; (*<name>dp</name> == ' ' || *<name>dp</name> == '\t')</expr>;</condition> <incr><expr><name>dp</name>--</expr></incr>)<empty_stmt>;</empty_stmt></for>
+				<if>if <condition>(<expr><name>dp</name> &lt; <name>ts</name></expr>)</condition><then> <block>{ <comment type="line">// missing word</comment>
+					<expr_stmt><expr><name>dp</name> = <name>NULL</name></expr>;</expr_stmt>
+				}</block></then> <else>else <block>{
+					<expr_stmt><expr>*(<name>dp</name> + 1) = '\0'</expr>;</expr_stmt>
+					<expr_stmt><expr><name>dp</name> = <name>dp</name> + 2</expr>;</expr_stmt>
+				}</block></else></if>
+				<break>break;</break>
+			}</block></then></if>
+			<expr_stmt><expr><name>dp</name>++</expr>;</expr_stmt>
+		}</block></while>
+
+		<comment type="line">// tabulator is the old morphological field separator</comment>
+		<expr_stmt><expr><name>dp2</name> = <call><name>strchr</name><argument_list>(<argument><expr><name>ts</name></expr></argument>, <argument><expr>'\t'</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>dp2</name> &amp;&amp; (!<name>dp</name> || <name>dp2</name> &lt; <name>dp</name>)</expr>)</condition><then> <block>{
+			<expr_stmt><expr>*<name>dp2</name> = '\0'</expr>;</expr_stmt>
+			<expr_stmt><expr><name>dp</name> = <name>dp2</name> + 1</expr>;</expr_stmt>
+		}</block></then></if>
+
+		<comment type="line">// split each line into word and affix char strings</comment>
+		<comment type="line">// "\/" signs slash in words (not affix separator)</comment>
+		<comment type="line">// "/" at beginning of the line is word character (not affix separator)</comment>
+		<expr_stmt><expr><name>ap</name> = <call><name>strchr</name><argument_list>(<argument><expr><name>ts</name></expr></argument>,<argument><expr>'/'</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<while>while <condition>(<expr><name>ap</name></expr>)</condition> <block>{
+			<if>if <condition>(<expr><name>ap</name> == <name>ts</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>ap</name>++</expr>;</expr_stmt>
+				<continue>continue;</continue>
+			}</block></then> <else>else <if>if <condition>(<expr>*(<name>ap</name> - 1) != '\\'</expr>)</condition><then> <break>break;</break></then></if></else></if>
+			<comment type="line">// replace "\/" with "/"</comment>
+			<for>for (<init><decl><type><name>char</name> *</type> <name>sp</name> =<init> <expr><name>ap</name> - 1</expr></init></decl>;</init> <condition><expr>*<name>sp</name></expr>;</condition> <incr><expr>*<name>sp</name> = *(<name>sp</name> + 1)</expr>, <expr><name>sp</name>++</expr></incr>)<empty_stmt>;</empty_stmt></for>
+			<expr_stmt><expr><name>ap</name> = <call><name>strchr</name><argument_list>(<argument><expr><name>ap</name></expr></argument>,<argument><expr>'/'</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></while>
+
+		<if>if <condition>(<expr><name>ap</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr>*<name>ap</name> = '\0'</expr>;</expr_stmt>
+			<if>if <condition>(<expr><name>aliasf</name></expr>)</condition><then> <block>{
+				<decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><call><name>atoi</name><argument_list>(<argument><expr><name>ap</name> + 1</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+				<expr_stmt><expr><name>al</name> = <call><name>get_aliasf</name><argument_list>(<argument><expr><name>index</name></expr></argument>, <argument><expr>&amp;<name>flags</name></expr></argument>, <argument><expr><name>dict</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr>!<name>al</name></expr>)</condition><then> <block>{
+					<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad flag vector alias\n"</expr></argument>, <argument><expr><name>dict</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<expr_stmt><expr>*<name>ap</name> = '\0'</expr>;</expr_stmt>
+				}</block></then></if>
+			}</block></then> <else>else <block>{
+				<expr_stmt><expr><name>al</name> = <call><name>decode_flags</name><argument_list>(<argument><expr>&amp;<name>flags</name></expr></argument>, <argument><expr><name>ap</name> + 1</expr></argument>, <argument><expr><name>dict</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr><name>al</name> == -1</expr>)</condition><then> <block>{
+					<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"Can't allocate memory.\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+					<return>return <expr>6</expr>;</return>
+				}</block></then></if>
+				<expr_stmt><expr><call><name>flag_qsort</name><argument_list>(<argument><expr><name>flags</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>al</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></else></if>
+		}</block></then> <else>else <block>{
+			<expr_stmt><expr><name>al</name> = 0</expr>;</expr_stmt>
+			<expr_stmt><expr><name>ap</name> = <name>NULL</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>flags</name> = <name>NULL</name></expr>;</expr_stmt>
+		}</block></else></if>
+
+		<decl_stmt><decl><type><name>int</name></type> <name>captype</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wbl</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>ts</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>wcl</name> =<init> <expr><call><name>get_clen_and_captype</name><argument_list>(<argument><expr><name>ts</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr>&amp;<name>captype</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+		<comment type="line">// add the word and its index plus its capitalized form optionally</comment>
+		<if>if <condition>(<expr><call><name>add_word</name><argument_list>(<argument><expr><name>ts</name></expr></argument>,<argument><expr><name>wbl</name></expr></argument>,<argument><expr><name>wcl</name></expr></argument>,<argument><expr><name>flags</name></expr></argument>,<argument><expr><name>al</name></expr></argument>,<argument><expr><name>dp</name></expr></argument>, <argument><expr>false</expr></argument>)</argument_list></call> ||
+			<call><name>add_hidden_capitalized_word</name><argument_list>(<argument><expr><name>ts</name></expr></argument>, <argument><expr><name>wbl</name></expr></argument>, <argument><expr><name>wcl</name></expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>al</name></expr></argument>, <argument><expr><name>dp</name></expr></argument>, <argument><expr><name>captype</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>dict</name></expr>;</expr_stmt>
+				<return>return <expr>5</expr>;</return>
+		}</block></then></if>
+	}</block></while>
+
+	<expr_stmt><expr>delete <name>dict</name></expr>;</expr_stmt>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="line">// the hash function is a simple load and rotate</comment>
+<comment type="line">// algorithm borrowed</comment>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>hash</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list> <specifier>const</specifier>
+<block>{
+	<decl_stmt><decl><type><name>long</name></type>  <name>hv</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<for>for (<init><decl><type><name>int</name></type> <name>i</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; 4  &amp;&amp;  *<name>word</name> != 0</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)
+		<expr_stmt><expr><name>hv</name> = (<name>hv</name> &lt;&lt; 8) | (*<name>word</name>++)</expr>;</expr_stmt></for>
+	<while>while <condition>(<expr>*<name>word</name> != 0</expr>)</condition> <block>{
+		<expr_stmt><expr><call><name>ROTATE</name><argument_list>(<argument><expr><name>hv</name></expr></argument>,<argument><expr><name>ROTATE_LEN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hv</name> ^= (*<name>word</name>++)</expr>;</expr_stmt>
+	}</block></while>
+	<return>return <expr>(<name>unsigned</name> <name>long</name>) <name>hv</name> % <name>tablesize</name></expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>decode_flags</name></name><parameter_list>(<param><decl><type><name>unsigned</name> <name>short</name> **</type> <name>result</name></decl></param>, <param><decl><type><name>char</name> *</type> <name>flags</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list> <block>{
+	<decl_stmt><decl><type><name>int</name></type> <name>len</name></decl>;</decl_stmt>
+	<if>if <condition>(<expr>*<name>flags</name> == '\0'</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad flagvector\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>result</name> = <name>NULL</name></expr>;</expr_stmt>
+		<return>return <expr>0</expr>;</return>
+	}</block></then></if>
+	<switch>switch <condition>(<expr><name>flag_mode</name></expr>)</condition> <block>{
+	  <case>case <expr><name>FLAG_LONG</name></expr>: <block>{ <comment type="line">// two-character flags (1x2yZz -&gt; 1x 2y Zz)</comment>
+		  <expr_stmt><expr><name>len</name> = <call><name>strlen</name><argument_list>(<argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr><name>len</name>%2 == 1</expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad flagvector\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		  <expr_stmt><expr><name>len</name> /= 2</expr>;</expr_stmt>
+		  <expr_stmt><expr>*<name>result</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr>!*<name>result</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
+		  <for>for (<init><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; <name>len</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			  <expr_stmt><expr>(*<name>result</name>)[<name>i</name>] = (((<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2</expr>]</index></name>) &lt;&lt; 8) + (<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2 + 1</expr>]</index></name></expr>;</expr_stmt> 
+		  }</block></for>
+		  <break>break;</break>
+					  }</block>
+	  </case><case>case <expr><name>FLAG_NUM</name></expr>: <block>{ <comment type="line">// decimal numbers separated by comma (4521,23,233 -&gt; 4521 23 233)</comment>
+		  <decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>len</name> = 1</expr>;</expr_stmt>
+		  <decl_stmt><decl><type><name>char</name> *</type> <name>src</name> =<init> <expr><name>flags</name></expr></init></decl>;</decl_stmt> 
+		  <decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>dest</name></decl>;</decl_stmt>
+		  <decl_stmt><decl><type><name>char</name> *</type> <name>p</name></decl>;</decl_stmt>
+		  <for>for (<init><expr><name>p</name> = <name>flags</name></expr>;</init> <condition><expr>*<name>p</name></expr>;</condition> <incr><expr><name>p</name>++</expr></incr>) <block>{
+			  <if>if <condition>(<expr>*<name>p</name> == ','</expr>)</condition><then> <expr_stmt><expr><name>len</name>++</expr>;</expr_stmt></then></if>
+		  }</block></for>
+		  <expr_stmt><expr>*<name>result</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr>!*<name>result</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
+		  <expr_stmt><expr><name>dest</name> = *<name>result</name></expr>;</expr_stmt>
+		  <for>for (<init><expr><name>p</name> = <name>flags</name></expr>;</init> <condition><expr>*<name>p</name></expr>;</condition> <incr><expr><name>p</name>++</expr></incr>) <block>{
+			  <if>if <condition>(<expr>*<name>p</name> == ','</expr>)</condition><then> <block>{
+				  <expr_stmt><expr><name>i</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>src</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				  <if>if <condition>(<expr><name>i</name> &gt;= <name>DEFAULTFLAGS</name></expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: flag id %d is too large (max: %d)\n"</expr></argument>,
+					  <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>DEFAULTFLAGS</name> - 1</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+				  <expr_stmt><expr>*<name>dest</name> = (<name>unsigned</name> <name>short</name>) <name>i</name></expr>;</expr_stmt>
+				  <if>if <condition>(<expr>*<name>dest</name> == 0</expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: 0 is wrong flag id\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+				  <expr_stmt><expr><name>src</name> = <name>p</name> + 1</expr>;</expr_stmt>
+				  <expr_stmt><expr><name>dest</name>++</expr>;</expr_stmt>
+			  }</block></then></if>
+		  }</block></for>
+		  <expr_stmt><expr><name>i</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>src</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr><name>i</name> &gt;= <name>DEFAULTFLAGS</name></expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: flag id %d is too large (max: %d)\n"</expr></argument>,
+			  <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>DEFAULTFLAGS</name> - 1</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		  <expr_stmt><expr>*<name>dest</name> = (<name>unsigned</name> <name>short</name>) <name>i</name></expr>;</expr_stmt>
+		  <if>if <condition>(<expr>*<name>dest</name> == 0</expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: 0 is wrong flag id\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		  <break>break;</break>
+					 }</block>    
+	  </case><case>case <expr><name>FLAG_UNI</name></expr>: <block>{ <comment type="line">// UTF-8 characters</comment>
+		  <decl_stmt><decl><type><name>w_char</name></type> <name><name>w</name><index>[<expr><name>BUFSIZE</name>/2</expr>]</index></name></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>len</name> = <call><name>u8_u16</name><argument_list>(<argument><expr><name>w</name></expr></argument>, <argument><expr><name>BUFSIZE</name>/2</expr></argument>, <argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr>*<name>result</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr>!*<name>result</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
+		  <expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>*<name>result</name></expr></argument>, <argument><expr><name>w</name></expr></argument>, <argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <break>break;</break>
+					 }</block>
+	  </case><default>default: <block>{ <comment type="line">// Ispell's one-character flags (erfg -&gt; e r f g)</comment>
+		  <decl_stmt><decl><type><name>unsigned</name> <name>short</name> *</type> <name>dest</name></decl>;</decl_stmt>
+		  <expr_stmt><expr><name>len</name> = <call><name>strlen</name><argument_list>(<argument><expr><name>flags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <expr_stmt><expr>*<name>result</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr>!*<name>result</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
+		  <expr_stmt><expr><name>dest</name> = *<name>result</name></expr>;</expr_stmt>
+		  <for>for (<init><decl><type><name>unsigned</name> <name>char</name> *</type> <name>p</name> =<init> <expr>(<name>unsigned</name> <name>char</name> *) <name>flags</name></expr></init></decl>;</init> <condition><expr>*<name>p</name></expr>;</condition> <incr><expr><name>p</name>++</expr></incr>) <block>{
+			  <expr_stmt><expr>*<name>dest</name> = (<name>unsigned</name> <name>short</name>) *<name>p</name></expr>;</expr_stmt>
+			  <expr_stmt><expr><name>dest</name>++</expr>;</expr_stmt>
+		  }</block></for>
+			   }</block>
+	</default>}</block></switch>
+	<return>return <expr><name>len</name></expr>;</return>
+}</block></function>
+
+<function><type><name>unsigned</name> <name>short</name></type> <name><name>HashMgr</name>::<name>decode_flag</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>f</name></decl></param>)</parameter_list> <block>{
+	<decl_stmt><decl><type><name>unsigned</name> <name>short</name></type> <name>s</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+	<switch>switch <condition>(<expr><name>flag_mode</name></expr>)</condition> <block>{
+	  <case>case <expr><name>FLAG_LONG</name></expr>:
+		  <expr_stmt><expr><name>s</name> = ((<name>unsigned</name> <name>short</name>) <name><name>f</name><index>[<expr>0</expr>]</index></name> &lt;&lt; 8) + (<name>unsigned</name> <name>short</name>) <name><name>f</name><index>[<expr>1</expr>]</index></name></expr>;</expr_stmt>
+		  <break>break;</break>
+	  </case><case>case <expr><name>FLAG_NUM</name></expr>:
+		  <expr_stmt><expr><name>i</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>f</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <if>if <condition>(<expr><name>i</name> &gt;= <name>DEFAULTFLAGS</name></expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: flag id %d is too large (max: %d)\n"</expr></argument>, <argument><expr><name>i</name></expr></argument>, <argument><expr><name>DEFAULTFLAGS</name> - 1</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		  <expr_stmt><expr><name>s</name> = (<name>unsigned</name> <name>short</name>) <name>i</name></expr>;</expr_stmt>
+		  <break>break;</break>
+	  </case><case>case <expr><name>FLAG_UNI</name></expr>:
+		  <expr_stmt><expr><call><name>u8_u16</name><argument_list>(<argument><expr>(<name>w_char</name> *) &amp;<name>s</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>f</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		  <break>break;</break>
+	  </case><default>default:
+		  <expr_stmt><expr><name>s</name> = (<name>unsigned</name> <name>short</name>) *((<name>unsigned</name> <name>char</name> *)<name>f</name>)</expr>;</expr_stmt>
+	</default>}</block></switch>
+	<if>if <condition>(<expr><name>s</name> == 0</expr>)</condition><then> <expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: 0 is wrong flag id\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<return>return <expr><name>s</name></expr>;</return>
+}</block></function>
+
+<function><type><name>char</name> *</type> <name><name>HashMgr</name>::<name>encode_flag</name></name><parameter_list>(<param><decl><type><name>unsigned</name> <name>short</name></type> <name>f</name></decl></param>)</parameter_list> <block>{
+	<decl_stmt><decl><type><name>unsigned</name> <name>char</name></type> <name><name>ch</name><index>[<expr>10</expr>]</index></name></decl>;</decl_stmt>
+	<if>if <condition>(<expr><name>f</name>==0</expr>)</condition><then> <return>return <expr><call><name>mystrdup</name><argument_list>(<argument><expr>"(NULL)"</expr></argument>)</argument_list></call></expr>;</return></then></if>
+	<if>if <condition>(<expr><name>flag_mode</name> == <name>FLAG_LONG</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name><name>ch</name><index>[<expr>0</expr>]</index></name> = (<name>unsigned</name> <name>char</name>) (<name>f</name> &gt;&gt; 8)</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>ch</name><index>[<expr>1</expr>]</index></name> = (<name>unsigned</name> <name>char</name>) (<name>f</name> - ((<name>f</name> &gt;&gt; 8) &lt;&lt; 8))</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>ch</name><index>[<expr>2</expr>]</index></name> = '\0'</expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>flag_mode</name> == <name>FLAG_NUM</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>sprintf</name><argument_list>(<argument><expr>(<name>char</name> *) <name>ch</name></expr></argument>, <argument><expr>"%d"</expr></argument>, <argument><expr><name>f</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then> <else>else <if>if <condition>(<expr><name>flag_mode</name> == <name>FLAG_UNI</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>u16_u8</name><argument_list>(<argument><expr>(<name>char</name> *) &amp;<name>ch</name></expr></argument>, <argument><expr>10</expr></argument>, <argument><expr>(<name>w_char</name> *) &amp;<name>f</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then> <else>else <block>{
+		<expr_stmt><expr><name><name>ch</name><index>[<expr>0</expr>]</index></name> = (<name>unsigned</name> <name>char</name>) (<name>f</name>)</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>ch</name><index>[<expr>1</expr>]</index></name> = '\0'</expr>;</expr_stmt>
+	}</block></else></if></else></if></else></if>
+	<return>return <expr><call><name>mystrdup</name><argument_list>(<argument><expr>(<name>char</name> *) <name>ch</name></expr></argument>)</argument_list></call></expr>;</return>
+}</block></function>
+
+<comment type="line">// read in aff file and set flag mode</comment>
+<function><type><name>int</name></type>  <name><name>HashMgr</name>::<name>load_config</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>affpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>
+<block>{
+	<decl_stmt><decl><type><name>char</name> *</type> <name>line</name></decl>;</decl_stmt> <comment type="line">// io buffers</comment>
+	<decl_stmt><decl><type><name>int</name></type> <name>firstline</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
+
+	<comment type="line">// open the affix file</comment>
+	<decl_stmt><decl><type><name>FileMgr</name> *</type> <name>afflst</name> =<init> <expr>new <call><name>FileMgr</name><argument_list>(<argument><expr><name>affpath</name></expr></argument>, <argument><expr><name>key</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+	<if>if <condition>(<expr>!<name>afflst</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"Error - could not open affix description file %s\n"</expr></argument>,<argument><expr><name>affpath</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+
+	<comment type="line">// read in each line ignoring any that do not</comment>
+	<comment type="line">// start with a known line type indicator</comment>
+
+	<while>while <condition>(<expr>(<name>line</name> = <name>afflst</name>-&gt;<call><name>getline</name><argument_list>()</argument_list></call>)</expr>)</condition> <block>{
+		<expr_stmt><expr><call><name>mychomp</name><argument_list>(<argument><expr><name>line</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<comment type="block">/* remove byte order mark */</comment>
+		<if>if <condition>(<expr><name>firstline</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>firstline</name> = 0</expr>;</expr_stmt>
+			<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"\xEF\xBB\xBF"</expr></argument>,<argument><expr>3</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <expr_stmt><expr><call><name>memmove</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr><name>line</name>+3</expr></argument>, <argument><expr><call><name>strlen</name><argument_list>(<argument><expr><name>line</name>+3</expr></argument>)</argument_list></call>+1</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		}</block></then></if>
+
+		<comment type="block">/* parse in the try string */</comment>
+		<if>if <condition>(<expr>(<call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"FLAG"</expr></argument>,<argument><expr>4</expr></argument>)</argument_list></call> == 0) &amp;&amp; <call><name>isspace</name><argument_list>(<argument><expr><name><name>line</name><index>[<expr>4</expr>]</index></name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><name>flag_mode</name> != <name>FLAG_CHAR</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: multiple definitions of the FLAG affix file parameter\n"</expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+			<if>if <condition>(<expr><call><name>strstr</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"long"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>flag_mode</name> = <name>FLAG_LONG</name></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><call><name>strstr</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"num"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>flag_mode</name> = <name>FLAG_NUM</name></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><call><name>strstr</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"UTF-8"</expr></argument>)</argument_list></call></expr>)</condition><then> <expr_stmt><expr><name>flag_mode</name> = <name>FLAG_UNI</name></expr>;</expr_stmt></then></if>
+			<if>if <condition>(<expr><name>flag_mode</name> == <name>FLAG_CHAR</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: FLAG needs `num', `long' or `UTF-8' parameter\n"</expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			}</block></then></if>
+		}</block></then></if>
+		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"FORBIDDENWORD"</expr></argument>,<argument><expr>13</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+			<decl_stmt><decl><type><name>char</name> *</type> <name>st</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+			<if>if <condition>(<expr><call><name>parse_string</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>&amp;<name>st</name></expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+				<return>return <expr>1</expr>;</return>
+			}</block></then></if>
+			<expr_stmt><expr><name>forbiddenword</name> = <call><name>decode_flag</name><argument_list>(<argument><expr><name>st</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>st</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"SET"</expr></argument>, <argument><expr>3</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>parse_string</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>&amp;<name>enc</name></expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+				<return>return <expr>1</expr>;</return>
+			}</block></then></if>    	    
+			<if>if <condition>(<expr><call><name>strcmp</name><argument_list>(<argument><expr><name>enc</name></expr></argument>, <argument><expr>"UTF-8"</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>utf8</name> = 1</expr>;</expr_stmt>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>OPENOFFICEORG</name></cpp:ifndef>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>MOZILLA_CLIENT</name></cpp:ifndef>
+				<expr_stmt><expr><call><name>initialize_utf_tbl</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			}</block></then> <else>else <expr_stmt><expr><name>csconv</name> = <call><name>get_current_cs</name><argument_list>(<argument><expr><name>enc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+		}</block></then></if>
+		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"LANG"</expr></argument>, <argument><expr>4</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>parse_string</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>&amp;<name>lang</name></expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+				<return>return <expr>1</expr>;</return>
+			}</block></then></if>    	    
+			<expr_stmt><expr><name>langnum</name> = <call><name>get_lang_num</name><argument_list>(<argument><expr><name>lang</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></then></if>
+
+		<comment type="block">/* parse in the ignored characters (for example, Arabic optional diacritics characters */</comment>
+		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"IGNORE"</expr></argument>,<argument><expr>6</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>parse_array</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>&amp;<name>ignorechars</name></expr></argument>, <argument><expr>&amp;<name>ignorechars_utf16</name></expr></argument>,
+				<argument><expr>&amp;<name>ignorechars_utf16_len</name></expr></argument>, <argument><expr><name>utf8</name></expr></argument>, <argument><expr><name>afflst</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+					<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+					<return>return <expr>1</expr>;</return>
+			}</block></then></if>
+		}</block></then></if>
+
+		<if>if <condition>(<expr>(<call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"AF"</expr></argument>,<argument><expr>2</expr></argument>)</argument_list></call> == 0) &amp;&amp; <call><name>isspace</name><argument_list>(<argument><expr><name><name>line</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>parse_aliasf</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr><name>afflst</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+				<return>return <expr>1</expr>;</return>
+			}</block></then></if>
+		}</block></then></if>
+
+		<if>if <condition>(<expr>(<call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"AM"</expr></argument>,<argument><expr>2</expr></argument>)</argument_list></call> == 0) &amp;&amp; <call><name>isspace</name><argument_list>(<argument><expr><name><name>line</name><index>[<expr>2</expr>]</index></name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr><call><name>parse_aliasm</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr><name>afflst</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
+				<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+				<return>return <expr>1</expr>;</return>
+			}</block></then></if>
+		}</block></then></if>
+
+		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"COMPLEXPREFIXES"</expr></argument>,<argument><expr>15</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <expr_stmt><expr><name>complexprefixes</name> = 1</expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr>((<call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"SFX"</expr></argument>,<argument><expr>3</expr></argument>)</argument_list></call> == 0) || (<call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>,<argument><expr>"PFX"</expr></argument>,<argument><expr>3</expr></argument>)</argument_list></call> == 0)) &amp;&amp; <call><name>isspace</name><argument_list>(<argument><expr><name><name>line</name><index>[<expr>3</expr>]</index></name></expr></argument>)</argument_list></call></expr>)</condition><then> <break>break;</break></then></if>
+	}</block></while>
+	<if>if <condition>(<expr><name>csconv</name> == <name>NULL</name></expr>)</condition><then> <expr_stmt><expr><name>csconv</name> = <call><name>get_current_cs</name><argument_list>(<argument><expr><name>SPELL_ENCODING</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+	<expr_stmt><expr>delete <name>afflst</name></expr>;</expr_stmt>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/* parse in the ALIAS table */</comment>
+<function><type><name>int</name></type>  <name><name>HashMgr</name>::<name>parse_aliasf</name></name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>line</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>
+<block>{
+	<if>if <condition>(<expr><name>numaliasf</name> != 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: multiple table definitions\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>tp</name> =<init> <expr><name>line</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>piece</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>np</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<while>while <condition>(<expr><name>piece</name></expr>)</condition> <block>{
+		<if>if <condition>(<expr>*<name>piece</name> != '\0'</expr>)</condition><then> <block>{
+			<switch>switch<condition>(<expr><name>i</name></expr>)</condition> <block>{
+<case>case <expr>0</expr>: <block>{ <expr_stmt><expr><name>np</name>++</expr>;</expr_stmt> <break>break;</break> }</block>
+</case><case>case <expr>1</expr>: <block>{ 
+	<expr_stmt><expr><name>numaliasf</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>piece</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>numaliasf</name> &lt; 1</expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad entry number\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><name>aliasf</name> = (<name>unsigned</name> <name>short</name> **) <macro><name>malloc</name><argument_list>(<argument>numaliasf * sizeof(unsigned short *)</argument>)</argument_list></macro></expr>;</expr_stmt>
+	<expr_stmt><expr><name>aliasflen</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>numaliasf</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<name>aliasf</name> || !<name>aliasflen</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>aliasf</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr><name>aliasflen</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasflen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><name>np</name>++</expr>;</expr_stmt>
+	<break>break;</break>
+		}</block>
+</case><default>default: <break>break;</break>
+			</default>}</block></switch>
+			<expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></while>
+	<if>if <condition>(<expr><name>np</name> != 2</expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasflen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: missing data\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if> 
+
+	<comment type="block">/* now parse the numaliasf lines to read in the remainder of the table */</comment>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>nl</name></decl>;</decl_stmt>
+	<for>for (<init><decl><type><name>int</name></type> <name>j</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>j</name> &lt; <name>numaliasf</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>) <block>{
+		<if>if <condition>(<expr>!(<name>nl</name> = <name>af</name>-&gt;<call><name>getline</name><argument_list>()</argument_list></call>)</expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+		<expr_stmt><expr><call><name>mychomp</name><argument_list>(<argument><expr><name>nl</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>tp</name> = <name>nl</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>i</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>aliasf</name><index>[<expr><name>j</name></expr>]</index></name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>aliasflen</name><index>[<expr><name>j</name></expr>]</index></name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<while>while <condition>(<expr><name>piece</name></expr>)</condition> <block>{
+			<if>if <condition>(<expr>*<name>piece</name> != '\0'</expr>)</condition><then> <block>{
+				<switch>switch<condition>(<expr><name>i</name></expr>)</condition> <block>{
+<case>case <expr>0</expr>: <block>{
+	<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>piece</name></expr></argument>,<argument><expr>"AF"</expr></argument>,<argument><expr>2</expr></argument>)</argument_list></call> != 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasflen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: table is corrupt\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<break>break;</break>
+		}</block>
+</case><case>case <expr>1</expr>: <block>{
+	<expr_stmt><expr><name><name>aliasflen</name><index>[<expr><name>j</name></expr>]</index></name> = (<name>unsigned</name> <name>short</name>) <call><name>decode_flags</name><argument_list>(<argument><expr>&amp;(<name><name>aliasf</name><index>[<expr><name>j</name></expr>]</index></name>)</expr></argument>, <argument><expr><name>piece</name></expr></argument>, <argument><expr><name>af</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr><call><name>flag_qsort</name><argument_list>(<argument><expr><name><name>aliasf</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name><name>aliasflen</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<break>break;</break> 
+		}</block>
+</case><default>default: <break>break;</break>
+				</default>}</block></switch>
+				<expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></while>
+		<if>if <condition>(<expr>!<name><name>aliasf</name><index>[<expr><name>j</name></expr>]</index></name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasflen</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>aliasf</name> = <name>NULL</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>aliasflen</name> = <name>NULL</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>numaliasf</name> = 0</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: table is corrupt\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>1</expr>;</return>
+		}</block></then></if>
+	}</block></for>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>is_aliasf</name></name><parameter_list>()</parameter_list> <block>{
+	<return>return <expr>(<name>aliasf</name> != <name>NULL</name>)</expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>get_aliasf</name></name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>, <param><decl><type><name>unsigned</name> <name>short</name> **</type> <name>fvec</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list> <block>{
+	<if>if <condition>(<expr>(<name>index</name> &gt; 0) &amp;&amp; (<name>index</name> &lt;= <name>numaliasf</name>)</expr>)</condition><then> <block>{
+		<expr_stmt><expr>*<name>fvec</name> = <name><name>aliasf</name><index>[<expr><name>index</name> - 1</expr>]</index></name></expr>;</expr_stmt>
+		<return>return <expr><name><name>aliasflen</name><index>[<expr><name>index</name> - 1</expr>]</index></name></expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad flag alias index: %d\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>, <argument><expr><name>index</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<expr_stmt><expr>*<name>fvec</name> = <name>NULL</name></expr>;</expr_stmt>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<comment type="block">/* parse morph alias definitions */</comment>
+<function><type><name>int</name></type>  <name><name>HashMgr</name>::<name>parse_aliasm</name></name><parameter_list>(<param><decl><type><name>char</name> *</type> <name>line</name></decl></param>, <param><decl><type><name>FileMgr</name> *</type> <name>af</name></decl></param>)</parameter_list>
+<block>{
+	<if>if <condition>(<expr><name>numaliasm</name> != 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: multiple table definitions\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>tp</name> =<init> <expr><name>line</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>piece</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>np</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
+	<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<while>while <condition>(<expr><name>piece</name></expr>)</condition> <block>{
+		<if>if <condition>(<expr>*<name>piece</name> != '\0'</expr>)</condition><then> <block>{
+			<switch>switch<condition>(<expr><name>i</name></expr>)</condition> <block>{
+<case>case <expr>0</expr>: <block>{ <expr_stmt><expr><name>np</name>++</expr>;</expr_stmt> <break>break;</break> }</block>
+</case><case>case <expr>1</expr>: <block>{ 
+	<expr_stmt><expr><name>numaliasm</name> = <call><name>atoi</name><argument_list>(<argument><expr><name>piece</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr><name>numaliasm</name> &lt; 1</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: bad entry number\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><name>aliasm</name> = (<name>char</name> **) <call><name>malloc</name><argument_list>(<argument><expr><name>numaliasm</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>char</name> *</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<name>aliasm</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<expr_stmt><expr><name>np</name>++</expr>;</expr_stmt>
+	<break>break;</break>
+		}</block>
+</case><default>default: <break>break;</break>
+			</default>}</block></switch>
+			<expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+		}</block></then></if>
+		<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></while>
+	<if>if <condition>(<expr><name>np</name> != 2</expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: missing data\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if> 
+
+	<comment type="block">/* now parse the numaliasm lines to read in the remainder of the table */</comment>
+	<decl_stmt><decl><type><name>char</name> *</type> <name>nl</name> =<init> <expr><name>line</name></expr></init></decl>;</decl_stmt>
+	<for>for (<init><decl><type><name>int</name></type> <name>j</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>j</name> &lt; <name>numaliasm</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>) <block>{
+		<if>if <condition>(<expr>!(<name>nl</name> = <name>af</name>-&gt;<call><name>getline</name><argument_list>()</argument_list></call>)</expr>)</condition><then> <return>return <expr>1</expr>;</return></then></if>
+		<expr_stmt><expr><call><name>mychomp</name><argument_list>(<argument><expr><name>nl</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>tp</name> = <name>nl</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>i</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name><name>aliasm</name><index>[<expr><name>j</name></expr>]</index></name> = <name>NULL</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>' '</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<while>while <condition>(<expr><name>piece</name></expr>)</condition> <block>{
+			<if>if <condition>(<expr>*<name>piece</name> != '\0'</expr>)</condition><then> <block>{
+				<switch>switch<condition>(<expr><name>i</name></expr>)</condition> <block>{
+<case>case <expr>0</expr>: <block>{
+	<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>piece</name></expr></argument>,<argument><expr>"AM"</expr></argument>,<argument><expr>2</expr></argument>)</argument_list></call> != 0</expr>)</condition><then> <block>{
+		<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: table is corrupt\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<break>break;</break>
+		}</block>
+</case><case>case <expr>1</expr>: <block>{
+	<comment type="line">// add the remaining of the line</comment>
+	<if>if <condition>(<expr>*<name>tp</name></expr>)</condition><then> <block>{
+		<expr_stmt><expr>*(<name>tp</name> - 1) = ' '</expr>;</expr_stmt>
+		<expr_stmt><expr><name>tp</name> = <name>tp</name> + <call><name>strlen</name><argument_list>(<argument><expr><name>tp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	}</block></then></if>
+	<if>if <condition>(<expr><name>complexprefixes</name></expr>)</condition><then> <block>{
+		<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>reverseword_utf</name><argument_list>(<argument><expr><name>piece</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then>
+		<else>else <expr_stmt><expr><call><name>reverseword</name><argument_list>(<argument><expr><name>piece</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
+	}</block></then></if>
+	<expr_stmt><expr><name><name>aliasm</name><index>[<expr><name>j</name></expr>]</index></name> = <call><name>mystrdup</name><argument_list>(<argument><expr><name>piece</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<if>if <condition>(<expr>!<name><name>aliasm</name><index>[<expr><name>j</name></expr>]</index></name></expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+		<return>return <expr>1</expr>;</return>
+	}</block></then></if>
+	<break>break;</break> }</block>
+</case><default>default: <break>break;</break>
+				</default>}</block></switch>
+				<expr_stmt><expr><name>i</name>++</expr>;</expr_stmt>
+			}</block></then></if>
+			<expr_stmt><expr><name>piece</name> = <call><name>mystrsep</name><argument_list>(<argument><expr>&amp;<name>tp</name></expr></argument>, <argument><expr>' '</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></while>
+		<if>if <condition>(<expr>!<name><name>aliasm</name><index>[<expr><name>j</name></expr>]</index></name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>numaliasm</name> = 0</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>aliasm</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>aliasm</name> = <name>NULL</name></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: line %d: table is corrupt\n"</expr></argument>, <argument><expr><name>af</name>-&gt;<call><name>getlinenum</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>1</expr>;</return>
+		}</block></then></if>
+	}</block></for>
+	<return>return <expr>0</expr>;</return>
+}</block></function>
+
+<function><type><name>int</name></type> <name><name>HashMgr</name>::<name>is_aliasm</name></name><parameter_list>()</parameter_list> <block>{
+	<return>return <expr>(<name>aliasm</name> != <name>NULL</name>)</expr>;</return>
+}</block></function>
+
+<function><type><name>char</name> *</type> <name><name>HashMgr</name>::<name>get_aliasm</name></name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>)</parameter_list> <block>{
+	<if>if <condition>(<expr>(<name>index</name> &gt; 0) &amp;&amp; (<name>index</name> &lt;= <name>numaliasm</name>)</expr>)</condition><then> <return>return <expr><name><name>aliasm</name><index>[<expr><name>index</name> - 1</expr>]</index></name></expr>;</return></then></if>
+	<expr_stmt><expr><call><name>HUNSPELL_WARNING</name><argument_list>(<argument><expr><name>stderr</name></expr></argument>, <argument><expr>"error: bad morph. alias index: %d\n"</expr></argument>, <argument><expr><name>index</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	<return>return <expr><name>NULL</name></expr>;</return>
+}</block></function>
+</unit>

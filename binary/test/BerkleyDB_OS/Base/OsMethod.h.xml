@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsMethod.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsMethod.h"</cpp:file></cpp:include>
+
+
+
+<comment type="line">// extracted from os_method.c</comment>
+
+
+<class>class <name>COsMethod</name>
+<block>{<private type="default">
+</private><public>public:
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_close</name>(int (*<name>func_close</name>) __P((int</decl></decl_stmt></public>)</block></class>))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_close</name></expr></argument>)</argument_list></call> = <name>func_close</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_dirfree</name>(void (*<name>func_dirfree</name>) __P((char **</decl>, int</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_dirfree</name></expr></argument>)</argument_list></call> = <name>func_dirfree</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_dirlist</name>(int (*<name>func_dirlist</name>) __P((const char *</decl>, char ***, int *</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_dirlist</name></expr></argument>)</argument_list></call> = <name>func_dirlist</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_exists</name>(int (*<name>func_exists</name>) __P((const char *</decl>, int *</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_exists</name></expr></argument>)</argument_list></call> = <name>func_exists</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_free</name>(void (*<name>func_free</name>) __P((void *</decl></decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_free</name></expr></argument>)</argument_list></call> = <name>func_free</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_fsync</name>(int (*<name>func_fsync</name>) __P((int</decl></decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_fsync</name></expr></argument>)</argument_list></call> = <name>func_fsync</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_ftruncate</name>(int (*<name>func_ftruncate</name>) __P((int</decl>, off_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ftruncate</name></expr></argument>)</argument_list></call> = <name>func_ftruncate</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_ioinfo</name>(int (*<name>func_ioinfo</name>)
+	    __P((const char *</decl>, int, u_int32_t *, u_int32_t *, u_int32_t *</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ioinfo</name></expr></argument>)</argument_list></call> = <name>func_ioinfo</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_malloc</name>(void *(*<name>func_malloc</name>) <specifier>__P</specifier><parameter_list>(<param/></parameter_list>(<specifier>size_t</specifier>)</decl></decl_stmt>))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_malloc</name></expr></argument>)</argument_list></call> = <name>func_malloc</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_map</name>(int (*<name>func_map</name>) __P((char *</decl>, size_t, int, int, void **</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_map</name></expr></argument>)</argument_list></call> = <name>func_map</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_pread</name>(ssize_t (*<name>func_pread</name>) __P((int</decl>, void *, size_t, off_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pread</name></expr></argument>)</argument_list></call> = <name>func_pread</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_pwrite</name>(ssize_t (*<name>func_pwrite</name>) __P((int</decl>, const void *, size_t, off_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pwrite</name></expr></argument>)</argument_list></call> = <name>func_pwrite</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_open</name>(int (*<name>func_open</name>) __P((const char *</decl>, int, ...</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_open</name></expr></argument>)</argument_list></call> = <name>func_open</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_read</name>(ssize_t (*<name>func_read</name>) __P((int</decl>, void *, size_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_read</name></expr></argument>)</argument_list></call> = <name>func_read</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_realloc</name>(void *(*<name>func_realloc</name>) <specifier>__P</specifier><parameter_list>(<param/></parameter_list>(<specifier>void</specifier> *, <specifier>size_t</specifier>)</decl></decl_stmt>))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_realloc</name></expr></argument>)</argument_list></call> = <name>func_realloc</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_rename</name>(int (*<name>func_rename</name>) __P((const char *</decl>, const char *</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_rename</name></expr></argument>)</argument_list></call> = <name>func_rename</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_seek</name>(int (*<name>func_seek</name>) __P((int</decl>, off_t, int</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_seek</name></expr></argument>)</argument_list></call> = <name>func_seek</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_sleep</name>(int (*<name>func_sleep</name>) __P((u_long</decl>, u_long</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_sleep</name></expr></argument>)</argument_list></call> = <name>func_sleep</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_unlink</name>(int (*<name>func_unlink</name>) __P((const char *</decl></decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_unlink</name></expr></argument>)</argument_list></call> = <name>func_unlink</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_unmap</name>(int (*<name>func_unmap</name>) __P((void *</decl>, size_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_unmap</name></expr></argument>)</argument_list></call> = <name>func_unmap</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_write</name>(ssize_t (*<name>func_write</name>) __P((int</decl>, const void *, size_t</decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_write</name></expr></argument>)</argument_list></call> = <name>func_write</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>db_env_set_func_yield</name>(int (*<name>func_yield</name>) __P((void</decl></decl_stmt>)))
+	<block>{
+		<expr_stmt><expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_yield</name></expr></argument>)</argument_list></call> = <name>func_yield</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block>
+};
+
+</unit>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="Config.h"><cpp:define>#<cpp:directive>define</cpp:directive> <name>NOSORT</name> 0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>INSERTIONSORT</name> 1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>BUBBLESORT</name> 2</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>DLINKED</name> 1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>SORTALGO</name> <name>INSERTIONSORT</name></cpp:define>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> != <name>NOSORT</name></expr></cpp:if>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>UPWARD</name> 0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>DOWNWARD</name> 1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>SORTORDER</name> <name>DOWNWARD</name></cpp:define>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>
