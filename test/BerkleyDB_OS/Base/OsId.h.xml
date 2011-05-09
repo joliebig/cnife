@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsId.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsId.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
 <cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
@@ -49,10 +49,11 @@
 		<if>if <condition>(<expr><name>tidp</name> != <name>NULL</name></expr>)</condition><then> <block>{
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>DB_WIN32</name></expr></argument>)</argument_list></call></expr></cpp:if>
 			<expr_stmt><expr>*<name>tidp</name> = <call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_UI_THREADS</name></expr></argument>)</argument_list></call></expr></cpp:elif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>not</name> <call><name>defined</name><argument_list>(<argument><expr><name>DB_WIN32</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_UI_THREADS</name></expr></argument>)</argument_list></call></expr></cpp:if>
 			<expr_stmt><expr>*<name>tidp</name> = <call><name>thr_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_SOLARIS_LWP</name></expr></argument>)</argument_list></call> || \
-		<call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_PTHREADS</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PTHREAD_SELF</name></expr></argument>)</argument_list></call></expr></cpp:elif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>not</name> <call><name>defined</name><argument_list>(<argument><expr><name>DB_WIN32</name></expr></argument>)</argument_list></call> &amp;&amp; <name>not</name> <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_UI_THREADS</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_SOLARIS_LWP</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_PTHREADS</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PTHREAD_SELF</name></expr></argument>)</argument_list></call></expr></cpp:if>
 			<expr_stmt><expr>*<name>tidp</name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 <cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
 			<comment type="block">/*
