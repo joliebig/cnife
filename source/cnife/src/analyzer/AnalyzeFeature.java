@@ -33,7 +33,7 @@ public class AnalyzeFeature {
 	private static final String IMPOSSIBLE = "impossible";
 	private static final String UNKNOWN = "unknown";
 	private IdentifiedFeature feature;
-	private Boolean findclones;
+	private Boolean detectclones;
 	private Boolean providehooknames;
 	private AnalyzedFeature analyzedFeature = null;
 	private LinkedList<CriticalOccurrence> crits;
@@ -76,9 +76,9 @@ public class AnalyzeFeature {
 	private static String FIND_NEXT_DEFINE = 
 		"./following::* intersect //cpp:define";
 
-	public AnalyzeFeature (IdentifiedFeature feature, Boolean findclones, Boolean providehooknames) {
+	public AnalyzeFeature (IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames) {
 		this.feature = feature;
-		this.findclones = findclones;
+		this.detectclones = detectclones;
 		this.providehooknames = providehooknames;
 		this.istreamreader = new InputStreamReader(System.in);
 		this.bufreader = new BufferedReader(this.istreamreader);
@@ -430,7 +430,7 @@ public class AnalyzeFeature {
 								|| occ.getCritNodeType() == RefactoringStrategy.BLOCK_REPLICATION_WITH_HOOK
 								|| occ.getCritNodeType() == RefactoringStrategy.STATEMENT_REPLICATION_WITH_HOOK)) {
 							
-							if (findclones)
+							if (detectclones)
 								cloneFinder.doDuplicateCheck(occ);
 							
 							if (occ.getDupe() == null) {

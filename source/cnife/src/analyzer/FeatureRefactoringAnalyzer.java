@@ -177,8 +177,8 @@ public class FeatureRefactoringAnalyzer {
 
 		// use a simple clonefinder to reduce the number of refinements
 		// (function/statement level)
-		CmdLineParser.Option findclones = cmdparser.addBooleanOption('f',
-				"findclones");
+		CmdLineParser.Option detectclones = cmdparser.addBooleanOption('d',
+				"detectclones");
 
 		// refactor or analyze only to get statistics
 		CmdLineParser.Option refactor = cmdparser.addBooleanOption('r',
@@ -204,7 +204,7 @@ public class FeatureRefactoringAnalyzer {
 		}
 
 		String inputfolderval = (String) cmdparser.getOptionValue(inputfolder, null);
-		Boolean findclonesval = (Boolean) cmdparser.getOptionValue(findclones,
+		Boolean detectclonesval = (Boolean) cmdparser.getOptionValue(detectclones,
 				Boolean.TRUE);
 		
 		if (inputfolderval != null)
@@ -247,7 +247,7 @@ public class FeatureRefactoringAnalyzer {
 				+ " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, findclonesval,
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval,
 					providehooknamesval);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
