@@ -8,7 +8,9 @@
 */</comment>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
@@ -32,7 +34,90 @@
 
 <class>class <name>CHashMeta</name>
 <block>{<private type="default">
-	</private><public><comment type="line">//#ifdef HAVE_HASH #else</comment>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_HASH</name></cpp:ifdef>
 
-	</public>}</block>;</class>
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>ham_get_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB</name> *</type><name>dbp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>dbp</name> = <name>dbc</name>-&gt;<name>dbp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>mpf</name> = <name>dbp</name>-&gt;<name>mpf</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbMeta</name>::<name>db_lget</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr>0</expr></argument>,
+			<argument><expr><name>hashp</name>-&gt;<name>meta_pgno</name></expr></argument>, <argument><expr><name>DB_LOCK_READ</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>hcp</name>-&gt;<name>hlock</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CMpFget</name>::<name>memp_fget</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>,
+			<argument><expr>&amp;<name>hashp</name>-&gt;<name>meta_pgno</name></expr></argument>, <argument><expr><name>DB_MPOOL_CREATE</name></expr></argument>, <argument><expr>&amp;(<name>hcp</name>-&gt;<name>hdr</name>)</expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name>__LPUT</name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr><name>hcp</name>-&gt;<name>hlock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* Release the meta-data page.
+	*
+	* PUBLIC: int __ham_release_meta __P((DBC *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_release_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_MPOOLFILE</name> *</type><name>mpf</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>mpf</name> = <name>dbc</name>-&gt;<name>dbp</name>-&gt;<name>mpf</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr><name>hcp</name>-&gt;<name>hdr</name></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>CMpFput</name>::<name>memp_fput</name></name><argument_list>(<argument><expr><name>mpf</name></expr></argument>, <argument><expr><name>hcp</name>-&gt;<name>hdr</name></expr></argument>,
+			<argument><expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>hcp</name></expr></argument>, <argument><expr><name>H_DIRTY</name></expr></argument>)</argument_list></call> ? <name>DB_MPOOL_DIRTY</name> : 0</expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr><name>hcp</name>-&gt;<name>hdr</name> = <name>NULL</name></expr>;</expr_stmt>
+		<constructor_decl><name>F_CLR</name><parameter_list>(<param><decl><type><name>hcp</name></type></decl></param>, <param><decl><type><name>H_DIRTY</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<return>return <expr>(<call><name>__TLPUT</name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr><name>hcp</name>-&gt;<name>hlock</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* Mark the meta-data page dirty.
+	*
+	* PUBLIC: int __ham_dirty_meta __P((DBC *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_dirty_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB</name> *</type><name>dbp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>HASH_CURSOR</name> *</type><name>hcp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>dbp</name> = <name>dbc</name>-&gt;<name>dbp</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hcp</name> = (<name>HASH_CURSOR</name> *)<name>dbc</name>-&gt;<name>internal</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>ret</name> = 0</expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>ret</name> = <call><name><name>CDbMeta</name>::<name>db_lget</name></name><argument_list>(<argument><expr><name>dbc</name></expr></argument>, <argument><expr><name>LCK_COUPLE</name></expr></argument>,
+			<argument><expr><name>hashp</name>-&gt;<name>meta_pgno</name></expr></argument>, <argument><expr><name>DB_LOCK_WRITE</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr>&amp;<name>hcp</name>-&gt;<name>hlock</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr><name>ret</name> == 0</expr>)</condition><then>
+			<constructor_decl><name>F_SET</name><parameter_list>(<param><decl><type><name>hcp</name></type></decl></param>, <param><decl><type><name>H_DIRTY</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>	<comment type="line">//#ifdef HAVE_HASH</comment>
+
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_get_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_release_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_dirty_meta</name><parameter_list>(<param><decl><type><name>DBC</name> *</type><name>dbc</name></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>	<comment type="line">//#ifdef HAVE_HASH #else</comment>
+
+</public>}</block>;</class>
 </unit>

@@ -9,7 +9,9 @@
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
@@ -23,9 +25,156 @@
 <block>{<private type="default">
 </private><public>public:
 
-<comment type="line">//#ifndef HAVE_HASH #else</comment>
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>HAVE_HASH</name></cpp:ifndef>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_db_create</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
 
 
-		</public>}</block>;</class>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_db_close</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_get_h_ffactor</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>h_ffactorp</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_set_h_ffactor</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>h_ffactor</name></decl></param>)</parameter_list>;</function_decl>
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>ham_set_h_hash</name><argument_list>(<argument><expr><name>DB</name> *<name>dbp</name></expr></argument>, <argument><expr><call><name>u_int32_t</name> <argument_list>(<argument><expr>*<name>func</name></expr></argument>)</argument_list></call> <call><name>__P</name><argument_list>(<argument><expr>(<name>DB</name> *, <name>const</name> <name>void</name> *, <name>u_int32_t</name>)</expr></argument>)</argument_list></call></expr></argument>)</argument_list></decl>;</decl_stmt>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_get_h_nelem</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>h_nelemp</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_set_h_nelem</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>h_nelem</name></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+	<comment type="block">/*
+	* __ham_db_create --
+	*	Hash specific initialization of the DB structure.
+	*
+	* PUBLIC: int __ham_db_create __P((DB *));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_db_create</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_malloc</name></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>dbenv</name></expr></argument>,
+			<argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>HASH</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_nelem</name> = 0</expr>;</expr_stmt>			<comment type="block">/* Defaults. */</comment>
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_ffactor</name> = 0</expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_hash</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>get_h_ffactor</name> = <name>ham_get_h_ffactor</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>set_h_ffactor</name> = <name>ham_set_h_ffactor</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>set_h_hash</name> = <name>ham_set_h_hash</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>get_h_nelem</name> = <name>ham_get_h_nelem</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>set_h_nelem</name> = <name>ham_set_h_nelem</name></expr>;</expr_stmt>
+
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_db_close __P((DB *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_db_close</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>)</parameter_list>
+	<block>{
+		<if>if <condition>(<expr><name>dbp</name>-&gt;<name>h_internal</name> == <name>NULL</name></expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+		<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>dbenv</name></expr></argument>, <argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>dbp</name>-&gt;<name>h_internal</name> = <name>NULL</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+
+
+	<comment type="block">/*
+	* __ham_get_h_ffactor --
+	*
+	* PUBLIC: int __ham_get_h_ffactor __P((DB *, u_int32_t *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_get_h_ffactor</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>h_ffactorp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>h_ffactorp</name> = <name>hashp</name>-&gt;<name>h_ffactor</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_set_h_ffactor --
+	*	Set the fill factor.
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_set_h_ffactor</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>h_ffactor</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><call><name>DB_ILLEGAL_AFTER_OPEN</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr>"DB-&gt;set_h_ffactor"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>DB_ILLEGAL_METHOD</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>DB_OK_HASH</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_ffactor</name> = <name>h_ffactor</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_set_h_hash --
+	*	Set the hash function.
+	*/</comment>
+
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>ham_set_h_hash</name><argument_list>(<argument><expr><name>DB</name> *<name>dbp</name></expr></argument>, <argument><expr><call><name>u_int32_t</name> <argument_list>(<argument><expr>*<name>func</name></expr></argument>)</argument_list></call> <call><name>__P</name><argument_list>(<argument><expr>(<name>DB</name> *, <name>const</name> <name>void</name> *, <name>u_int32_t</name>)</expr></argument>)</argument_list></call></expr></argument>)</argument_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><call><name>DB_ILLEGAL_AFTER_OPEN</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr>"DB-&gt;set_h_hash"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>DB_ILLEGAL_METHOD</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>DB_OK_HASH</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_hash</name> = <name>func</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></decl></decl_stmt>
+
+	<comment type="block">/*
+	* __db_get_h_nelem --
+	*
+	* PUBLIC: int __ham_get_h_nelem __P((DB *, u_int32_t *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_get_h_nelem</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>h_nelemp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+
+		<constructor_decl><name>DB_ILLEGAL_METHOD</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>DB_OK_HASH</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>h_nelemp</name> = <name>hashp</name>-&gt;<name>h_nelem</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_set_h_nelem --
+	*	Set the table size.
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_set_h_nelem</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>h_nelem</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>HASH</name> *</type><name>hashp</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><call><name>DB_ILLEGAL_AFTER_OPEN</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr>"DB-&gt;set_h_nelem"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>DB_ILLEGAL_METHOD</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>DB_OK_HASH</name></type></decl></param>)</parameter_list>;</constructor_decl>
+
+		<expr_stmt><expr><name>hashp</name> = <call><name>static_cast<argument_list>&lt;<argument><name>HASH</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>dbp</name>-&gt;<name>h_internal</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>hashp</name>-&gt;<name>h_nelem</name> = <name>h_nelem</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>	<comment type="line">//#ifndef HAVE_HASH #else</comment>
+
+</public>}</block>;</class>
 
 </unit>

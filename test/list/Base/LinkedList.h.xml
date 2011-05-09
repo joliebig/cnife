@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.cpp"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Node.cpp"</cpp:file></cpp:include>
 
-<decl_stmt><decl><type><name>using</name> <name>namespace</name></type> <name>std</name></decl>;</decl_stmt>
+<using>using namespace <name>std</name>;</using>
 
-<decl_stmt><decl><type><name>class</name></type> <name>LinkedList</name> <block>{
-	<label><name>public</name>:</label>
-		<expr_stmt><expr><call><name>LinkedList</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<class>class <name>LinkedList</name> <block>{<private type="default">
+	</private><public>public:
+		<constructor_decl><name>LinkedList</name><parameter_list>()</parameter_list>;</constructor_decl>
 		<destructor_decl><name>~<name>LinkedList</name></name><parameter_list>()</parameter_list>;</destructor_decl>
 
 		<function_decl><type><name>void</name></type> <name>insert</name><parameter_list>( <param><decl><type><name>int</name></type></decl></param> )</parameter_list>;</function_decl>
@@ -16,7 +16,7 @@
 		<function_decl><type><name>bool</name></type> <name>isEmpty</name><parameter_list>()</parameter_list>;</function_decl>
 		<function_decl><type><name>void</name></type> <name>displayAllNodes</name><parameter_list>()</parameter_list>;</function_decl>
 
-<label><name>private</name>:</label>
+</public><private>private:
 		<function_decl><type><name>void</name></type> <name>displayNode</name><parameter_list>( <param><decl><type><name>Node</name>*</type></decl></param> )</parameter_list>;</function_decl>
 
 		<decl_stmt><decl><type><name>Node</name>*</type> <name>first</name></decl>;</decl_stmt>
@@ -24,37 +24,37 @@
 		<decl_stmt><decl><type><name>Node</name>*</type> <name>last</name></decl>;</decl_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
-}</block></decl></decl_stmt><empty_stmt>;</empty_stmt>
+</private>}</block>;</class>
 
-<expr_stmt><expr><name>LinkedList</name>::<macro><name>LinkedList</name><argument_list>()</argument_list></macro> <block>{
-	<expr><name>first</name> = <name>NULL</name></expr>;
+<constructor><name><name>LinkedList</name>::<name>LinkedList</name></name><parameter_list>()</parameter_list> <block>{
+	<expr_stmt><expr><name>first</name> = <name>NULL</name></expr>;</expr_stmt>
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-	<expr><name>last</name> = <name>NULL</name></expr>;
+	<expr_stmt><expr><name>last</name> = <name>NULL</name></expr>;</expr_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-	<return>return;</return></block></expr></expr_stmt>
-}
+	<return>return;</return>
+}</block></constructor>
 
-<expr_stmt><expr><name>LinkedList</name>::~<macro><name>LinkedList</name><argument_list>()</argument_list></macro> <block>{
-	<expr><call><name>deleteAllNodes</name><argument_list>()</argument_list></call></expr>;
-	<return>return;</return></block></expr></expr_stmt>
-}
+<destructor><name><name>LinkedList</name>::~<name>LinkedList</name></name><parameter_list>()</parameter_list> <block>{
+	<expr_stmt><expr><call><name>deleteAllNodes</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+	<return>return;</return>
+}</block></destructor>
 
-<expr_stmt><expr><name>void</name> <name>LinkedList</name>::<macro><name>insert</name><argument_list>( <argument>int newData</argument> )</argument_list></macro> <block>{
-	<expr><name>Node</name> *<name>n</name> = <name>new</name> <call><name>Node</name><argument_list>()</argument_list></call></expr>;
-	<expr><name>n</name>-&gt;<name>data</name> = <name>newData</name></expr>;
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>insert</name></name><parameter_list>( <param><decl><type><name>int</name></type> <name>newData</name></decl></param> )</parameter_list> <block>{
+	<decl_stmt><decl><type><name>Node</name> *</type><name>n</name> =<init> <expr>new <call><name>Node</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
+	<expr_stmt><expr><name>n</name>-&gt;<name>data</name> = <name>newData</name></expr>;</expr_stmt>
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>BUBBLESORT</name> || <name>SORTALGO</name> == <name>INSERTIONSORT</name></expr></cpp:if>
-	<expr><name>Node</name> *<name>a</name> = <name>NULL</name></expr>;
-	<expr><name>Node</name> *<name>b</name> = <name>NULL</name></expr>;
+	<decl_stmt><decl><type><name>Node</name> *</type><name>a</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>Node</name> *</type><name>b</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>BUBBLESORT</name></expr></cpp:if>
-	<expr><name>Node</name> *<name>c</name> = <name>NULL</name></expr>;
-	<expr><name>Node</name> *<name>e</name> = <name>NULL</name></expr>;
-	<expr><name>Node</name> *<name>tmp</name> = <name>NULL</name></expr>;
+	<decl_stmt><decl><type><name>Node</name> *</type><name>c</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>Node</name> *</type><name>e</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>Node</name> *</type><name>tmp</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 	<if>if <condition>(<expr><name>NULL</name> == <name>first</name></expr>)</condition><then> <block>{
 		<expr_stmt><expr><name>first</name> = <name>n</name></expr>;</expr_stmt>
-	<expr_stmt/></block></then></if>}</block></expr></expr_stmt> <else>else <block>{
+	}</block></then> <else>else <block>{
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>INSERTIONSORT</name></expr></cpp:if>
 		<expr_stmt><expr><name>a</name> = <name>first</name></expr>;</expr_stmt>
 		<expr_stmt><expr><name>b</name> = <name>first</name>-&gt;<name>next</name></expr>;</expr_stmt>
@@ -93,7 +93,7 @@
 			<expr_stmt><expr><name>b</name>-&gt;<name>prev</name> = <name>n</name></expr>;</expr_stmt></then></if>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-	}</block>
+	}</block></else></if>
 
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>BUBBLESORT</name></expr></cpp:if>
 	<while>while <condition>(<expr><name>e</name> != <name>first</name>-&gt;<name>next</name></expr>)</condition> <block>{
@@ -135,16 +135,16 @@
 			<if>if <condition>(<expr><name>b</name> == <name>e</name></expr>)</condition><then>
 				<expr_stmt><expr><name>e</name> == <name>a</name></expr>;</expr_stmt></then></if>
 		}</block></while>
-	}</block></while></else>
+	}</block></while>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-}
+}</block></function>
 
-<expr_stmt><expr><name>void</name> <name>LinkedList</name>::<macro><name>deleteAllNodes</name><argument_list>()</argument_list></macro> <block>{
-	<expr><name>Node</name> *<name>one</name></expr>;
-	<expr><name>Node</name> *<name>two</name></expr>;
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>deleteAllNodes</name></name><parameter_list>()</parameter_list> <block>{
+	<decl_stmt><decl><type><name>Node</name> *</type><name>one</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>Node</name> *</type><name>two</name></decl>;</decl_stmt>
 
 	<if>if <condition>(<expr><name>NULL</name> == <name>first</name></expr>)</condition><then>
-		<return>return;</return></then></if></block></expr></expr_stmt>
+		<return>return;</return></then></if>
 
 	<while>while <condition>(<expr><name>NULL</name> != <name>two</name></expr>)</condition> <block>{
 		<expr_stmt><expr><name>one</name> = <name>first</name></expr>;</expr_stmt>
@@ -154,18 +154,18 @@
 		<if>if <condition>(<expr><name>two</name> != <name>NULL</name></expr>)</condition><then>
 			<expr_stmt><expr><name>two</name>-&gt;<name>prev</name> = <name>NULL</name></expr>;</expr_stmt></then></if>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-		<decl_stmt><decl><type><name>delete</name></type> <name>one</name></decl>;</decl_stmt>
+		<expr_stmt><expr>delete <name>one</name></expr>;</expr_stmt>
 	}</block></while>
-}
+}</block></function>
 
-<expr_stmt><expr><name>bool</name> <name>LinkedList</name>::<macro><name>isEmpty</name><argument_list>()</argument_list></macro> <block>{
-	<return>return <expr><name>first</name> == <name>last</name></expr>;</return></block></expr></expr_stmt>
-}
+<function><type><name>bool</name></type> <name><name>LinkedList</name>::<name>isEmpty</name></name><parameter_list>()</parameter_list> <block>{
+	<return>return <expr><name>first</name> == <name>last</name></expr>;</return>
+}</block></function>
 
 
-<expr_stmt><expr><name>void</name> <name>LinkedList</name>::<macro><name>displayAllNodes</name><argument_list>()</argument_list></macro> <block>{
-	<expr><name>Node</name> *<name>pCur</name> = <name>first</name></expr>;
-	<expr><name>int</name> <name>nodeCount</name> = 1</expr>;
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>displayAllNodes</name></name><parameter_list>()</parameter_list> <block>{
+	<decl_stmt><decl><type><name>Node</name> *</type><name>pCur</name> =<init> <expr><name>first</name></expr></init></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>int</name></type> <name>nodeCount</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
 
 	<while>while <condition>( <expr><name>pCur</name></expr> )</condition> <block>{
 		<expr_stmt><expr><name>cout</name> &lt;&lt; "Node " &lt;&lt; <name>nodeCount</name> &lt;&lt; ": "</expr>;</expr_stmt>
@@ -174,16 +174,16 @@
 
 		<expr_stmt><expr><name>nodeCount</name>++</expr>;</expr_stmt>
 		<expr_stmt><expr><name>pCur</name> = <name>pCur</name>-&gt;<name>next</name></expr>;</expr_stmt>
-	<expr_stmt/></block></while>}</block></expr></expr_stmt>
+	}</block></while>
 
 	<return>return;</return>
-}
+}</block></function>
 
 
-<expr_stmt><expr><name>void</name> <name>LinkedList</name>::<macro><name>displayNode</name><argument_list>( <argument>Node *node</argument> )</argument_list></macro> <block>{
-	<expr><name>cout</name> &lt;&lt; <name>node</name> -&gt; <name>data</name></expr>;
-	<return>return;</return></block></expr></expr_stmt>
-}
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>displayNode</name></name><parameter_list>( <param><decl><type><name>Node</name> *</type><name>node</name></decl></param> )</parameter_list> <block>{
+	<expr_stmt><expr><name>cout</name> &lt;&lt; <name>node</name> -&gt; <name>data</name></expr>;</expr_stmt>
+	<return>return;</return>
+}</block></function>
 
 <function><type><name>void</name></type> <name>printMenu</name><parameter_list>()</parameter_list> <block>{
 	<expr_stmt><expr><name>cout</name> &lt;&lt; "1. Add node " &lt;&lt; <name>endl</name></expr>;</expr_stmt>

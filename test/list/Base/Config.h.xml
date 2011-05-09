@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" filename="Config.h"><cpp:define>#<cpp:directive>define</cpp:directive> <name>NOSORT</name> 0</cpp:define>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="Config.h"><cpp:define>#<cpp:directive>define</cpp:directive> <name>NOSORT</name> 0</cpp:define>
 <cpp:define>#<cpp:directive>define</cpp:directive> <name>INSERTIONSORT</name> 1</cpp:define>
 <cpp:define>#<cpp:directive>define</cpp:directive> <name>BUBBLESORT</name> 2</cpp:define>
 
