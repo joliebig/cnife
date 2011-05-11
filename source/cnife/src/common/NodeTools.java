@@ -1,42 +1,39 @@
 package common;
 
 import java.util.ArrayList;
-
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class NodeTools {
-
-	public static boolean haveSameParents (Node node1, Node node2) {
+	public static boolean haveSameParents(Node node1, Node node2) {
 		return node1.getParentNode() == node2.getParentNode();
 	}
-	
-	public static Node getCommonAncestors (Node node1, Node node2) {
+
+	public static Node getCommonAncestors(Node node1, Node node2) {
 		int depthNode1 = getDepth(node1);
 		int depthNode2 = getDepth(node2);
 		Node ancestor1 = node1;
 		Node ancestor2 = node2;
 		if (depthNode1 > depthNode2) {
-			for (int i = 0; i < (depthNode1 - depthNode2); i++) {
+			for (int i = 0; i < depthNode1 - depthNode2; i++)
 				ancestor1 = ancestor1.getParentNode();
-			}
-		} else if (depthNode1 < depthNode2){
-			for (int i = 0; i < (depthNode2 - depthNode1); i++) {
+		} else if (depthNode1 < depthNode2) {
+			for (int i = 0; i < depthNode2 - depthNode1; i++) {
 				ancestor2 = ancestor2.getParentNode();
 			}
 		}
-		
-		while (ancestor1 != ancestor2 && ancestor1 != null && ancestor2 != null) {
+
+		while ((ancestor1 != ancestor2) && (ancestor1 != null)
+				&& (ancestor2 != null)) {
 			ancestor1 = ancestor1.getParentNode();
 			ancestor2 = ancestor2.getParentNode();
 		}
-		if (ancestor1 == null || ancestor2 == null) {
-			//Fehlerfall, der in einem 'echten' XML-Dokument nie eintreten dürfte
+		if ((ancestor1 == null) || (ancestor2 == null)) {
 			return null;
 		}
 		return ancestor1;
 	}
-	
+
 	public static int getDepth(Node node) {
 		int depth = 0;
 		Node ancestor = node.getParentNode();
@@ -46,12 +43,13 @@ public class NodeTools {
 		}
 		return depth;
 	}
-	
+
 	public static boolean containsNode(Node container, Node child) {
 		return getCommonAncestors(container, child) == container;
 	}
-	
-	public static NodeList intersectUpperLower(NodeList lowerList, NodeList upperList) {
+
+	public static NodeList intersectUpperLower(NodeList lowerList,
+			NodeList upperList) {
 		final ArrayList<Node> content = new ArrayList<Node>();
 		NodeList result = new NodeList() {
 			
@@ -67,15 +65,12 @@ public class NodeTools {
 				return list.size();
 			}
 		};
-		
-		//upperList wird von unten angefangen
-		//lowerlist von oben aus Optimierungsgründen
 		int upperIndex = upperList.getLength() - 1;
 		int lowerIndex = 0;
 		boolean done = false;
 		while (!done) {
 			done = true;
-			for (int i = upperIndex; i >= 0 && done; i--) {
+			for (int i = upperIndex; (i >= 0) && (done); i--) {
 				if (lowerList.item(lowerIndex) == upperList.item(i)) {
 					done = false;
 					content.add(lowerList.item(lowerIndex));
@@ -83,7 +78,7 @@ public class NodeTools {
 			}
 			lowerIndex++;
 		}
-		
+
 		return result;
 	}
 }

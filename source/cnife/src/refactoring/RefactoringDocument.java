@@ -3,14 +3,12 @@ package refactoring;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-
 import org.w3c.dom.Attr;
 import org.w3c.dom.CDATASection;
 import org.w3c.dom.Comment;
@@ -30,7 +28,6 @@ import org.w3c.dom.Text;
 import org.w3c.dom.UserDataHandler;
 
 public class RefactoringDocument implements Document {
-
 	protected static String CLASS_NODE_QUERY = "/src:unit/src:class/src:name";
 	protected Document xmlDoc;
 	private String featureName;
@@ -38,7 +35,7 @@ public class RefactoringDocument implements Document {
 	private String fileName;
 
 	public String getFileName() {
-		return fileName;
+		return this.fileName;
 	}
 
 	public void setFileName(String fileName) {
@@ -46,21 +43,7 @@ public class RefactoringDocument implements Document {
 	}
 
 	public RefactoringDocument(Document xmlDoc) {
-		super();
-		// Document doc = null;
-		// TODO Dokumentenkopien
 		this.xmlDoc = xmlDoc;
-		// if (xmlDoc != null) {
-		// doc = xmlDoc.getImplementation().createDocument(
-		// xmlDoc.getNamespaceURI(),
-		// null,
-		// xmlDoc.getDoctype());
-		// Node imported = doc.importNode(xmlDoc.getFirstChild(), true);
-		// doc.appendChild(imported);
-		// //TODO DEBUG
-		// // System.out.println(doc.getFirstChild().getTextContent());
-		// }
-		// this.xmlDoc = doc;
 	}
 
 	public void saveDocument(String pathName)
@@ -68,15 +51,13 @@ public class RefactoringDocument implements Document {
 			TransformerException {
 		Transformer transformer = TransformerFactory.newInstance()
 				.newTransformer();
-		DOMSource src = new DOMSource(xmlDoc);
+		DOMSource src = new DOMSource(this.xmlDoc);
 		FileOutputStream out = new FileOutputStream(pathName);
 		StreamResult res = new StreamResult(out);
 		transformer.transform(src, res);
-
 		try {
 			out.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -86,295 +67,291 @@ public class RefactoringDocument implements Document {
 	}
 
 	public String getFeatureName() {
-		return featureName;
+		return this.featureName;
 	}
 
 	public void setModified(boolean modified) {
 		this.modified = modified;
-
 	}
 
 	public boolean getModified() {
-		return modified;
+		return this.modified;
 	}
 
-	// Delegators
-
 	public Node adoptNode(Node source) throws DOMException {
-		return xmlDoc.adoptNode(source);
+		return this.xmlDoc.adoptNode(source);
 	}
 
 	public Node appendChild(Node newChild) throws DOMException {
-		return xmlDoc.appendChild(newChild);
+		return this.xmlDoc.appendChild(newChild);
 	}
 
 	public Node cloneNode(boolean deep) {
-		return xmlDoc.cloneNode(deep);
+		return this.xmlDoc.cloneNode(deep);
 	}
 
 	public short compareDocumentPosition(Node other) throws DOMException {
-		return xmlDoc.compareDocumentPosition(other);
+		return this.xmlDoc.compareDocumentPosition(other);
 	}
 
 	public Attr createAttribute(String name) throws DOMException {
-		return xmlDoc.createAttribute(name);
+		return this.xmlDoc.createAttribute(name);
 	}
 
 	public Attr createAttributeNS(String namespaceURI, String qualifiedName)
 			throws DOMException {
-		return xmlDoc.createAttributeNS(namespaceURI, qualifiedName);
+		return this.xmlDoc.createAttributeNS(namespaceURI, qualifiedName);
 	}
 
 	public CDATASection createCDATASection(String data) throws DOMException {
-		return xmlDoc.createCDATASection(data);
+		return this.xmlDoc.createCDATASection(data);
 	}
 
 	public Comment createComment(String data) {
-		return xmlDoc.createComment(data);
+		return this.xmlDoc.createComment(data);
 	}
 
 	public DocumentFragment createDocumentFragment() {
-		return xmlDoc.createDocumentFragment();
+		return this.xmlDoc.createDocumentFragment();
 	}
 
 	public Element createElement(String tagName) throws DOMException {
-		return xmlDoc.createElement(tagName);
+		return this.xmlDoc.createElement(tagName);
 	}
 
 	public Element createElementNS(String namespaceURI, String qualifiedName)
 			throws DOMException {
-		return xmlDoc.createElementNS(namespaceURI, qualifiedName);
+		return this.xmlDoc.createElementNS(namespaceURI, qualifiedName);
 	}
 
 	public EntityReference createEntityReference(String name)
 			throws DOMException {
-		return xmlDoc.createEntityReference(name);
+		return this.xmlDoc.createEntityReference(name);
 	}
 
 	public ProcessingInstruction createProcessingInstruction(String target,
 			String data) throws DOMException {
-		return xmlDoc.createProcessingInstruction(target, data);
+		return this.xmlDoc.createProcessingInstruction(target, data);
 	}
 
 	public Text createTextNode(String data) {
-		return xmlDoc.createTextNode(data);
+		return this.xmlDoc.createTextNode(data);
 	}
 
 	public NamedNodeMap getAttributes() {
-		return xmlDoc.getAttributes();
+		return this.xmlDoc.getAttributes();
 	}
 
 	public String getBaseURI() {
-		return xmlDoc.getBaseURI();
+		return this.xmlDoc.getBaseURI();
 	}
 
 	public NodeList getChildNodes() {
-		return xmlDoc.getChildNodes();
+		return this.xmlDoc.getChildNodes();
 	}
 
 	public DocumentType getDoctype() {
-		return xmlDoc.getDoctype();
+		return this.xmlDoc.getDoctype();
 	}
 
 	public Element getDocumentElement() {
-		return xmlDoc.getDocumentElement();
+		return this.xmlDoc.getDocumentElement();
 	}
 
 	public String getDocumentURI() {
-		return xmlDoc.getDocumentURI();
+		return this.xmlDoc.getDocumentURI();
 	}
 
 	public DOMConfiguration getDomConfig() {
-		return xmlDoc.getDomConfig();
+		return this.xmlDoc.getDomConfig();
 	}
 
 	public Element getElementById(String elementId) {
-		return xmlDoc.getElementById(elementId);
+		return this.xmlDoc.getElementById(elementId);
 	}
 
 	public NodeList getElementsByTagName(String tagname) {
-		return xmlDoc.getElementsByTagName(tagname);
+		return this.xmlDoc.getElementsByTagName(tagname);
 	}
 
 	public NodeList getElementsByTagNameNS(String namespaceURI, String localName) {
-		return xmlDoc.getElementsByTagNameNS(namespaceURI, localName);
+		return this.xmlDoc.getElementsByTagNameNS(namespaceURI, localName);
 	}
 
 	public Object getFeature(String feature, String version) {
-		return xmlDoc.getFeature(feature, version);
+		return this.xmlDoc.getFeature(feature, version);
 	}
 
 	public Node getFirstChild() {
-		return xmlDoc.getFirstChild();
+		return this.xmlDoc.getFirstChild();
 	}
 
 	public DOMImplementation getImplementation() {
-		return xmlDoc.getImplementation();
+		return this.xmlDoc.getImplementation();
 	}
 
 	public String getInputEncoding() {
-		return xmlDoc.getInputEncoding();
+		return this.xmlDoc.getInputEncoding();
 	}
 
 	public Node getLastChild() {
-		return xmlDoc.getLastChild();
+		return this.xmlDoc.getLastChild();
 	}
 
 	public String getLocalName() {
-		return xmlDoc.getLocalName();
+		return this.xmlDoc.getLocalName();
 	}
 
 	public String getNamespaceURI() {
-		return xmlDoc.getNamespaceURI();
+		return this.xmlDoc.getNamespaceURI();
 	}
 
 	public Node getNextSibling() {
-		return xmlDoc.getNextSibling();
+		return this.xmlDoc.getNextSibling();
 	}
 
 	public String getNodeName() {
-		return xmlDoc.getNodeName();
+		return this.xmlDoc.getNodeName();
 	}
 
 	public short getNodeType() {
-		return xmlDoc.getNodeType();
+		return this.xmlDoc.getNodeType();
 	}
 
 	public String getNodeValue() throws DOMException {
-		return xmlDoc.getNodeValue();
+		return this.xmlDoc.getNodeValue();
 	}
 
 	public Document getOwnerDocument() {
-		return xmlDoc.getOwnerDocument();
+		return this.xmlDoc.getOwnerDocument();
 	}
 
 	public Node getParentNode() {
-		return xmlDoc.getParentNode();
+		return this.xmlDoc.getParentNode();
 	}
 
 	public String getPrefix() {
-		return xmlDoc.getPrefix();
+		return this.xmlDoc.getPrefix();
 	}
 
 	public Node getPreviousSibling() {
-		return xmlDoc.getPreviousSibling();
+		return this.xmlDoc.getPreviousSibling();
 	}
 
 	public boolean getStrictErrorChecking() {
-		return xmlDoc.getStrictErrorChecking();
+		return this.xmlDoc.getStrictErrorChecking();
 	}
 
 	public String getTextContent() throws DOMException {
-		return xmlDoc.getTextContent();
+		return this.xmlDoc.getTextContent();
 	}
 
 	public Object getUserData(String key) {
-		return xmlDoc.getUserData(key);
+		return this.xmlDoc.getUserData(key);
 	}
 
 	public String getXmlEncoding() {
-		return xmlDoc.getXmlEncoding();
+		return this.xmlDoc.getXmlEncoding();
 	}
 
 	public boolean getXmlStandalone() {
-		return xmlDoc.getXmlStandalone();
+		return this.xmlDoc.getXmlStandalone();
 	}
 
 	public String getXmlVersion() {
-		return xmlDoc.getXmlVersion();
+		return this.xmlDoc.getXmlVersion();
 	}
 
 	public boolean hasAttributes() {
-		return xmlDoc.hasAttributes();
+		return this.xmlDoc.hasAttributes();
 	}
 
 	public boolean hasChildNodes() {
-		return xmlDoc.hasChildNodes();
+		return this.xmlDoc.hasChildNodes();
 	}
 
 	public Node importNode(Node importedNode, boolean deep) throws DOMException {
-		return xmlDoc.importNode(importedNode, deep);
+		return this.xmlDoc.importNode(importedNode, deep);
 	}
 
 	public Node insertBefore(Node newChild, Node refChild) throws DOMException {
-		return xmlDoc.insertBefore(newChild, refChild);
+		return this.xmlDoc.insertBefore(newChild, refChild);
 	}
 
 	public boolean isDefaultNamespace(String namespaceURI) {
-		return xmlDoc.isDefaultNamespace(namespaceURI);
+		return this.xmlDoc.isDefaultNamespace(namespaceURI);
 	}
 
 	public boolean isEqualNode(Node arg) {
-		return xmlDoc.isEqualNode(arg);
+		return this.xmlDoc.isEqualNode(arg);
 	}
 
 	public boolean isSameNode(Node other) {
-		return xmlDoc.isSameNode(other);
+		return this.xmlDoc.isSameNode(other);
 	}
 
 	public boolean isSupported(String feature, String version) {
-		return xmlDoc.isSupported(feature, version);
+		return this.xmlDoc.isSupported(feature, version);
 	}
 
 	public String lookupNamespaceURI(String prefix) {
-		return xmlDoc.lookupNamespaceURI(prefix);
+		return this.xmlDoc.lookupNamespaceURI(prefix);
 	}
 
 	public String lookupPrefix(String namespaceURI) {
-		return xmlDoc.lookupPrefix(namespaceURI);
+		return this.xmlDoc.lookupPrefix(namespaceURI);
 	}
 
 	public void normalize() {
-		xmlDoc.normalize();
+		this.xmlDoc.normalize();
 	}
 
 	public void normalizeDocument() {
-		xmlDoc.normalizeDocument();
+		this.xmlDoc.normalizeDocument();
 	}
 
 	public Node removeChild(Node oldChild) throws DOMException {
-		return xmlDoc.removeChild(oldChild);
+		return this.xmlDoc.removeChild(oldChild);
 	}
 
 	public Node renameNode(Node n, String namespaceURI, String qualifiedName)
 			throws DOMException {
-		return xmlDoc.renameNode(n, namespaceURI, qualifiedName);
+		return this.xmlDoc.renameNode(n, namespaceURI, qualifiedName);
 	}
 
 	public Node replaceChild(Node newChild, Node oldChild) throws DOMException {
-		return xmlDoc.replaceChild(newChild, oldChild);
+		return this.xmlDoc.replaceChild(newChild, oldChild);
 	}
 
 	public void setDocumentURI(String documentURI) {
-		xmlDoc.setDocumentURI(documentURI);
+		this.xmlDoc.setDocumentURI(documentURI);
 	}
 
 	public void setNodeValue(String nodeValue) throws DOMException {
-		xmlDoc.setNodeValue(nodeValue);
+		this.xmlDoc.setNodeValue(nodeValue);
 	}
 
 	public void setPrefix(String prefix) throws DOMException {
-		xmlDoc.setPrefix(prefix);
+		this.xmlDoc.setPrefix(prefix);
 	}
 
 	public void setStrictErrorChecking(boolean strictErrorChecking) {
-		xmlDoc.setStrictErrorChecking(strictErrorChecking);
+		this.xmlDoc.setStrictErrorChecking(strictErrorChecking);
 	}
 
 	public void setTextContent(String textContent) throws DOMException {
-		xmlDoc.setTextContent(textContent);
+		this.xmlDoc.setTextContent(textContent);
 	}
 
 	public Object setUserData(String key, Object data, UserDataHandler handler) {
-		return xmlDoc.setUserData(key, data, handler);
+		return this.xmlDoc.setUserData(key, data, handler);
 	}
 
 	public void setXmlStandalone(boolean xmlStandalone) throws DOMException {
-		xmlDoc.setXmlStandalone(xmlStandalone);
+		this.xmlDoc.setXmlStandalone(xmlStandalone);
 	}
 
 	public void setXmlVersion(String xmlVersion) throws DOMException {
-		xmlDoc.setXmlVersion(xmlVersion);
+		this.xmlDoc.setXmlVersion(xmlVersion);
 	}
-
 }

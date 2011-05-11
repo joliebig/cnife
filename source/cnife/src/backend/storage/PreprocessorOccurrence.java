@@ -1,30 +1,24 @@
 package backend.storage;
 
+import backend.PreprocessorNode;
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
-
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
-
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
-
 import scanner.FeatureSearcher;
 import scanner.PreprocessorTree;
-import backend.PreprocessorNode;
-
 
 public class PreprocessorOccurrence {
-	
-	//maximal 3
 	private PreprocessorNode[] prepNodes;
 	private File docFileName;
 	private String type;
 	private LinkedList<PreprocessorOccurrence> rootPrepOccurrence;
 	private LinkedList<PreprocessorOccurrence> containedOccurrences;
 	private PreprocessorTree tree;
-	
+
 	public void setPrepNodes(PreprocessorNode[] prepNodes) {
 		this.prepNodes = prepNodes;
 	}
@@ -38,15 +32,15 @@ public class PreprocessorOccurrence {
 	}
 
 	public String getDocFileName() {
-		return docFileName.getAbsolutePath();
+		return this.docFileName.getAbsolutePath();
 	}
-	
+
 	public PreprocessorNode[] getPrepNodes() {
-		if (prepNodes[0].getNode() == null) {
+		if (this.prepNodes[0].getNode() == null) {
 			FeatureSearcher searcher = new FeatureSearcher();
 			try {
-				Document doc = searcher.parseDocument(docFileName);
-				searcher.populateTree(doc, tree);
+				Document doc = searcher.parseDocument(this.docFileName);
+				searcher.populateTree(doc, this.tree);
 			} catch (SAXException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -56,37 +50,37 @@ public class PreprocessorOccurrence {
 			} catch (XPathExpressionException e) {
 				e.printStackTrace();
 			}
-			
 		}
-		return prepNodes;
+
+		return this.prepNodes;
 	}
-	
+
 	public String getType() {
-		return type;
+		return this.type;
 	}
-	
+
 	public LinkedList<PreprocessorOccurrence> getRootPrepOccurrences() {
-		return rootPrepOccurrence;
+		return this.rootPrepOccurrence;
 	}
-	
+
 	public LinkedList<PreprocessorOccurrence> getContainedOccurrences() {
-		return containedOccurrences;
+		return this.containedOccurrences;
 	}
-	
-	public void setContainedOccurrences(LinkedList<PreprocessorOccurrence> containedOccurrences) {
+
+	public void setContainedOccurrences(
+			LinkedList<PreprocessorOccurrence> containedOccurrences) {
 		this.containedOccurrences = containedOccurrences;
 	}
-	
+
 	public Document getDocument() {
-		if (prepNodes != null) {
-			return prepNodes[0].getNode().getOwnerDocument();
-		} else {
-			return null;
+		if (this.prepNodes != null) {
+			return this.prepNodes[0].getNode().getOwnerDocument();
 		}
+		return null;
 	}
-	
+
 	public long getLinesOfCode() {
-		return prepNodes[prepNodes.length-1].getLineNumber() 
-				- prepNodes[0].getLineNumber();
+		return this.prepNodes[(this.prepNodes.length - 1)].getLineNumber()
+				- this.prepNodes[0].getLineNumber();
 	}
 }

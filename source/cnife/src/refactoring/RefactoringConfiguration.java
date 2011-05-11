@@ -3,7 +3,6 @@ package refactoring;
 import java.util.HashMap;
 
 public class RefactoringConfiguration {
-
 	HashMap<RefactoringStrategy, RefactoringRule> levels;
 
 	public RefactoringConfiguration() {
@@ -20,28 +19,24 @@ public class RefactoringConfiguration {
 		if (!checkRule(from, to)) {
 			throw new RefactoringConfigurationException(
 					"RefactoringStrategy not in scope!");
-		} else {
-			RefactoringRule current = null;
-			if (!levels.containsKey(from)) {
-				current = new RefactoringRule();
-				levels.put(from, current);
-			} else {
-				current = levels.get(from);
-			}
-			current.addRule(minlines, to);
-
 		}
+		RefactoringRule current = null;
+		if (!this.levels.containsKey(from)) {
+			current = new RefactoringRule();
+			this.levels.put(from, current);
+		} else {
+			current = (RefactoringRule) this.levels.get(from);
+		}
+		current.addRule(minlines, to);
 	}
 
 	private boolean checkRule(RefactoringStrategy from, RefactoringStrategy to) {
-		if (from == to) {
+		if (from == to)
 			return true;
-		} else if (from == null) {
+		if (from == null) {
 			return false;
-		} else {
-			return checkRule(from.getWiderScopeStrategy(), to);
 		}
-
+		return checkRule(from.getWiderScopeStrategy(), to);
 	}
 
 	public RefactoringStrategy getMappedRule(RefactoringStrategy strat) {
@@ -51,10 +46,10 @@ public class RefactoringConfiguration {
 	public RefactoringStrategy getMappedRule(RefactoringStrategy strat,
 			int lines) {
 		RefactoringStrategy mappedStrat = null;
-		if (!levels.containsKey(strat)) {
+		if (!this.levels.containsKey(strat)) {
 			mappedStrat = strat;
 		} else {
-			RefactoringRule rule = levels.get(strat);
+			RefactoringRule rule = (RefactoringRule) this.levels.get(strat);
 			mappedStrat = rule.getBestStrategy(lines);
 			if (mappedStrat == null) {
 				mappedStrat = strat;

@@ -1,30 +1,24 @@
 package analyzer;
 
+import backend.storage.PreprocessorOccurrence;
+import common.xmlTemplates.FunctionBuilder;
 import java.io.File;
 import java.util.LinkedList;
-
 import org.w3c.dom.Node;
-
-import common.xmlTemplates.FunctionBuilder;
-
 import refactoring.RefactoringStrategy;
 
-import backend.storage.PreprocessorOccurrence;
-
 public class CriticalOccurrence extends PreprocessorOccurrence {
-	
 	private RefactoringStrategy critNodeType;
 	private Node containingFunctionNode;
-	
 	private LinkedList<String> localVariableDependencies;
 	private LinkedList<String> parameterDependencies;
 	private LinkedList<String> ownLocalVariables;
 	private String hookFunctionName;
 	private CriticalOccurrence dupe;
 	private FunctionBuilder hookBuilder;
-	
+
 	public FunctionBuilder getHookBuilder() {
-		return hookBuilder;
+		return this.hookBuilder;
 	}
 
 	public void setHookBuilder(FunctionBuilder hookBuilder) {
@@ -32,7 +26,7 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	}
 
 	public CriticalOccurrence getDupe() {
-		return dupe;
+		return this.dupe;
 	}
 
 	public void setDupe(CriticalOccurrence dupe) {
@@ -40,13 +34,13 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	}
 
 	public CriticalOccurrence(PreprocessorOccurrence current) {
-		this.setDocFileName(new File(current.getDocFileName()));
-		this.setPrepNodes(current.getPrepNodes());
-		this.setType(current.getType());
+		setDocFileName(new File(current.getDocFileName()));
+		setPrepNodes(current.getPrepNodes());
+		setType(current.getType());
 	}
 
 	public LinkedList<String> getLocalVariableDependencies() {
-		return localVariableDependencies;
+		return this.localVariableDependencies;
 	}
 
 	public void setLocalVariableDependencies(
@@ -55,15 +49,16 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	}
 
 	public LinkedList<String> getParameterDependencies() {
-		return parameterDependencies;
+		return this.parameterDependencies;
 	}
 
-	public void setParameterDependencies(LinkedList<String> parameterDependencies) {
+	public void setParameterDependencies(
+			LinkedList<String> parameterDependencies) {
 		this.parameterDependencies = parameterDependencies;
 	}
 
 	public LinkedList<String> getOwnLocalVariables() {
-		return ownLocalVariables;
+		return this.ownLocalVariables;
 	}
 
 	public void setOwnLocalVariables(LinkedList<String> ownLocalVariables) {
@@ -71,7 +66,7 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	}
 
 	public String getHookFunctionName() {
-		return hookFunctionName;
+		return this.hookFunctionName;
 	}
 
 	public void setHookFunctionName(String hookFunctionName) {
@@ -83,11 +78,11 @@ public class CriticalOccurrence extends PreprocessorOccurrence {
 	}
 
 	public RefactoringStrategy getCritNodeType() {
-		return critNodeType;
+		return this.critNodeType;
 	}
-	
+
 	public Node getContainingFunctionNode() {
-		return containingFunctionNode;
+		return this.containingFunctionNode;
 	}
 
 	public void setContainingFunctionNode(Node containingFunctionNode) {

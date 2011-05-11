@@ -1,29 +1,24 @@
 package scanner;
 
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpression;
-import javax.xml.xpath.XPathExpressionException;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
-
 import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.PreprocessorOccurrence;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathExpressionException;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
 
 public abstract class FeaturePattern {
-
 	public abstract String getXpathQuery();
 
 	public abstract String getRefactoringType();
 
 	public boolean verify(PreprocessorTree patternTree,
 			PreprocessorTree completeTree) {
-
 		completeTree.calculateMatches(patternTree);
 
 		return true;
@@ -32,20 +27,17 @@ public abstract class FeaturePattern {
 	public LinkedList<PreprocessorOccurrence> checkDoc(Document srcDoc,
 			PreprocessorTree completeTree) {
 		LinkedList<PreprocessorOccurrence> occs = null;
-
 		try {
 			occs = doXPath(srcDoc, completeTree, getXpathQuery(),
 					getRefactoringType(), true);
 		} catch (XPathExpressionException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		if (occs == null || occs.isEmpty()) {
+		if ((occs == null) || (occs.isEmpty())) {
 			return new LinkedList<PreprocessorOccurrence>();
-		} else {
-			return occs;
 		}
+		return occs;
 	}
 
 	protected PreprocessorTree constructTree(NodeList result,
@@ -54,19 +46,14 @@ public abstract class FeaturePattern {
 
 		for (int i = 0; i < result.getLength(); i++) {
 			PreprocessorNode node = new PreprocessorNode();
-			// System.out.println(result.item(i).getPrefix());
+
 			node.setNode(result.item(i));
 			node.setType(result.item(i).getNodeName()
-					.substring(NameSpaceConfigs.CPP_PREFIX.length() + 1));
+					.substring("cpp".length() + 1));
 
 			tree.addAgainst(node, completeTree);
 		}
 
-		/*
-		 * /TODO DEBUG List<PreprocessorNode> list = tree.flattenTree(); for
-		 * (PreprocessorNode node : list) { System.out.println(node.getType());
-		 * } //TODO DEBUG END
-		 */
 		return tree;
 	}
 
@@ -77,20 +64,20 @@ public abstract class FeaturePattern {
 		while (nodeIterator.hasNext()) {
 			PreprocessorOccurrence occ = new PreprocessorOccurrence();
 
-			PreprocessorNode ifNode = nodeIterator.next();
+			PreprocessorNode ifNode = (PreprocessorNode) nodeIterator.next();
 			PreprocessorNode elseNode = null;
 			PreprocessorNode endNode = null;
 
-			PreprocessorNode tmp = nodeIterator.next();
+			PreprocessorNode tmp = (PreprocessorNode) nodeIterator.next();
 			if (tmp.getType().equals("else")) {
 				elseNode = tmp;
-				endNode = nodeIterator.next();
+				endNode = (PreprocessorNode) nodeIterator.next();
 			} else {
 				endNode = tmp;
 			}
-			if (elseNode == null) {
+			if (elseNode == null)
 				occ.setPrepNodes(new PreprocessorNode[] { ifNode, endNode });
-			} else {
+			else {
 				occ.setPrepNodes(new PreprocessorNode[] { ifNode, elseNode,
 						endNode });
 			}
@@ -108,7 +95,7 @@ public abstract class FeaturePattern {
 		XPathExpression expr = QueryBuilder.instance().getExpression(xpath);
 		NodeList result = (NodeList) expr.evaluate(srcDoc,
 				XPathConstants.NODESET);
-		// DEBUG System.out.println(result.getLength());
+
 		PreprocessorTree tree = constructTree(result, completeTree);
 
 		verify(tree, completeTree);

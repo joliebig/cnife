@@ -6,14 +6,16 @@ import backend.storage.PreprocessorOccurrence;
 
 public abstract class FeatureVisitor {
 	protected IdentifiedFeatureList list;
-	
+
 	public FeatureVisitor(IdentifiedFeatureList list) {
 		this.list = list;
 	}
-	
+
 	public abstract void visitAllNodes();
-	
-	protected abstract void visitFeature(IdentifiedFeature feature);
+
+	protected abstract void visitFeature(
+			IdentifiedFeature paramIdentifiedFeature);
+
 	protected abstract void visitOccurrence(
-			PreprocessorOccurrence prepOccurrence);
+			PreprocessorOccurrence paramPreprocessorOccurrence);
 }

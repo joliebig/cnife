@@ -1,5 +1,9 @@
 package analyzer;
 
+import analyzer.visitors.FeatureVisitor;
+import backend.storage.IdentifiedFeature;
+import backend.storage.IdentifiedFeatureList;
+import backend.storage.PreprocessorOccurrence;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileNotFoundException;
@@ -8,127 +12,92 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
-
+import jargs.gnu.CmdLineParser;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.xpath.XPathExpressionException;
-
-import jargs.gnu.CmdLineParser;
-
 import org.xml.sax.SAXException;
-
 import refactoring.RefactoringDocument;
 import scanner.FeatureSearcher;
-import analyzer.visitors.FeatureVisitor;
-import backend.storage.IdentifiedFeature;
-import backend.storage.IdentifiedFeatureList;
-import backend.storage.PreprocessorOccurrence;
 
 public class FeatureRefactoringAnalyzer {
-
 	private File outputDir;
 	LinkedList<FeatureVisitor> visitors;
 	IdentifiedFeatureList backend;
 	LinkedList<String> annotationfilter;
 
-	public FeatureRefactoringAnalyzer(File outputDir, LinkedList<String> annotationfilterlist) {
-		assert outputDir.exists() && outputDir.isDirectory();
+	public FeatureRefactoringAnalyzer(File outputDir, LinkedList<String> annotationfilter) {
+		assert ((outputDir.exists()) && (outputDir.isDirectory()));
 
 		this.outputDir = outputDir;
 		this.visitors = new LinkedList<FeatureVisitor>();
-		this.annotationfilter = annotationfilterlist;
+		this.annotationfilter = annotationfilter;
 
 		initBackEnd();
 		initProjectDir();
 	}
 
 	private void initBackEnd() {
-		backend = new IdentifiedFeatureList();
+		this.backend = new IdentifiedFeatureList();
 	}
 
 	private void initProjectDir() {
-		File baseDir = new File(outputDir.getAbsolutePath()
+		File baseDir = new File(this.outputDir.getAbsolutePath()
 				+ File.separatorChar + "Base");
 		if (baseDir.exists()) {
-			File[] outputDirContent = outputDir.listFiles(new FileFilter() {
-
-				@Override
-				public boolean accept(File file) {
-					if (file.isDirectory() && !file.getName().startsWith("."))
-						return true;
-					return false;
-				}
-
-			});
-
+			File[] outputDirContent = this.outputDir
+					.listFiles(new FileFilter() {
+						public boolean accept(File file) {
+							return (file.isDirectory())
+									&& (!file.getName().startsWith("."));
+						}
+					});
 			for (File fileDir : outputDirContent) {
 				File[] fileDirContent = fileDir.listFiles(new FileFilter() {
-
-					@Override
 					public boolean accept(File file) {
-						if (file.getName().toLowerCase().matches(".*\\.xml")
-								&& !file.isDirectory()) {
-							return true;
-						}
-						return false;
+						return (file.getName().toLowerCase()
+								.matches(".*\\.xml")) && (!file.isDirectory());
 					}
 				});
-
 				for (File featureFile : fileDirContent) {
 					FeatureSearcher searcher = new FeatureSearcher();
-					searcher.setOutputDir(outputDir);
-					searcher.setBackend(backend);
-					searcher.setAnnotationFilter(annotationfilter);
+					searcher.setOutputDir(this.outputDir);
+					searcher.setBackend(this.backend);
 					searcher.checkDoc(featureFile);
 				}
 			}
 		} else {
 			baseDir.mkdir();
 		}
-
 	}
-	
+
 	public boolean addFile(File xmlFile) {
 		if (!xmlFile.exists()) {
 			return false;
-		} else {
-
-			FeatureSearcher scanner = new FeatureSearcher();
-			scanner.setOutputDir(outputDir);
-			scanner.setBackend(backend);
-			scanner.checkDoc(xmlFile);
-
-			return true;
 		}
+
+		FeatureSearcher scanner = new FeatureSearcher();
+		scanner.setOutputDir(this.outputDir);
+		scanner.setBackend(this.backend);
+		scanner.checkDoc(xmlFile);
+
+		return true;
 	}
 
 	public LinkedList<String> getFeatureNames() {
 		Iterator<IdentifiedFeature> it = this.backend.iterate();
 		LinkedList<String> featureNames = new LinkedList<String>();
 		while (it.hasNext()) {
-			featureNames.add(it.next().getName());
+			featureNames.add(((IdentifiedFeature) it.next()).getName());
 		}
 		return featureNames;
 	}
 
-	/**
-	 * debugging and testing
-	 * 
-	 * @return textrepresentation for refactorings
-	 */
 	public String getRefactoringSuggestion() {
 		return null;
 	}
 
-	/**
-	 * Berechnet die besten Features
-	 * 
-	 * @param topK
-	 *            wieviele Features geliefert werden sollen
-	 * @return sortiert nach Score (beste zuerst in der Liste) alle Features,
-	 *         maximal topK-viele
-	 */
 	public LinkedList<IdentifiedFeature> getBestFeatures(int topK) {
 		return null;
 	}
@@ -138,7 +107,7 @@ public class FeatureRefactoringAnalyzer {
 			throws FileNotFoundException, TransformerFactoryConfigurationError,
 			TransformerException {
 		for (String file : affectedFiles) {
-			backend.removeFileFromList(file);
+			this.backend.removeFileFromList(file);
 		}
 
 		for (RefactoringDocument doc : modFiles) {
@@ -155,6 +124,7 @@ public class FeatureRefactoringAnalyzer {
 				doc.saveDocument(featureDir.getAbsolutePath()
 						+ File.separatorChar + doc.getFileName());
 			}
+
 		}
 
 		initProjectDir();
@@ -167,7 +137,6 @@ public class FeatureRefactoringAnalyzer {
 	public static void main(String[] args) throws SAXException, IOException,
 			ParserConfigurationException, TransformerFactoryConfigurationError,
 			TransformerException {
-
 		// setup command line arguments parser
 		CmdLineParser cmdparser = new CmdLineParser();
 
@@ -235,6 +204,7 @@ public class FeatureRefactoringAnalyzer {
 			System.exit(1);
 		}
 
+
 		int simple = 0;
 		int hook = 0;
 		int impc = 0;
@@ -247,40 +217,37 @@ public class FeatureRefactoringAnalyzer {
 				+ " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval,
-					providehooknamesval);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval, providehooknamesval);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
-					.iterateOccurrences();
+			.iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
 			while (it.hasNext()) {
-				PreprocessorOccurrence occ = it.next();
+				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();
 				System.out.println("\nFound type: " + occ.getType()
 						+ " on linenumber: "
-						+ occ.getPrepNodes()[0].getLineNumber() + " ("
-						+ occ.getLinesOfCode() + " loc)\nin File: "
+						+ occ.getPrepNodes()[0].getLineNumber() + "\nin File: "
 						+ occ.getDocFileName());
 				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
 					occ.setType("toomit");
-				if (occ.getType().startsWith("impossible")
-						|| occ.getType().startsWith("unknown")) {
+				if ((occ.getType().startsWith("impossible"))
+						|| (occ.getType().startsWith("unknown")))
 					impc++;
-				} else if (occ.getType().startsWith("Hook")) {
+				else if (occ.getType().startsWith("Hook"))
 					hook++;
-				} else if (occ.getType().startsWith("toomit")) {
+				else if (occ.getType().startsWith("toomit"))
 					omit++;
-				} else {
+				else {
 					simple++;
 				}
 			}
 			System.out
 					.println("-------------------------------------------------------------\n");
-
 			if (refactorval) {
 				LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-				a.saveRefactorings(afeat.getAnalyzedFeature()
-						.getAffectedFiles().keySet(), modFiles);
+				a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles()
+					.keySet(), modFiles);
 			}
 		}
 		System.out.println("Finished. Statistics:");
@@ -290,7 +257,7 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("omitted (user intervention): " + omit);
 	}
 
-	public static void main3(String[] args) throws SAXException, IOException,
+	public static void main5(String[] args) throws SAXException, IOException,
 			ParserConfigurationException, XPathExpressionException,
 			TransformerFactoryConfigurationError, TransformerException {
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(new File(
@@ -304,16 +271,16 @@ public class FeatureRefactoringAnalyzer {
 		LinkedList<String> list = a.getFeatureNames();
 		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
 		System.out.println("Feature-Anzahl: " + list.size());
+		IdentifiedFeature feat;
 		for (String name : list) {
-			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
+			feat = a.backend.getIdentifiedFeatureByName(name);
 			System.out.println("Feature: " + name);
 			System.out.println("gesamt LOCs: " + feat.getLOCs());
 			AnalyzeFeature afeat = new AnalyzeFeature(feat, false, false);
 			afeat.analyze();
 			afeats.add(afeat.getAnalyzedFeature());
 			System.out.println("LOCs" + feat.getLOCs());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
-					.iterateOccurrences();
+			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = it.next();
 				System.out.println("Linenumber: "
@@ -321,112 +288,31 @@ public class FeatureRefactoringAnalyzer {
 				System.out.println("in File: " + occ.getDocFileName());
 				System.out.println("LOCs in File: " + occ.getLinesOfCode());
 				System.out.println("Found type: " + occ.getType() + "\n");
-				if (occ.getType().startsWith("impossible")
-						|| occ.getType().startsWith("unknown")) {
+				if ((occ.getType().startsWith("impossible"))
+						|| (occ.getType().startsWith("unknown"))) {
 					impc++;
-					implc += occ.getLinesOfCode();
+					implc = (int) (implc + occ.getLinesOfCode());
 				} else if (occ.getType().startsWith("Hook")) {
 					hook++;
 				} else {
 					simple++;
 				}
 				if (types.containsKey(occ.getType()))
-					types.put(occ.getType(), types.get(occ.getType()) + 1);
+					types.put(occ.getType(), Integer.valueOf(((Integer) types
+							.get(occ.getType())).intValue() + 1));
 				else
 					types.put(occ.getType(), new Integer(1));
 			}
 			System.out
 					.println("-------------------------------------------------------------\n");
-			LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-			a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles()
-					.keySet(), modFiles);
 			afeat.refactor();
 		}
+
 		Set<String> keys = types.keySet();
 		for (String type : keys) {
 			System.out.println(type + ": " + types.get(type));
 		}
 		System.out.println("einfache: " + simple + " hooks " + hook);
-		System.out.println("unmoegliche: " + impc + " LOCs " + implc);
-
-		// File[] dirlist = (new File("source_mls")).listFiles();
-		//
-		// for (File file : dirlist) {
-		// if (file.getName().matches(".*Stat.*")) {
-		// System.out.println("bla");
-		// }
-		// boolean test = a.addFile(file);
-		// if (test == false) {
-		// System.out.println("File " + file.getName() + " not found!");
-		// System.exit(0);
-		// } else {
-		// System.out.println("File " + file.getName() + " added!");
-		// }
-		// }
-
-		// Iterator<IdentifiedFeature> it = a.backend.iterate();
-		// LinkedList<String> featureNames = new LinkedList<String>();
-		// while (it.hasNext()) {
-		// featureNames.add(it.next().getName());
-		// }
-		// for (String name : featureNames) {
-		// // String name = "HAVE_BTREE";
-		// IdentifiedFeature feature =
-		// a.backend.getIdentifiedFeatureByName(name);
-		// if (feature == null) continue;
-		// System.out.println(name);
-		// AnalyzeFeature feat = new AnalyzeFeature(feature);
-		// feat.analyze();
-		//
-		// LinkedList<RefactoringDocument> modFiles = feat.refactor();
-		// a.saveRefactorings(feat.getAnalyzedFeature().getAffectedFiles().keySet(),
-		// modFiles);
-
-		// }
-		// IdentifiedFeature feature = it.next();
-		// System.out.println("Found Feature: " + feature.getName());
-		// System.out.println("LOCS:          " + feature.getLOCs());
-		// Iterator<PreprocessorOccurrence> occIt =
-		// feature.iterateOccurrences();
-		// while (occIt.hasNext()) {
-		// PreprocessorOccurrence occ = occIt.next();
-		// System.out.println("Occurrence in: " + occ.getDocFileName());
-		// System.out.println("recognized Pattern: " + occ.getType());
-		// PreprocessorNode[] nodes = occ.getPrepNodes();
-		// for (int i = 0; i < nodes.length; i++) {
-		// System.out.println("Directive  at: line "
-		// + nodes[i].getLineNumber()
-		// + " Type: "
-		// + nodes[i].getType());
-		// }
-		// }
-		// }
-		// IdentifiedFeature feat =
-		// a.backend.getIdentifiedFeatureByName("DIAGNOSTIC");
-		// Iterator<PreprocessorOccurrence> featIt = feat.iterateOccurrences();
-		// NewFileTemplate pos = NewFileTemplate.instantiate();
-		// NewFileTemplate neg = NewFileTemplate.instantiate();
-		// Document doc = null;
-		// while(featIt.hasNext()) {
-		// PreprocessorOccurrence occ = featIt.next();
-		// RefactoringAction action =
-		// RefactoringFactory.instance().getAction(occ.getType());
-		// doc = occ.getPrepNodes()[0].getNode().getOwnerDocument();
-		// action.moveNodes(doc,
-		// pos, neg, occ, feat.getName());
-		// }
-		// pos.setClassName(doc);
-		// neg.setClassName(doc);
-		//
-		//
-		// System.out.println("-----ORIGINAL-----");
-		// System.out.println(doc.getFirstChild().getTextContent());
-		// System.out.println("---END:ORiGINAL---\n");
-		// System.out.println("-------POS--------");
-		// System.out.println(pos.getFirstChild().getTextContent());
-		// System.out.println("-----END:POS------\n");
-		// System.out.println("-------NEG--------");
-		// System.out.println(neg.getFirstChild().getTextContent());
-		// System.out.println("-----END:NEG------");
+		System.out.println("unmögliche: " + impc + " LOCs " + implc);
 	}
 }

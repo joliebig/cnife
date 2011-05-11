@@ -1,27 +1,19 @@
 package scanner;
 
+import backend.storage.PreprocessorOccurrence;
 import org.w3c.dom.Node;
 
-import backend.storage.PreprocessorOccurrence;
-
 public class CheckLogics {
-	
-	
-	
-	
 	public String getFeatureName(PreprocessorOccurrence pOccurrence) {
 		Node node = pOccurrence.getPrepNodes()[0].getNode();
 		Node nameNode = node.getLastChild();
 		String name = computeName(nameNode.getTextContent());
-		return name; 
-		
+		return name;
 	}
-
-
 
 	private String computeName(String textContent) {
 		String newTextContent = null;
-		
+
 		if (textContent.matches(".*[\\||!|\\&|=|(defined)]+.*")) {
 			newTextContent = textContent.replace("||", "_OR_");
 			newTextContent = newTextContent.replace("&&", "_AND_");
@@ -35,7 +27,7 @@ public class CheckLogics {
 		} else {
 			newTextContent = textContent;
 		}
-		
+
 		return newTextContent;
 	}
 }

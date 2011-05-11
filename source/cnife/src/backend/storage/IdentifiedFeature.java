@@ -8,83 +8,73 @@ public class IdentifiedFeature {
 	private LinkedList<PreprocessorOccurrence> list;
 	private int score;
 	private String name;
-	private long LOCs = 0;
+	private long LOCs = 0L;
 	private HashMap<String, LinkedList<PreprocessorOccurrence>> fileOccurrences;
-	
+
 	public IdentifiedFeature() {
 		this.list = new LinkedList<PreprocessorOccurrence>();
 		this.fileOccurrences = 
 			new HashMap<String, LinkedList<PreprocessorOccurrence>>();
 	}
-	
+
 	public int getScore() {
-		return score;
+		return this.score;
 	}
-	
+
 	public int getClutteredPartsCount() {
-		return fileOccurrences.size(); 
+		return this.fileOccurrences.size();
 	}
-	
+
 	public long getLOCs() {
-		return LOCs;
+		return this.LOCs;
 	}
-	
+
 	public Iterator<PreprocessorOccurrence> iterateOccurrences() {
-		return list.iterator();
+		return this.list.iterator();
 	}
-	
+
 	public String getName() {
-		return name;
+		return this.name;
 	}
 
 	public void setName(String name) {
 		this.name = name;
 	}
 
-	/**
-	 * Fügt ein neues PreprocessorOccurrence-Objekt diesem Feature hinzu
-	 * @param occ
-	 */
 	public void addOccurrence(PreprocessorOccurrence occ) {
-		if (occ.getPrepNodes().length == 2) {
-			this.LOCs += 
-				occ.getPrepNodes()[1].getLineNumber() 
-				- occ.getPrepNodes()[0].getLineNumber();
-		} else if (occ.getPrepNodes().length == 3) {
-			this.LOCs += 
-				occ.getPrepNodes()[2].getLineNumber() 
-				- occ.getPrepNodes()[0].getLineNumber();
+		if (occ.getPrepNodes().length == 2)
+			this.LOCs += occ.getPrepNodes()[1].getLineNumber()
+					- occ.getPrepNodes()[0].getLineNumber();
+		else if (occ.getPrepNodes().length == 3) {
+			this.LOCs += occ.getPrepNodes()[2].getLineNumber()
+					- occ.getPrepNodes()[0].getLineNumber();
 		}
-		
-		list.add(occ);
-		
+
+		this.list.add(occ);
+
 		LinkedList<PreprocessorOccurrence> occInFile = null;
-		if (fileOccurrences.containsKey(occ.getDocFileName())) {
-			occInFile = fileOccurrences.get(occ.getDocFileName());
+		if (this.fileOccurrences.containsKey(occ.getDocFileName())) {
+			occInFile = this.fileOccurrences.get(occ.getDocFileName());
 		} else {
 			occInFile = new LinkedList<PreprocessorOccurrence>();
-			fileOccurrences.put(occ.getDocFileName(), occInFile);
+			this.fileOccurrences.put(occ.getDocFileName(), occInFile);
 		}
 		occInFile.add(occ);
 	}
-	
-	/**
-	 * Löscht alle Auftreten einer Datei aus diesem Feature
-	 * @param fileName
-	 */
-	public void removeWholeFileFromFeature (String fileName) {
-		if (fileOccurrences.containsKey(fileName)) {
+
+	public void removeWholeFileFromFeature(String fileName) {
+		if (this.fileOccurrences.containsKey(fileName)) {
 			LinkedList<PreprocessorOccurrence> file = 
 				fileOccurrences.get(fileName);
 			for (PreprocessorOccurrence occ : file) {
 				this.LOCs -= occ.getLinesOfCode();
 			}
-			list.removeAll(file);
-			fileOccurrences.remove(fileName);
+			this.list.removeAll(file);
+			this.fileOccurrences.remove(fileName);
 		}
 	}
 
-	public boolean isEmpty () {
-		return list.isEmpty();
+	public boolean isEmpty() {
+		return this.list.isEmpty();
 	}
 }
