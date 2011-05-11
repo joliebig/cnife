@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsFsync.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsFsync.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
 <cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
@@ -73,8 +73,7 @@
 		<else>else
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>F_FULLFSYNC</name></expr></argument>)</argument_list></call></expr></cpp:if>
 			<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>fcntl</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>F_FULLFSYNC</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>not</name> <call><name>defined</name><argument_list>(<argument><expr><name>F_FULLFSYNC</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_FDATASYNC</name></expr></argument>)</argument_list></call></expr></cpp:if>
+<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_FDATASYNC</name></expr></argument>)</argument_list></call></expr></cpp:elif>
 			<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>fdatasync</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 <cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
 			<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>fsync</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsAlloc.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsAlloc.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
@@ -193,10 +193,10 @@
 		 * byte after the memory and set it to a special value that we check
 		 * for when the memory is free'd.
 		 */</comment>
-		<expr_stmt><expr>((<name>u_int8_t</name> *)<name>p</name>)<index>[<expr><name>size</name> - 1</expr>]</index> = <name>CLEAR_BYTE</name></expr>;</expr_stmt>
+		<expr_stmt><expr>((<name>u_int8_t</name> *)<name>p</name>)[<name>size</name> - 1] = <name>CLEAR_BYTE</name></expr>;</expr_stmt>
 	
 		<expr_stmt><expr>((union <name>__db_allocinfo</name> *)<name>p</name>)-&gt;<name>size</name> = <name>size</name></expr>;</expr_stmt>
-		<expr_stmt><expr><name>p</name> = &amp;((union <name>__db_allocinfo</name> *)<name>p</name>)<index>[<expr>1</expr>]</index></expr>;</expr_stmt>
+		<expr_stmt><expr><name>p</name> = &amp;((union <name>__db_allocinfo</name> *)<name>p</name>)[1]</expr>;</expr_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 		<expr_stmt><expr>*(<name>void</name> **)<name>storep</name> = <name>p</name></expr>;</expr_stmt>
 	
@@ -223,13 +223,13 @@
 		<expr_stmt><expr><name>size</name> += <call><name>sizeof</name><argument_list>(<argument>union <expr><name>__db_allocinfo</name></expr></argument>)</argument_list></call> + 1</expr>;</expr_stmt>
 	
 		<comment type="block">/* Back up to the real beginning */</comment>
-		<expr_stmt><expr><name>ptr</name> = &amp;((union <name>__db_allocinfo</name> *)<name>ptr</name>)<index>[<expr>-1</expr>]</index></expr>;</expr_stmt>
+		<expr_stmt><expr><name>ptr</name> = &amp;((union <name>__db_allocinfo</name> *)<name>ptr</name>)[-1]</expr>;</expr_stmt>
 	
 		<block>{
 			<decl_stmt><decl><type><name>size_t</name></type> <name>s</name></decl>;</decl_stmt>
 	
 			<expr_stmt><expr><name>s</name> = ((union <name>__db_allocinfo</name> *)<name>ptr</name>)-&gt;<name>size</name></expr>;</expr_stmt>
-			<if>if <condition>(<expr>((<name>u_int8_t</name> *)<name>ptr</name>)<index>[<expr><name>s</name> - 1</expr>]</index> != <name>CLEAR_BYTE</name></expr>)</condition><then>
+			<if>if <condition>(<expr>((<name>u_int8_t</name> *)<name>ptr</name>)[<name>s</name> - 1] != <name>CLEAR_BYTE</name></expr>)</condition><then>
 				 <expr_stmt><expr><call><name>os_guard</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 		}</block>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
@@ -258,10 +258,10 @@
 			<return>return <expr>(<name>ret</name>)</expr>;</return>
 		}</block></then></if>
 <cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>DIAGNOSTIC</name></cpp:ifdef>
-		<expr_stmt><expr>((<name>u_int8_t</name> *)<name>p</name>)<index>[<expr><name>size</name> - 1</expr>]</index> = <name>CLEAR_BYTE</name></expr>;</expr_stmt>	<comment type="block">/* Initialize guard byte. */</comment>
+		<expr_stmt><expr>((<name>u_int8_t</name> *)<name>p</name>)[<name>size</name> - 1] = <name>CLEAR_BYTE</name></expr>;</expr_stmt>	<comment type="block">/* Initialize guard byte. */</comment>
 	
 		<expr_stmt><expr>((union <name>__db_allocinfo</name> *)<name>p</name>)-&gt;<name>size</name> = <name>size</name></expr>;</expr_stmt>
-		<expr_stmt><expr><name>p</name> = &amp;((union <name>__db_allocinfo</name> *)<name>p</name>)<index>[<expr>1</expr>]</index></expr>;</expr_stmt>
+		<expr_stmt><expr><name>p</name> = &amp;((union <name>__db_allocinfo</name> *)<name>p</name>)[1]</expr>;</expr_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
 		<expr_stmt><expr>*(<name>void</name> **)<name>storep</name> = <name>p</name></expr>;</expr_stmt>
@@ -280,9 +280,9 @@
 		<if>if <condition>(<expr><name>ptr</name> == <name>NULL</name></expr>)</condition><then>
 			<return>return;</return></then></if>
 	
-		<expr_stmt><expr><name>ptr</name> = &amp;((union <name>__db_allocinfo</name> *)<name>ptr</name>)<index>[<expr>-1</expr>]</index></expr>;</expr_stmt>
+		<expr_stmt><expr><name>ptr</name> = &amp;((union <name>__db_allocinfo</name> *)<name>ptr</name>)[-1]</expr>;</expr_stmt>
 		<expr_stmt><expr><name>size</name> = ((union <name>__db_allocinfo</name> *)<name>ptr</name>)-&gt;<name>size</name></expr>;</expr_stmt>
-		<if>if <condition>(<expr>((<name>u_int8_t</name> *)<name>ptr</name>)<index>[<expr><name>size</name> - 1</expr>]</index> != <name>CLEAR_BYTE</name></expr>)</condition><then>
+		<if>if <condition>(<expr>((<name>u_int8_t</name> *)<name>ptr</name>)[<name>size</name> - 1] != <name>CLEAR_BYTE</name></expr>)</condition><then>
 			 <expr_stmt><expr><call><name>os_guard</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 	
 		<comment type="block">/* Overwrite memory. */</comment>
