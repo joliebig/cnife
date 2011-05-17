@@ -26,8 +26,7 @@ public class FeatureRefactoringAnalyzer {
 	LinkedList<FeatureVisitor> visitors;
 	IdentifiedFeatureList backend;
 	LinkedList<String> annotationfilter;
-	int k;
-
+	
 	public FeatureRefactoringAnalyzer(File outputDir, LinkedList<String> annotationfilter) {
 		assert ((outputDir.exists()) && (outputDir.isDirectory()));
 
