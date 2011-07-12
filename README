@@ -1,0 +1,6 @@
+cnife is an extensible Java library for the (semi)automatic transformation
+of #ifdef annotated source code in C++ programs into FeatureC++
+feature-modules (see FeatureC++ project website for more information;
+http://fosd.net/fcc). cnife recognizes a set of patterns automatically
+(#ifdef usage in software systems) and tries to transform the annotated code
+into feature-modules.
