@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
@@ -16,7 +15,6 @@ import jargs.gnu.CmdLineParser;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
-import javax.xml.xpath.XPathExpressionException;
 import org.xml.sax.SAXException;
 import refactoring.RefactoringDocument;
 import scanner.FeatureSearcher;
@@ -26,7 +24,7 @@ public class FeatureRefactoringAnalyzer {
 	LinkedList<FeatureVisitor> visitors;
 	IdentifiedFeatureList backend;
 	LinkedList<String> annotationfilter;
-	
+
 	public FeatureRefactoringAnalyzer(File outputDir, LinkedList<String> annotationfilter) {
 		assert ((outputDir.exists()) && (outputDir.isDirectory()));
 
@@ -175,19 +173,20 @@ public class FeatureRefactoringAnalyzer {
 		String inputfolderval = (String) cmdparser.getOptionValue(inputfolder, null);
 		Boolean detectclonesval = (Boolean) cmdparser.getOptionValue(detectclones,
 				Boolean.TRUE);
-		
-		if (inputfolderval != null)
+
+		if (inputfolderval != null) {
 			inputfolderval.trim();
-		else
+		} else {
+			System.err.println("No inputfolder given. Terminating ...!");
 			System.exit(2);
-		Boolean refactorval = (Boolean) cmdparser.getOptionValue(refactor,
-				Boolean.FALSE);
+		}
+		Boolean refactorval = (Boolean) cmdparser.getOptionValue(refactor, Boolean.FALSE);
 		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
 				providehooknames, Boolean.FALSE);
 		Integer stmttrafoval = (Integer) cmdparser.getOptionValue(stmttrafo, 0);
 		String s = (String) cmdparser.getOptionValue(annotationfilter, null);
 		String[] slist = null;
-		
+
 		if (s != null)
 			slist = s.split(",");
 		LinkedList<String> annotationfilterlist = null;
@@ -199,11 +198,9 @@ public class FeatureRefactoringAnalyzer {
 
 		File projectDirectory = new File(inputfolderval);
 		if (!projectDirectory.exists() || !projectDirectory.isDirectory()) {
-			System.out
-					.print("Project directory not valid: " + projectDirectory);
-			System.exit(1);
+			System.err.println("Project directory not valid: " + projectDirectory);
+			System.exit(2);
 		}
-
 
 		int simple = 0;
 		int hook = 0;
@@ -225,9 +222,11 @@ public class FeatureRefactoringAnalyzer {
 			System.out.println("processing Feature " + name + " ...");
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();
-				System.out.println("\nFound type: " + occ.getType()
+				System.out.println("\nFound type: "
+						+ occ.getType()
 						+ " on linenumber: "
-						+ occ.getPrepNodes()[0].getLineNumber() + "\nin File: "
+						+ occ.getPrepNodes()[0].getLineNumber()
+						+ "\nin File: "
 						+ occ.getDocFileName());
 				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
 					occ.setType("toomit");
@@ -242,8 +241,7 @@ public class FeatureRefactoringAnalyzer {
 					simple++;
 				}
 			}
-			System.out
-					.println("-------------------------------------------------------------\n");
+			System.out.println("-------------------------------------------------------------\n");
 			if (refactorval) {
 				LinkedList<RefactoringDocument> modFiles = afeat.refactor();
 				a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles()
@@ -253,10 +251,12 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("Finished. Statistics:");
 		System.out.println("the good: " + simple);
 		System.out.println("the bad " + hook);
+		System.out.println("the ugly ");
 		System.out.println("impossibles: " + impc);
 		System.out.println("omitted (user intervention): " + omit);
 	}
 
+	/*
 	public static void main5(String[] args) throws SAXException, IOException,
 			ParserConfigurationException, XPathExpressionException,
 			TransformerFactoryConfigurationError, TransformerException {
@@ -315,4 +315,5 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("einfache: " + simple + " hooks " + hook);
 		System.out.println("unmögliche: " + impc + " LOCs " + implc);
 	}
+	*/
 }
