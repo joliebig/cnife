@@ -1,18 +1,24 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.cpp"</cpp:file></cpp:include>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="LinkedList.h" language="C++"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.cpp"</cpp:file></cpp:include>
 
 <class>class <name>Node</name> <block>{<private type="default">
 </private><public>public:
 	<decl_stmt><decl><type><name>int</name></type> <name>data</name></decl>;</decl_stmt>
 	<decl_stmt><decl><type><name>Node</name> *</type><name>next</name></decl>;</decl_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-	<decl_stmt><decl><type><name>Node</name> *</type><name>prev</name></decl>;</decl_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+
+
 </public>}</block>;</class>
 
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED2</name></expr></cpp:if>
-<function><type><name>void</name></type> <name><name>Node</name>::<name>test</name></name><parameter_list>()</parameter_list> <block>{
 
-}</block></function>
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>insert</name></name><parameter_list>( <param><decl><type><name>int</name></type> <name>newData</name></decl></param> )</parameter_list> <block>{
+	<if>if <condition>(<expr><name>newData</name> &gt; 5</expr>)</condition><then> <block>{
+		<expr_stmt><expr><name>newData</name> = 5</expr>;</expr_stmt>
+	}</block></then>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED3</name></expr></cpp:if>
+	<else>else <block>{
+		<expr_stmt><expr><name>newData</name> = 4</expr>;</expr_stmt>
+	}</block></else></if>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+}</block></function>
+
 </unit>
