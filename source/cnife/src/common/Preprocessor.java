@@ -1,10 +1,13 @@
 package common;
 
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.io.*;
 import org.javatuples.*;
 
 public class Preprocessor {
+
+	private static final File tmpdir = new File("/tmp");
 
 	/**
 	 * Method generates all combinations of true, false for a given number of elements
@@ -14,8 +17,7 @@ public class Preprocessor {
 	 * @param n
 	 * @return all combinations as a list of lists of booleans
 	 */
-	@SuppressWarnings("unused")
-	private static LinkedList<LinkedList<Boolean>> combinations(int n) {
+	public static LinkedList<LinkedList<Boolean>> combinations(int n) {
 		if (n <= 0) {
 			LinkedList<LinkedList<Boolean>> r = new LinkedList<LinkedList<Boolean>>();
 			r.add(new LinkedList<Boolean>());
@@ -44,14 +46,15 @@ public class Preprocessor {
 	 * @param infile
 	 * @param outfile
 	 */
-	@SuppressWarnings("unused")
-	private static void run(LinkedList<Pair<Boolean, String>> conf, File infile, File outfile) {
+	public static File run(LinkedList<Pair<Boolean, String>> conf, File infile) {
+		File outfile = null;
 		try {
+			outfile = File.createTempFile("test", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String cppcmd = "cpp";
-			cppcmd += " --CC"; // preserver comments
-			cppcmd += " --P";  // do not create line-markers
-			cppcmd += " --fdirectives-only"; // do not expand macros
+			cppcmd += " -CC"; // preserver comments
+			cppcmd += " -P";  // do not create line-markers
+			cppcmd += " -fdirectives-only"; // do not expand macros
 
 			for (Pair<Boolean, String> cp: conf) {
 				if (cp.getValue0()) cppcmd += " -D";
@@ -70,6 +73,25 @@ public class Preprocessor {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
+		return outfile;
+	}
+
+	/**
+	 * Method creates a configuration for the preprocessor for
+	 * @param c
+	 * @param p
+	 * @return
+	 */
+	public static LinkedList<Pair<Boolean, String>> createConfiguration(LinkedList<Boolean> c, LinkedList<String> p) {
+		LinkedList<Pair<Boolean, String>> res = new LinkedList<Pair<Boolean, String>>();
+
+		Iterator<Boolean> i1 = c.iterator();
+		Iterator<String> i2 = p.iterator();
+		while (i1.hasNext() && i2.hasNext()) {
+			res.add(new Pair<Boolean, String>(i1.next(), i2.next()));
+		}
+
+		return res;
 	}
 
 	/**
@@ -77,12 +99,10 @@ public class Preprocessor {
 	 * @param n
 	 * @return
 	 */
-	@SuppressWarnings("unused")
-	private static File prepareCodeForCPP(String n) {
+	public static File prepareCodeForCPP(String n) {
 		File fd = null;
 		try {
-			fd = File.createTempFile("", ".c");
-			fd.deleteOnExit();
+			fd = File.createTempFile("test", ".c", tmpdir);
 
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(fd));
 			ofd.write(n);
