@@ -94,6 +94,7 @@ public class HookRefactoring extends RefactoringAction {
 
 	private void insertDupeHookCall(PreprocessorNode[] nodes, Document from,
 			FunctionBuilder fb) {
+		System.out.println("dup call");
 		Node functionCallNode = fb.buildCallNode();
 		PreprocessorNode start = nodes[0];
 		Node importedCall = start.getNode().getOwnerDocument()

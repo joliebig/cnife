@@ -55,6 +55,7 @@ public class CompleteFunctionRefactoring extends RefactoringAction {
 						XPathConstants.NODE);
 				NodeList childs = frag.getChildNodes();
 				for (int i = 0; i < childs.getLength(); i++) {
+					System.out.println("clone Node 1");
 					Node child = childs.item(i).cloneNode(true);
 					target.adoptNode(child);
 					entryPoint.getParentNode().insertBefore(child,
@@ -78,6 +79,7 @@ public class CompleteFunctionRefactoring extends RefactoringAction {
 
 				NodeList childs = frag.getChildNodes();
 				for (int i = 0; i < childs.getLength(); i++) {
+					System.out.println("clone node 2");
 					Node child = childs.item(i).cloneNode(true);
 					target.adoptNode(child);
 					entryPoint.getParentNode().insertBefore(child,

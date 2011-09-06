@@ -34,7 +34,7 @@ public class AnalyzeFeature {
 	private Boolean providehooknames;
 	private InputStreamReader istreamreader;
 	private BufferedReader bufreader;
-	
+
 	private static String EXPR_NAMES_BELOW_IF_QUERY = "./(following::src:expr[not(contains(.,\"->\"))]/src:name union following::src:expr/src:name[1])";
 
 	private static String EXPR_NAMES_BEFORE_END_QUERY = "./(preceding::src:expr[not(contains(.,\"->\"))]/src:name union preceding::src:expr/src:name[1])";
@@ -48,6 +48,12 @@ public class AnalyzeFeature {
 	private static String FIND_NEXT_GOTOS = "./following::* intersect //src:goto";
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
+
+	private static String FIND_ELSE_BLOCK = "./following::* intersect //src:else";
+
+	private static String ELSE_BLOCK_BELOW_IF_QUERY = "./following::src:else";
+
+	private static String ELSE_BLOCK_BEFORE_END_QUERY = "./preceding::src:if/src:else";
 
 	public AnalyzeFeature(IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames) {
 		this.feature = feature;
@@ -79,7 +85,11 @@ public class AnalyzeFeature {
 					|| (current.getType().equals("HookRefactoring"))) {
 				CriticalOccurrence occ = new CriticalOccurrence(current);
 				boolean isImpossible = false;
+				boolean hasElseBlock = false;
+
 				try {
+					hasElseBlock = hasElseBlock(occ);
+					System.out.println("haselseblock: " + hasElseBlock);
 					isImpossible = hasDefines(occ);
 					if (!isImpossible) {
 						isImpossible = hasGoto(occ);
@@ -174,6 +184,22 @@ public class AnalyzeFeature {
 				XPathConstants.NODESET);
 
 		return lower.item(0) != upper.item(0);
+	}
+
+	private boolean hasElseBlock(CriticalOccurrence occ)
+			throws XPathExpressionException {
+
+		XPathExpression elseBlockBelow = QueryBuilder.instance()
+				.getExpression(ELSE_BLOCK_BELOW_IF_QUERY);
+		XPathExpression elseBlockBefore = QueryBuilder.instance()
+				.getExpression(ELSE_BLOCK_BEFORE_END_QUERY);
+		NodeList elseBlockBelowIf = (NodeList) elseBlockBelow.evaluate(
+				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
+		NodeList elseBlockBeforeIf = (NodeList) elseBlockBefore.evaluate(
+				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
+				XPathConstants.NODESET);
+
+		return elseBlockBelowIf.item(0) == elseBlockBeforeIf.item(0);
 	}
 
 	private boolean hasGoto(CriticalOccurrence occ)
@@ -324,9 +350,9 @@ public class AnalyzeFeature {
 		if (this.analyzedFeature == null) {
 			analyze();
 		}
-		HashMap<String, RefactoringDocument> posfiles = 
+		HashMap<String, RefactoringDocument> posfiles =
 			new HashMap<String, RefactoringDocument>();
-		HashMap<String, RefactoringDocument> negfiles = 
+		HashMap<String, RefactoringDocument> negfiles =
 			new HashMap<String, RefactoringDocument>();
 		Iterator<PreprocessorOccurrence> it = analyzedFeature.iterateOccurrences();
 
@@ -390,7 +416,7 @@ public class AnalyzeFeature {
 	}
 
 	private void setHookNames() {
-		HashMap<String, HashMap<Node, LinkedList<CriticalOccurrence>>> files = 
+		HashMap<String, HashMap<Node, LinkedList<CriticalOccurrence>>> files =
 			analyzedFeature.getAffectedFiles();
 
 		for (String key : files.keySet()) {
@@ -408,14 +434,14 @@ public class AnalyzeFeature {
 										&& (occ.getCritNodeType() != RefactoringStrategy.BLOCK_REPLICATION_WITH_HOOK) && (occ
 										.getCritNodeType() != RefactoringStrategy.STATEMENT_REPLICATION_WITH_HOOK)))
 							continue;
-						
+
 						if (detectclones)
 							cloneFinder.doDuplicateCheck(occ);
 
 						if (occ.getDupe() == null) {
 							String name = key.substring(key.lastIndexOf('\\') + 1);
 							name = name.substring(0, name.indexOf('.'));
-							
+
 							if (providehooknames) {
 								try {
 									System.out.print("hookname for " + name + " -- " + occ.getDocFileName() + ": ");
