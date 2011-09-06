@@ -50,7 +50,7 @@ public class AnalyzeFeature {
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
 
-	private static String FIND_ELSE_BLOCK = "./following::* intersect //src:else";
+//	private static String FIND_ELSE_BLOCK = "./following::* intersect //src:else";
 
 	private static String ELSE_BLOCK_BELOW_IF_QUERY = "./following::src:else";
 

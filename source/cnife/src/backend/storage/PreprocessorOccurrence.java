@@ -1,5 +1,6 @@
 package backend.storage;
 
+import analyzer.FeatureSearcher;
 import backend.PreprocessorNode;
 import java.io.File;
 import java.io.IOException;
@@ -8,7 +9,10 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
-import scanner.FeatureSearcher;
+
+import common.XMLTools;
+
+
 import scanner.PreprocessorTree;
 
 public class PreprocessorOccurrence {
@@ -39,7 +43,7 @@ public class PreprocessorOccurrence {
 		if (this.prepNodes[0].getNode() == null) {
 			FeatureSearcher searcher = new FeatureSearcher();
 			try {
-				Document doc = searcher.parseDocument(this.docFileName);
+				Document doc = XMLTools.parseDocument(this.docFileName);
 				searcher.populateTree(doc, this.tree);
 			} catch (SAXException e) {
 				e.printStackTrace();

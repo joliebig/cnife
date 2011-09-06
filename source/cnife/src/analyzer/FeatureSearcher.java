@@ -1,4 +1,4 @@
-package scanner;
+package analyzer;
 
 import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeatureList;
@@ -8,7 +8,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
@@ -33,7 +32,13 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import common.QueryBuilder;
+import common.XMLTools;
 
+import scanner.CheckLogics;
+import scanner.FeaturePattern;
+import scanner.PreprocessorTree;
+import scanner.RemainingOccurrencesPattern;
+import scanner.ReplaceFileException;
 import scanner.patterns.ClassIntroductionPattern;
 import scanner.patterns.CompleteFunctionPattern;
 import scanner.patterns.CompletePrivatePublicBlock;
@@ -50,7 +55,7 @@ public class FeatureSearcher {
 	public void importExternalFile(File xmlDoc) throws ReplaceFileException {
 		FileOutputStream out = null;
 		try {
-			Document doc = parseDocument(xmlDoc);
+			Document doc = XMLTools.parseDocument(xmlDoc);
 			if (this.outputDir != null) {
 				File baseFile = new File(this.outputDir.getAbsolutePath()
 						+ File.separatorChar + "Base" + File.separatorChar
@@ -74,10 +79,6 @@ public class FeatureSearcher {
 			e.printStackTrace();
 		} catch (TransformerException e) {
 			e.printStackTrace();
-		} catch (SAXException e) {
-			e.printStackTrace();
-		} catch (ParserConfigurationException e) {
-			e.printStackTrace();
 		} finally {
 			if (out != null)
 				try {
@@ -97,7 +98,7 @@ public class FeatureSearcher {
 		PreprocessorTree tree = buildPrepTreeWithLineNumbers(xmlDoc);
 		try {
 			if (doc == null) {
-				doc = parseDocument(xmlDoc);
+				doc = XMLTools.parseDocument(xmlDoc);
 			}
 			populateTree(doc, tree);
 			tree.calculateDepths();
@@ -141,14 +142,6 @@ public class FeatureSearcher {
 		} catch (TransformerFactoryConfigurationError e) {
 			e.printStackTrace();
 		}
-	}
-
-	public Document parseDocument(File xmlDoc) throws SAXException,
-			IOException, ParserConfigurationException {
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		factory.setNamespaceAware(true);
-		Document doc = factory.newDocumentBuilder().parse(xmlDoc);
-		return doc;
 	}
 
 	public void populateTree(Document doc, PreprocessorTree tree)
@@ -212,7 +205,7 @@ public class FeatureSearcher {
 	public void setBackend(IdentifiedFeatureList backend) {
 		this.backend = backend;
 	}
-	
+
 	public void setAnnotationFilter(LinkedList<String> annotationfilter) {
 		this.annotationfilter = annotationfilter;
 	}

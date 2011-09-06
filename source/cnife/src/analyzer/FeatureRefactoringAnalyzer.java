@@ -16,8 +16,9 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import org.xml.sax.SAXException;
+
+
 import refactoring.RefactoringDocument;
-import scanner.FeatureSearcher;
 
 public class FeatureRefactoringAnalyzer {
 	private File outputDir;
