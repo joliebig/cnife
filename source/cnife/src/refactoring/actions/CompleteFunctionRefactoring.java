@@ -1,9 +1,10 @@
 package refactoring.actions;
 
-import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
+import common.QueryBuilder;
+
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;

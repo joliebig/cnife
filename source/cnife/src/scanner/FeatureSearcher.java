@@ -1,6 +1,5 @@
 package scanner;
 
-import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeatureList;
 import backend.storage.PreprocessorOccurrence;
@@ -32,6 +31,9 @@ import net.sf.saxon.trans.XPathException;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import common.QueryBuilder;
+
 import scanner.patterns.ClassIntroductionPattern;
 import scanner.patterns.CompleteFunctionPattern;
 import scanner.patterns.CompletePrivatePublicBlock;

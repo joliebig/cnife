@@ -1,10 +1,10 @@
 package refactoring.actions;
 
 import analyzer.CriticalOccurrence;
-import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
+import common.QueryBuilder;
 import common.xmlTemplates.FunctionBuilder;
 import java.util.LinkedList;
 import javax.xml.xpath.XPathConstants;

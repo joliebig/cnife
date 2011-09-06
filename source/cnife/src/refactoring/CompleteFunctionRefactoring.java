@@ -1,6 +1,5 @@
 package refactoring;
 
-import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.PreprocessorOccurrence;
 import javax.xml.xpath.XPathConstants;
@@ -9,6 +8,8 @@ import javax.xml.xpath.XPathExpressionException;
 import org.w3c.dom.Document;
 import org.w3c.dom.DocumentFragment;
 import org.w3c.dom.Node;
+
+import common.QueryBuilder;
 
 public class CompleteFunctionRefactoring {
 	// private static final String ENTRY_POINT = "/src:unit/src:class/src:block/src:comment";

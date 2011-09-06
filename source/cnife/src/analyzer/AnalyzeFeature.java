@@ -3,6 +3,7 @@ package analyzer;
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
+import common.QueryBuilder;
 import common.xmlTemplates.NewFileTemplate;
 import java.io.File;
 import java.io.IOException;

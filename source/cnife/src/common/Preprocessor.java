@@ -3,6 +3,8 @@ package common;
 import java.util.LinkedList;
 import java.io.*;
 
+import org.w3c.dom.Node;
+
 public class Preprocessor {
 	private static LinkedList<LinkedList<Boolean>> combinations(int n) {
 		if (n <= 0) {
@@ -44,5 +46,9 @@ public class Preprocessor {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
+	}
+
+	private static LinkedList<String> getConfigurationParameter(Node n) {
+		return new LinkedList<String>();
 	}
 }

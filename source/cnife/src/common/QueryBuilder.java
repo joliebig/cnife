@@ -1,4 +1,4 @@
-package analyzer;
+package common;
 
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathExpression;

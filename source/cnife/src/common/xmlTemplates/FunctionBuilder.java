@@ -1,6 +1,5 @@
 package common.xmlTemplates;
 
-import analyzer.QueryBuilder;
 import java.io.IOException;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -12,6 +11,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
 import org.xml.sax.SAXException;
+
+import common.QueryBuilder;
 
 public class FunctionBuilder {
 	private static String TEMPLATE_FILE = "./function_vorlage.xml";

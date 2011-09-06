@@ -1,6 +1,5 @@
 package common.xmlTemplates;
 
-import analyzer.QueryBuilder;
 import java.io.IOException;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -10,6 +9,9 @@ import javax.xml.xpath.XPathExpressionException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
+
+import common.QueryBuilder;
+
 import refactoring.RefactoringDocument;
 
 public class NewFileTemplate extends RefactoringDocument {

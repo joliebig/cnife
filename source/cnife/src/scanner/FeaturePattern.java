@@ -1,6 +1,5 @@
 package scanner;
 
-import analyzer.QueryBuilder;
 import backend.PreprocessorNode;
 import backend.storage.PreprocessorOccurrence;
 import java.util.Iterator;
@@ -11,6 +10,8 @@ import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
+
+import common.QueryBuilder;
 
 public abstract class FeaturePattern {
 	public abstract String getXpathQuery();
