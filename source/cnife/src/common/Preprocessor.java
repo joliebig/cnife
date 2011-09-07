@@ -3,6 +3,7 @@ package common;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.io.*;
+
 import org.javatuples.*;
 
 public class Preprocessor {
@@ -50,6 +51,7 @@ public class Preprocessor {
 		File outfile = null;
 		try {
 			outfile = File.createTempFile("test", ".c", tmpdir);
+			outfile.deleteOnExit();
 			Runtime rt = Runtime.getRuntime();
 			String cppcmd = "cpp";
 			cppcmd += " -CC"; // preserver comments
@@ -73,7 +75,76 @@ public class Preprocessor {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
-		return outfile;
+		return processCPPOutput(conf, outfile);
+	}
+
+	/**
+	 * This method generates all variants of an annotated input file given a list of configurations confs
+	 * and a list of parameters p
+	 * @param confs
+	 * @param p
+	 * @param infile
+	 * @return
+	 */
+	public static LinkedList<File> runAll(LinkedList<LinkedList<Boolean>> confs, LinkedList<String> p, File infile) {
+		LinkedList<File> res = new LinkedList<File>();
+		LinkedList<Pair<Boolean, String>> cc = null;
+		File out = null;
+
+		for (LinkedList<Boolean> conf: confs) {
+			cc = Preprocessor.createConfiguration(conf, p);
+			out = Preprocessor.run(cc, infile);
+			res.add(out);
+		}
+
+		return res;
+	}
+
+	/**
+	 * This method processes the output of a cpp run (i.e., remove #define macros at start and
+	 * add the configuration #if)
+	 * @param c configuration of the program variant
+	 * @param outfile file that contains unpreprocessed cpp output
+	 * @return
+	 */
+	private static File processCPPOutput(LinkedList<Pair<Boolean, String>> conf, File outfile) {
+		if (outfile == null || conf == null) return null;
+		File res = null;
+		String sconf = "#if ";
+
+		for (Pair<Boolean, String> e: conf) {
+			if (!e.getValue0()) sconf += "!";
+			sconf += "defined(" + e.getValue1() + ") && ";
+		}
+
+		sconf = sconf.substring(0, sconf.length()-3); // split last &&
+
+		try {
+			res = File.createTempFile("test", ".c", tmpdir);
+			BufferedReader br = new BufferedReader(new FileReader(outfile));
+			BufferedWriter bw = new BufferedWriter(new FileWriter(res));
+			String line = null;
+			bw.write(sconf+"\n");
+
+			while ((line = br.readLine()) != null) {
+				// beware this might cause a problem
+				// cpp run generates a list of #defines and attaches them prior to
+				// the preprocessed code, if a user uses a #define on his own this
+				// #define is delete just like the generated ones.
+				if (line.startsWith("#"))
+					continue;
+				bw.write(line+"\n");
+			}
+
+			bw.write("#endif\n");
+			bw.close();
+
+		} catch (IOException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		}
+
+		return res;
 	}
 
 	/**
@@ -100,11 +171,12 @@ public class Preprocessor {
 	 * @return
 	 */
 	public static File prepareCodeForCPP(String n) {
-		File fd = null;
+		File res = null;
 		try {
-			fd = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test", ".c", tmpdir);
+			res.deleteOnExit();
 
-			BufferedWriter ofd = new BufferedWriter(new FileWriter(fd));
+			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
 			ofd.write(n);
 			ofd.close();
 		} catch (IOException e) {
@@ -112,6 +184,6 @@ public class Preprocessor {
 			e.printStackTrace();
 		}
 
-		return fd;
+		return res;
 	}
 }
