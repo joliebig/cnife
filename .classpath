@@ -2,7 +2,8 @@
 <classpath>
 	<classpathentry kind="src" path="source/cnife/src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.6"/>
-	<classpathentry kind="lib" path="/home/joliebig/workspace/cnife/source/cnife/lib/saxon9he.jar"/>
-	<classpathentry kind="lib" path="/home/joliebig/workspace/cnife/source/cnife/lib/jargs.jar"/>
+	<classpathentry kind="lib" path="source/cnife/lib/jargs.jar"/>
+	<classpathentry kind="lib" path="source/cnife/lib/javatuples-1.1.jar"/>
+	<classpathentry kind="lib" path="source/cnife/lib/saxon9he.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
