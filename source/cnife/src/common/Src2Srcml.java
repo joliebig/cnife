@@ -28,13 +28,15 @@ public class Src2Srcml {
 	 * @param infile
 	 * @param outfile
 	 */
-	public static void run(File infile, File outfile) {
+	public static File run(File infile) {
+		File res = null;
 		try {
+			res = File.createTempFile("test", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String src2srcmlcmd = "src2srcml";
 			src2srcmlcmd = " --language C++"; // set language
 			src2srcmlcmd = " " + infile; // set input file
-			src2srcmlcmd = " -o " + outfile; // set output file
+			src2srcmlcmd = " -o " + res; // set output file
 
 			Process pr = rt.exec(src2srcmlcmd);
 			int exitval = pr.waitFor();
@@ -45,6 +47,23 @@ public class Src2Srcml {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
+		return res;
+	}
+
+	/**
+	 * This method returns files that contain the src2srcml representation of
+	 * all infiles.
+	 * @param infiles
+	 * @return
+	 */
+	public static LinkedList<File> runAll(LinkedList<File> infiles) {
+		LinkedList<File> res = new LinkedList<File>();
+
+		for (File infile: infiles) {
+			res.add(Src2Srcml.run(infile));
+		}
+
+		return res;
 	}
 
 	/**
@@ -64,8 +83,6 @@ public class Src2Srcml {
 			String line;
 
 			while ((line = br.readLine()) != null) {
-				// skip #define and #undef directives added by cpp
-				if (line.startsWith("#")) continue;
 				bw.write(line);
 			}
 
@@ -76,6 +93,23 @@ public class Src2Srcml {
 			e.printStackTrace();
 		}
 		return tmpfile;
+	}
+
+	/**
+	 * This method returns a list of file handles with all variants of an undisiciplined
+	 * annotated statement, wrapped in a simple test function.
+	 * @param infiles
+	 * @return
+	 */
+	public static LinkedList<File> prepareAllFiles(LinkedList<File> infiles) {
+		LinkedList<File> res = new LinkedList<File>();
+		File cr = null;
+
+		for (File infile: infiles) {
+			cr = Src2Srcml.prepareFile(infile);
+			res.add(cr);
+		}
+		return res;
 	}
 
 	/**
@@ -122,5 +156,21 @@ public class Src2Srcml {
 			e.printStackTrace();
 		}
 		return nl;
+	}
+
+	/**
+	 * Method returns a list of NodeLists that contain the expanded statements of an undisciplined
+	 * annotated statement.
+	 * @param infiles
+	 * @return
+	 */
+	public static LinkedList<NodeList> extractNodesFromAll(LinkedList<File> infiles) {
+		LinkedList<NodeList> res = new LinkedList<NodeList>();
+
+		for (File infile: infiles) {
+			res.add(Src2Srcml.extractNodes(infile));
+		}
+
+		return res;
 	}
 }
