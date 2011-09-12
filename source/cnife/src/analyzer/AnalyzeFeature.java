@@ -52,11 +52,13 @@ public class AnalyzeFeature {
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
 
-//	private static String FIND_ELSE_BLOCK = "./following::* intersect //src:else";
-
 	private static String ELSE_BLOCK_BELOW_IF_QUERY = "./following::src:else";
 
 	private static String ELSE_BLOCK_BEFORE_END_QUERY = "./preceding::src:if/src:else";
+
+	private static String CASE_BLOCK_BELOW = "./following::src:case";
+
+	private static String CASE_BLOCK_BEFORE = "./parent::src:case";
 
 	public AnalyzeFeature(IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames) {
 		this.feature = feature;
@@ -89,10 +91,13 @@ public class AnalyzeFeature {
 				CriticalOccurrence occ = new CriticalOccurrence(current);
 				boolean isImpossible = false;
 				boolean hasElseBlock = false;
+				boolean hasCaseBlock = false;
 
 				try {
 					hasElseBlock = hasElseBlock(occ);
+					hasCaseBlock = hasCaseBlock(occ);
 					System.out.println("haselseblock: " + hasElseBlock);
+					System.out.println("hascaseblock: " + hasCaseBlock);
 					isImpossible = hasDefines(occ);
 					if (!isImpossible) {
 						isImpossible = hasGoto(occ);
@@ -189,6 +194,25 @@ public class AnalyzeFeature {
 		return lower.item(0) != upper.item(0);
 	}
 
+	private boolean hasCaseBlock(CriticalOccurrence occ)
+			throws XPathExpressionException {
+		XPathExpression caseBlockBelow = QueryBuilder.instance()
+				.getExpression(CASE_BLOCK_BELOW);
+		XPathExpression caseBlockBefore = QueryBuilder.instance()
+				.getExpression(CASE_BLOCK_BEFORE);
+		NodeList nlcaseBlockBelow = (NodeList) caseBlockBelow.evaluate(
+				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
+		NodeList nlcaseBlockBefore = (NodeList) caseBlockBefore.evaluate(
+				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
+				XPathConstants.NODESET);
+
+		if (nlcaseBlockBelow.getLength() > 0
+				&& nlcaseBlockBefore.getLength() > 0)
+			return nlcaseBlockBelow.item(0) == nlcaseBlockBefore.item(0);
+		else
+			return false;
+	}
+
 	private boolean hasElseBlock(CriticalOccurrence occ)
 			throws XPathExpressionException {
 
@@ -202,7 +226,11 @@ public class AnalyzeFeature {
 				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
 				XPathConstants.NODESET);
 
-		return elseBlockBelowIf.item(0) == elseBlockBeforeIf.item(0);
+		if (elseBlockBelowIf.getLength() > 0
+				&& elseBlockBeforeIf.getLength() > 0)
+			return elseBlockBelowIf.item(0) == elseBlockBeforeIf.item(0);
+		else
+			return false;
 	}
 
 	private boolean hasGoto(CriticalOccurrence occ)
