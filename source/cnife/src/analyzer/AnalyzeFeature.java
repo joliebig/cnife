@@ -1,5 +1,6 @@
 package analyzer;
 
+import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
@@ -100,7 +101,36 @@ public class AnalyzeFeature {
 					System.out.println("hascaseblock: " + hasCaseBlock);
 
 					// expand else block
-					
+					Node pn = current.getPrepNodes()[0].getNode().getParentNode();
+					File of = Preprocessor.prepareCodeForCPP(pn.getTextContent());
+					File oft = Src2Srcml.runSrcml2src(of);
+					LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(pn);
+					LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
+					LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, oft);
+
+					LinkedList<File> xnfs = Src2Srcml.runAll(nfs);
+					LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
+					Node ppn = pn.getParentNode();
+					ppn.removeChild(pn);
+
+					for (NodeList nl: nlxnfs) {
+						if (nl.getLength() == 0)
+							continue;
+						PreprocessorOccurrence oc = new PreprocessorOccurrence();
+						PreprocessorNode ocpn[] = new PreprocessorNode[nl.getLength()];
+						for (int i = 0; i < nl.getLength(); i++) {
+							PreprocessorNode tmpnode = new PreprocessorNode();
+							tmpnode.setNode(nl.item(0));
+							tmpnode.setLineNumber(5); //todo
+							tmpnode.setDepth(5);
+							ocpn[i] = tmpnode;
+						}
+						oc.setPrepNodes(ocpn);
+						oc.setDocFileName(new File(occ.getDocFileName()));
+						this.feature.addOccurrence(oc);
+					}
+
+
 					isImpossible = hasDefines(occ);
 					if (!isImpossible) {
 						isImpossible = hasGoto(occ);
@@ -109,7 +139,7 @@ public class AnalyzeFeature {
 					} else {
 						occ.setType("impossible (local #define)");
 					}
-					setContainer(occ);
+					// setContainer(occ);
 				} catch (XPathExpressionException e) {
 					e.printStackTrace();
 				}

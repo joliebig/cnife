@@ -87,50 +87,6 @@ public class Src2Srcml {
 	}
 
 	/**
-	 * Method writes an xml node n to a file and returns the filename.
-	 * @param n
-	 * @return
-	 */
-	public static File writeNode2XMLFile(Node n) {
-		File res = null;
-		DocumentBuilderFactory dbf = null;
-		DocumentBuilder db = null;
-
-		try {
-			res = File.createTempFile("test", ".c", tmpdir);
-			dbf = DocumentBuilderFactory.newInstance();
-			db = dbf.newDocumentBuilder();
-		} catch (IOException e) {
-			System.out.println(e.toString());
-			e.printStackTrace();
-		} catch (ParserConfigurationException e) {
-			System.out.println(e.toString());
-			e.printStackTrace();
-		}
-		Document d = db.newDocument();
-		Node i = d.importNode(n, true);
-		d.appendChild(i);
-
-		TransformerFactory tf = TransformerFactory.newInstance();
-		Transformer t = null;
-		try {
-			t = tf.newTransformer();
-		} catch (TransformerConfigurationException e) {
-			System.out.println(e.toString());
-			e.printStackTrace();
-		}
-		DOMSource ds = new DOMSource(d);
-		StreamResult sr = new StreamResult(res);
-		try {
-			t.transform(ds, sr);
-		} catch (TransformerException e) {
-			e.printStackTrace();
-		}
-
-		return res;
-	}
-
-	/**
 	 * This method returns files that contain the src2srcml representation of
 	 * all infiles.
 	 * @param infiles
