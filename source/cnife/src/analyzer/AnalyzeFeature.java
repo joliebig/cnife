@@ -98,6 +98,9 @@ public class AnalyzeFeature {
 					hasCaseBlock = hasCaseBlock(occ);
 					System.out.println("haselseblock: " + hasElseBlock);
 					System.out.println("hascaseblock: " + hasCaseBlock);
+
+					// expand else block
+					
 					isImpossible = hasDefines(occ);
 					if (!isImpossible) {
 						isImpossible = hasGoto(occ);

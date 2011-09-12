@@ -10,11 +10,21 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -28,15 +38,15 @@ public class Src2Srcml {
 	 * @param infile
 	 * @param outfile
 	 */
-	public static File run(File infile) {
+	public static File runSrc2srcml(File infile) {
 		File res = null;
 		try {
 			res = File.createTempFile("test", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String src2srcmlcmd = "src2srcml";
-			src2srcmlcmd = " --language C++"; // set language
-			src2srcmlcmd = " " + infile; // set input file
-			src2srcmlcmd = " -o " + res; // set output file
+			src2srcmlcmd += " --language C++"; // set language
+			src2srcmlcmd += " " + infile.getAbsolutePath(); // set input file
+			src2srcmlcmd += " -o " + res; // set output file
 
 			Process pr = rt.exec(src2srcmlcmd);
 			int exitval = pr.waitFor();
@@ -51,6 +61,76 @@ public class Src2Srcml {
 	}
 
 	/**
+	 * Method that runs the srcml2src tool on an input file generating an
+	 * output file.
+	 * @param infile
+	 * @return
+	 */
+	public static File runSrcml2src(File infile) {
+		File res = null;
+		try {
+			res = File.createTempFile("test", ".c", tmpdir);
+			Runtime rt = Runtime.getRuntime();
+			String srcml2srccmd = "srcml2src";
+			srcml2srccmd += " " + infile.getAbsolutePath();
+			srcml2srccmd += " -o " + res.getAbsolutePath();
+
+			Process pr = rt.exec(srcml2srccmd);
+			int exitval = pr.waitFor();
+			if (exitval != 0)
+				System.out.println("srcml2src returned with value: " + exitval);
+		} catch (Exception e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		}
+		return res;
+	}
+
+	/**
+	 * Method writes an xml node n to a file and returns the filename.
+	 * @param n
+	 * @return
+	 */
+	public static File writeNode2XMLFile(Node n) {
+		File res = null;
+		DocumentBuilderFactory dbf = null;
+		DocumentBuilder db = null;
+
+		try {
+			res = File.createTempFile("test", ".c", tmpdir);
+			dbf = DocumentBuilderFactory.newInstance();
+			db = dbf.newDocumentBuilder();
+		} catch (IOException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		} catch (ParserConfigurationException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		}
+		Document d = db.newDocument();
+		Node i = d.importNode(n, true);
+		d.appendChild(i);
+
+		TransformerFactory tf = TransformerFactory.newInstance();
+		Transformer t = null;
+		try {
+			t = tf.newTransformer();
+		} catch (TransformerConfigurationException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		}
+		DOMSource ds = new DOMSource(d);
+		StreamResult sr = new StreamResult(res);
+		try {
+			t.transform(ds, sr);
+		} catch (TransformerException e) {
+			e.printStackTrace();
+		}
+
+		return res;
+	}
+
+	/**
 	 * This method returns files that contain the src2srcml representation of
 	 * all infiles.
 	 * @param infiles
@@ -60,7 +140,7 @@ public class Src2Srcml {
 		LinkedList<File> res = new LinkedList<File>();
 
 		for (File infile: infiles) {
-			res.add(Src2Srcml.run(infile));
+			res.add(Src2Srcml.runSrc2srcml(infile));
 		}
 
 		return res;
@@ -173,4 +253,5 @@ public class Src2Srcml {
 
 		return res;
 	}
+
 }

@@ -15,5 +15,6 @@ public class TestExpansion {
 		File ofd = Preprocessor.prepareCodeForCPP(switchstmt.getTextContent());
 		@SuppressWarnings("unused")
 		LinkedList<File> nfd = Preprocessor.runAll(confs, fnames, ofd);
+		System.out.println(Src2Srcml.writeNode2XMLFile(switchstmt).getAbsolutePath());
 	}
 }
