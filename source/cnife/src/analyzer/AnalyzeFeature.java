@@ -1,6 +1,5 @@
 package analyzer;
 
-import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
@@ -20,6 +19,8 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
+
+import org.javatuples.Pair;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -53,9 +54,9 @@ public class AnalyzeFeature {
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
 
-	private static String ELSE_BLOCK_BELOW_IF_QUERY = "./following::src:else";
+	private static String ELSE_BLOCK_BELOW = "./following::src:else";
 
-	private static String ELSE_BLOCK_BEFORE_END_QUERY = "./preceding::src:if/src:else";
+	private static String ELSE_BLOCK_BEFORE = "./preceding::src:if/src:else";
 
 	private static String CASE_BLOCK_BELOW = "./following::src:case";
 
@@ -71,6 +72,40 @@ public class AnalyzeFeature {
 
 	public LinkedList<CriticalOccurrence> getCriticalNodes() {
 		return this.crits;
+	}
+
+	private void expandCaseBlock(CriticalOccurrence occ) {
+//		Node sn = cn.getParentNode().getParentNode(); // TODO
+//
+//		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(sn);
+//		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
+		File of = Preprocessor.writeCode2File(occ.getPrepNodes());
+//		LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, of);
+//
+//		LinkedList<File> pnfs = Src2Srcml.prepareAllFiles(nfs);
+//		LinkedList<File> xnfs = Src2Srcml.runAll(pnfs);
+//		LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
+//		Node ppn = sn.getParentNode();
+//		boolean rn = false;
+//		Node ln = null;
+//
+//		for (NodeList nl: nlxnfs) {
+//			for (int i = 0; i < nl.getLength(); i++)
+//				if (!rn) {
+//					ln = nl.item(i);
+//					ppn.replaceChild(sn, ln);
+//				} else {
+//					insertAfter(ppn, nl.item(i), ln);
+//					ln = nl.item(i);
+//				}
+//		}
+	}
+
+	private void insertAfter(Node pnode, Node nnode, Node rnode) {
+		if (rnode == null)
+			pnode.appendChild(nnode);
+		else
+			pnode.insertBefore(nnode, rnode.getNextSibling());
 	}
 
 	public void analyze() {
@@ -95,41 +130,14 @@ public class AnalyzeFeature {
 				boolean hasCaseBlock = false;
 
 				try {
-					hasElseBlock = hasElseBlock(occ);
-					hasCaseBlock = hasCaseBlock(occ);
-					System.out.println("haselseblock: " + hasElseBlock);
-					System.out.println("hascaseblock: " + hasCaseBlock);
+					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BLOCK_BELOW, ELSE_BLOCK_BEFORE);
+					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
+					hasElseBlock = hasElseBlock(belse);
+					hasCaseBlock = hasCaseBlock(bcase);
 
-					// expand else block
-					Node pn = current.getPrepNodes()[0].getNode().getParentNode();
-					File of = Preprocessor.prepareCodeForCPP(pn.getTextContent());
-					File oft = Src2Srcml.runSrcml2src(of);
-					LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(pn);
-					LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
-					LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, oft);
-
-					LinkedList<File> xnfs = Src2Srcml.runAll(nfs);
-					LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
-					Node ppn = pn.getParentNode();
-					ppn.removeChild(pn);
-
-					for (NodeList nl: nlxnfs) {
-						if (nl.getLength() == 0)
-							continue;
-						PreprocessorOccurrence oc = new PreprocessorOccurrence();
-						PreprocessorNode ocpn[] = new PreprocessorNode[nl.getLength()];
-						for (int i = 0; i < nl.getLength(); i++) {
-							PreprocessorNode tmpnode = new PreprocessorNode();
-							tmpnode.setNode(nl.item(0));
-							tmpnode.setLineNumber(5); //todo
-							tmpnode.setDepth(5);
-							ocpn[i] = tmpnode;
-						}
-						oc.setPrepNodes(ocpn);
-						oc.setDocFileName(new File(occ.getDocFileName()));
-						this.feature.addOccurrence(oc);
+					if (hasCaseBlock) {
+						expandCaseBlock(occ);
 					}
-
 
 					isImpossible = hasDefines(occ);
 					if (!isImpossible) {
@@ -139,7 +147,9 @@ public class AnalyzeFeature {
 					} else {
 						occ.setType("impossible (local #define)");
 					}
-					// setContainer(occ);
+
+					if (!hasCaseBlock)
+						setContainer(occ);
 				} catch (XPathExpressionException e) {
 					e.printStackTrace();
 				}
@@ -213,6 +223,21 @@ public class AnalyzeFeature {
 		}
 	}
 
+	private Pair<NodeList, NodeList> extractNodeList(CriticalOccurrence occ, String uperbound, String lowerbound) throws XPathExpressionException {
+		XPathExpression ub = QueryBuilder.instance()
+				.getExpression(uperbound);
+		XPathExpression lb = QueryBuilder.instance()
+				.getExpression(lowerbound);
+		NodeList ubl = (NodeList) ub.evaluate(
+				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
+		NodeList lbl = (NodeList) lb.evaluate(
+				occ.getPrepNodes()[(occ.getPrepNodes().length -1)].getNode(),
+				XPathConstants.NODESET);
+
+		return new Pair<NodeList, NodeList>(ubl, lbl);
+
+	}
+
 	private boolean hasDefines(CriticalOccurrence occ)
 			throws XPathExpressionException {
 		XPathExpression expr = QueryBuilder.instance().getExpression(
@@ -227,41 +252,20 @@ public class AnalyzeFeature {
 		return lower.item(0) != upper.item(0);
 	}
 
-	private boolean hasCaseBlock(CriticalOccurrence occ)
-			throws XPathExpressionException {
-		XPathExpression caseBlockBelow = QueryBuilder.instance()
-				.getExpression(CASE_BLOCK_BELOW);
-		XPathExpression caseBlockBefore = QueryBuilder.instance()
-				.getExpression(CASE_BLOCK_BEFORE);
-		NodeList nlcaseBlockBelow = (NodeList) caseBlockBelow.evaluate(
-				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
-		NodeList nlcaseBlockBefore = (NodeList) caseBlockBefore.evaluate(
-				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
-				XPathConstants.NODESET);
+	private boolean hasCaseBlock(Pair<NodeList, NodeList> b) {
 
-		if (nlcaseBlockBelow.getLength() > 0
-				&& nlcaseBlockBefore.getLength() > 0)
-			return nlcaseBlockBelow.item(0) == nlcaseBlockBefore.item(0);
+		if (b.getValue0().getLength() > 0
+				&& b.getValue1().getLength() > 0)
+			return b.getValue0().item(0) == b.getValue1().item(0);
 		else
 			return false;
 	}
 
-	private boolean hasElseBlock(CriticalOccurrence occ)
-			throws XPathExpressionException {
+	private boolean hasElseBlock(Pair<NodeList, NodeList> b) {
 
-		XPathExpression elseBlockBelow = QueryBuilder.instance()
-				.getExpression(ELSE_BLOCK_BELOW_IF_QUERY);
-		XPathExpression elseBlockBefore = QueryBuilder.instance()
-				.getExpression(ELSE_BLOCK_BEFORE_END_QUERY);
-		NodeList elseBlockBelowIf = (NodeList) elseBlockBelow.evaluate(
-				occ.getPrepNodes()[0].getNode(), XPathConstants.NODESET);
-		NodeList elseBlockBeforeIf = (NodeList) elseBlockBefore.evaluate(
-				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
-				XPathConstants.NODESET);
-
-		if (elseBlockBelowIf.getLength() > 0
-				&& elseBlockBeforeIf.getLength() > 0)
-			return elseBlockBelowIf.item(0) == elseBlockBeforeIf.item(0);
+		if (b.getValue0().getLength() > 0
+				&& b.getValue1().getLength() > 0)
+			return b.getValue0().item(0) == b.getValue1().item(0);
 		else
 			return false;
 	}

@@ -10,21 +10,11 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 
 import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -72,8 +62,9 @@ public class Src2Srcml {
 			res = File.createTempFile("test", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String srcml2srccmd = "srcml2src";
-			srcml2srccmd += " " + infile.getAbsolutePath();
-			srcml2srccmd += " -o " + res.getAbsolutePath();
+			srcml2srccmd += " " + infile;
+			srcml2srccmd += " --language C++";
+			srcml2srccmd += " -o " + res;
 
 			Process pr = rt.exec(srcml2srccmd);
 			int exitval = pr.waitFor();

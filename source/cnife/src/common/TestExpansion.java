@@ -12,8 +12,10 @@ public class TestExpansion {
 		Node switchstmt = doc.getElementsByTagName("switch").item(0);
 		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(switchstmt);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
-		File ofd = Preprocessor.prepareCodeForCPP(switchstmt.getTextContent());
-		@SuppressWarnings("unused")
+		File ofd = Preprocessor.writeCode2File(switchstmt.getTextContent());
 		LinkedList<File> nfd = Preprocessor.runAll(confs, fnames, ofd);
+
+		for (File f: nfd)
+			System.out.println(f.getAbsolutePath());
 	}
 }

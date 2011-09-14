@@ -5,6 +5,10 @@ import java.util.LinkedList;
 import java.io.*;
 
 import org.javatuples.*;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import backend.PreprocessorNode;
 
 public class Preprocessor {
 
@@ -51,10 +55,9 @@ public class Preprocessor {
 		File outfile = null;
 		try {
 			outfile = File.createTempFile("test", ".c", tmpdir);
-			outfile.deleteOnExit();
 			Runtime rt = Runtime.getRuntime();
 			String cppcmd = "cpp";
-			cppcmd += " -CC"; // preserver comments
+			cppcmd += " -CC"; // preserve comments
 			cppcmd += " -P";  // do not create line-markers
 			cppcmd += " -fdirectives-only"; // do not expand macros
 
@@ -64,17 +67,18 @@ public class Preprocessor {
 				cppcmd += cp.getValue1();
 			}
 
-			cppcmd += " " + infile; // input file
-			cppcmd += " " + outfile; // output file
+			cppcmd += " " + infile.getAbsolutePath(); // input file
+			cppcmd += " " + outfile.getAbsolutePath(); // output file
 
 			Process pr = rt.exec(cppcmd);
 			int exitval = pr.waitFor();
 			if (exitval != 0)
-				System.out.println("Exited with error code " + exitval);
+				System.out.println("preprocessor exited with error code " + exitval);
 		} catch (Exception e) {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
+
 		return processCPPOutput(conf, outfile);
 	}
 
@@ -89,12 +93,10 @@ public class Preprocessor {
 	public static LinkedList<File> runAll(LinkedList<LinkedList<Boolean>> confs, LinkedList<String> p, File infile) {
 		LinkedList<File> res = new LinkedList<File>();
 		LinkedList<Pair<Boolean, String>> cc = null;
-		File out = null;
 
 		for (LinkedList<Boolean> conf: confs) {
 			cc = Preprocessor.createConfiguration(conf, p);
-			out = Preprocessor.run(cc, infile);
-			res.add(out);
+			res.add(Preprocessor.run(cc, infile));
 		}
 
 		return res;
@@ -108,29 +110,31 @@ public class Preprocessor {
 	 * @return
 	 */
 	private static File processCPPOutput(LinkedList<Pair<Boolean, String>> conf, File outfile) {
-		if (outfile == null || conf == null) return null;
 		File res = null;
-		String sconf = "#if ";
+		StringBuffer buf = new StringBuffer();
+		buf.append("#if ");
+		Iterator<Pair<Boolean, String>> i = conf.iterator();
 
-		for (Pair<Boolean, String> e: conf) {
-			if (!e.getValue0()) sconf += "!";
-			sconf += "defined(" + e.getValue1() + ") && ";
+		while (i.hasNext()) {
+			Pair<Boolean, String> e = i.next();
+			if (!e.getValue0()) buf.append("!");
+			buf.append("defined(" + e.getValue1() + ")");
+
+			if (i.hasNext()) buf.append(" && ");
 		}
-
-		sconf = sconf.substring(0, sconf.length()-3); // split last &&
 
 		try {
 			res = File.createTempFile("test", ".c", tmpdir);
 			BufferedReader br = new BufferedReader(new FileReader(outfile));
 			BufferedWriter bw = new BufferedWriter(new FileWriter(res));
 			String line = null;
-			bw.write(sconf+"\n");
+			bw.write(buf.toString()+"\n");
 
 			while ((line = br.readLine()) != null) {
 				// beware this might cause a problem
 				// cpp run generates a list of #defines and attaches them prior to
 				// the preprocessed code, if a user uses a #define on his own this
-				// #define is delete just like the generated ones.
+				// #define is deleted just like the generated ones.
 				if (line.startsWith("#"))
 					continue;
 				bw.write(line+"\n");
@@ -166,15 +170,37 @@ public class Preprocessor {
 	}
 
 	/**
-	 * Method puts the code of Node n in a file and returns the file-handle.
-	 * @param n
+	 * Method puts the code of pnodes in a file and returns the file-handle.
+	 * @param pnodes
 	 * @return
 	 */
-	public static File prepareCodeForCPP(String n) {
+	public static File writeCode2File(PreprocessorNode pnodes[]) {
 		File res = null;
 		try {
 			res = File.createTempFile("test", ".c", tmpdir);
-			res.deleteOnExit();
+
+			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
+			for (PreprocessorNode pn: pnodes) {
+				ofd.write(pn.getNode().getTextContent());
+			}
+			ofd.close();
+		} catch (IOException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		}
+
+		return res;
+	}
+
+	/**
+	 * Method to create a temporary file and put String n in it.
+	 * @param n
+	 * @return
+	 */
+	public static File writeCode2File(String n) {
+		File res = null;
+		try {
+			res = File.createTempFile("test", ".c", tmpdir);
 
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
 			ofd.write(n);
