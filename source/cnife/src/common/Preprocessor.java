@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.io.*;
 
 import org.javatuples.*;
+import org.w3c.dom.Node;
 
 import backend.PreprocessorNode;
 
@@ -168,19 +169,40 @@ public class Preprocessor {
 	}
 
 	/**
+	 * This method returns a linked list of all siblings for a given Node n.
+	 * @param n
+	 * @return
+	 */
+	private static LinkedList<Node> getSiblings(Node n) {
+		LinkedList<Node> res = new LinkedList<Node>();
+
+		while (n != null) {
+			res.add(n);
+			n = n.getNextSibling();
+		}
+
+		return res;
+	}
+
+	/**
 	 * Method puts the code of pnodes in a file and returns the file-handle.
 	 * @param pnodes
 	 * @return
 	 */
 	public static File writeCode2File(PreprocessorNode pnodes[]) {
+
 		File res = null;
 		try {
 			res = File.createTempFile("test_expanded_", ".c", tmpdir);
 
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
-			for (PreprocessorNode pn: pnodes) {
-				ofd.write(pn.getNode().getTextContent());
-			}
+			Node ifdef = pnodes[0].getNode();
+			Node endif = pnodes[1].getNode();
+			ofd.write(ifdef.getParentNode().getTextContent()+"\n");
+
+			if (!getSiblings(ifdef).contains(endif))
+				ofd.write(endif.getTextContent()+"\n");
+
 			ofd.close();
 		} catch (IOException e) {
 			System.out.println(e.toString());

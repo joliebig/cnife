@@ -74,38 +74,38 @@ public class AnalyzeFeature {
 		return this.crits;
 	}
 
-	private void expandCaseBlock(CriticalOccurrence occ) {
-		Node sn = occ.getPrepNodes()[0].getNode().getParentNode().getParentNode();
-
-		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(sn);
+	private void expandBlock(CriticalOccurrence occ, Node n) {
+		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(n);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
-		File of = Preprocessor.writeCode2File(occ.getPrepNodes());
-		LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, of);
+		File unprocessedfile = Preprocessor.writeCode2File(occ.getPrepNodes());
+		LinkedList<File> generatedvariants = Preprocessor.runAll(confs, fnames, unprocessedfile);
 
-		LinkedList<File> pnfs = Src2Srcml.prepareAllFiles(nfs);
-		LinkedList<File> xnfs = Src2Srcml.runAll(pnfs);
-		LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
-		Node ppn = sn.getParentNode();
-		boolean rn = false;
-		Node ln = null;
+		LinkedList<File> packedvariants = Src2Srcml.prepareAllFiles(generatedvariants);
+		LinkedList<File> srcmlannovariants = Src2Srcml.runAll(packedvariants);
+		LinkedList<NodeList> disannotatednodes = Src2Srcml.extractNodesFromAll(srcmlannovariants);
 
-		for (NodeList nl: nlxnfs) {
-			for (int i = 0; i < nl.getLength(); i++)
-				if (!rn) {
-					ln = nl.item(i);
-					ppn.replaceChild(sn, ln);
+		Node parentnode = n.getParentNode();
+		boolean replacedalready = false;
+		Node lastaddition = null;
+
+		for (NodeList nl: disannotatednodes) {
+			for (int i = 0; i < nl.getLength(); i++) {
+				if (!replacedalready) {
+					lastaddition = nl.item(i);
+					parentnode.replaceChild(lastaddition, n);
 				} else {
-					insertAfter(ppn, nl.item(i), ln);
-					ln = nl.item(i);
+					lastaddition = parentnode.insertBefore(nl.item(i), lastaddition);
 				}
+			}
 		}
 	}
 
-	private void insertAfter(Node pnode, Node nnode, Node rnode) {
-		if (rnode == null)
-			pnode.appendChild(nnode);
-		else
-			pnode.insertBefore(nnode, rnode.getNextSibling());
+	private void expandElseBlock(CriticalOccurrence occ) {
+		expandBlock(occ, occ.getPrepNodes()[0].getNode().getParentNode());
+	}
+
+	private void expandCaseBlock(CriticalOccurrence occ) {
+		expandBlock(occ, occ.getPrepNodes()[0].getNode().getParentNode().getParentNode());
 	}
 
 	public void analyze() {
@@ -137,6 +137,10 @@ public class AnalyzeFeature {
 
 					if (hasCaseBlock) {
 						expandCaseBlock(occ);
+					}
+
+					if (hasElseBlock) {
+						expandElseBlock(occ);
 					}
 
 					isImpossible = hasDefines(occ);
