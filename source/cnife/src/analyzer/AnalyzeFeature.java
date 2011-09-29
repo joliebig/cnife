@@ -75,30 +75,30 @@ public class AnalyzeFeature {
 	}
 
 	private void expandCaseBlock(CriticalOccurrence occ) {
-//		Node sn = cn.getParentNode().getParentNode(); // TODO
-//
-//		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(sn);
-//		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
+		Node sn = occ.getPrepNodes()[0].getNode().getParentNode().getParentNode();
+
+		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(sn);
+		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
 		File of = Preprocessor.writeCode2File(occ.getPrepNodes());
-//		LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, of);
-//
-//		LinkedList<File> pnfs = Src2Srcml.prepareAllFiles(nfs);
-//		LinkedList<File> xnfs = Src2Srcml.runAll(pnfs);
-//		LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
-//		Node ppn = sn.getParentNode();
-//		boolean rn = false;
-//		Node ln = null;
-//
-//		for (NodeList nl: nlxnfs) {
-//			for (int i = 0; i < nl.getLength(); i++)
-//				if (!rn) {
-//					ln = nl.item(i);
-//					ppn.replaceChild(sn, ln);
-//				} else {
-//					insertAfter(ppn, nl.item(i), ln);
-//					ln = nl.item(i);
-//				}
-//		}
+		LinkedList<File> nfs = Preprocessor.runAll(confs, fnames, of);
+
+		LinkedList<File> pnfs = Src2Srcml.prepareAllFiles(nfs);
+		LinkedList<File> xnfs = Src2Srcml.runAll(pnfs);
+		LinkedList<NodeList> nlxnfs = Src2Srcml.extractNodesFromAll(xnfs);
+		Node ppn = sn.getParentNode();
+		boolean rn = false;
+		Node ln = null;
+
+		for (NodeList nl: nlxnfs) {
+			for (int i = 0; i < nl.getLength(); i++)
+				if (!rn) {
+					ln = nl.item(i);
+					ppn.replaceChild(sn, ln);
+				} else {
+					insertAfter(ppn, nl.item(i), ln);
+					ln = nl.item(i);
+				}
+		}
 	}
 
 	private void insertAfter(Node pnode, Node nnode, Node rnode) {

@@ -10,9 +10,11 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
+import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -31,7 +33,7 @@ public class Src2Srcml {
 	public static File runSrc2srcml(File infile) {
 		File res = null;
 		try {
-			res = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test_src2srcml_", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String src2srcmlcmd = "src2srcml";
 			src2srcmlcmd += " --language C++"; // set language
@@ -59,7 +61,7 @@ public class Src2Srcml {
 	public static File runSrcml2src(File infile) {
 		File res = null;
 		try {
-			res = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test_srcml2src_", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String srcml2srccmd = "srcml2src";
 			srcml2srccmd += " " + infile;
@@ -103,17 +105,17 @@ public class Src2Srcml {
 		File tmpfile = null;
 		try {
 			BufferedReader br = new BufferedReader(new FileReader(infile));
-			tmpfile = File.createTempFile("test", ".c", tmpdir);
+			tmpfile = File.createTempFile("test_se_prepared_", ".c", tmpdir);
 			BufferedWriter bw = new BufferedWriter(new FileWriter(tmpfile));
 
-			bw.write("void test() {");
+			bw.write("void test() {\n");
 			String line;
 
 			while ((line = br.readLine()) != null) {
-				bw.write(line);
+				bw.write(line+"\n");
 			}
 
-			bw.write("}");
+			bw.write("}"+"\n");
 			bw.close();
 		} catch (IOException e) {
 			System.out.println(e.toString());
@@ -172,12 +174,12 @@ public class Src2Srcml {
 	 */
 	public static NodeList extractNodes(File infile) {
 		Document doc = XMLTools.parseDocument(infile);
-		String FUNCTION_STMTS = "//function/block/*";
+		String FUNCTION_STMTS = "//src:function/src:block/*";
 		NodeList nl = null;
 
 		try {
 			XPathExpression stmts = QueryBuilder.instance().getExpression(FUNCTION_STMTS);
-			nl = (NodeList) stmts.evaluate(doc.getFirstChild(), XPathConstants.NODESET);
+			nl = (NodeList) stmts.evaluate(doc, XPathConstants.NODESET);
 		} catch (XPathExpressionException e) {
 			System.out.println(e.toString());
 			e.printStackTrace();

@@ -5,8 +5,6 @@ import java.util.LinkedList;
 import java.io.*;
 
 import org.javatuples.*;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
 import backend.PreprocessorNode;
 
@@ -54,7 +52,7 @@ public class Preprocessor {
 	public static File run(LinkedList<Pair<Boolean, String>> conf, File infile) {
 		File outfile = null;
 		try {
-			outfile = File.createTempFile("test", ".c", tmpdir);
+			outfile = File.createTempFile("test_se_", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
 			String cppcmd = "cpp";
 			cppcmd += " -CC"; // preserve comments
@@ -124,7 +122,7 @@ public class Preprocessor {
 		}
 
 		try {
-			res = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test_seprocessed_", ".c", tmpdir);
 			BufferedReader br = new BufferedReader(new FileReader(outfile));
 			BufferedWriter bw = new BufferedWriter(new FileWriter(res));
 			String line = null;
@@ -177,7 +175,7 @@ public class Preprocessor {
 	public static File writeCode2File(PreprocessorNode pnodes[]) {
 		File res = null;
 		try {
-			res = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test_expanded_", ".c", tmpdir);
 
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
 			for (PreprocessorNode pn: pnodes) {
@@ -200,7 +198,7 @@ public class Preprocessor {
 	public static File writeCode2File(String n) {
 		File res = null;
 		try {
-			res = File.createTempFile("test", ".c", tmpdir);
+			res = File.createTempFile("test_unprocessed_", ".c", tmpdir);
 
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
 			ofd.write(n);
