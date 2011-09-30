@@ -1,6 +1,5 @@
 package analyzer;
 
-import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;

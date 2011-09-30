@@ -106,9 +106,7 @@ public class FeatureRefactoringAnalyzer {
 				TransformerFactoryConfigurationError,
 				TransformerException {
 		for (RefactoringDocument doc: modfiles) {
-			doc.saveDocument(this.outputDir.getAbsolutePath()
-					+ File.separatorChar + "Base"
-					+ File.separatorChar + "Test.xml");
+			doc.saveDocument(doc.getDocumentURI().substring(5));
 		}
 
 		initProjectDir();
