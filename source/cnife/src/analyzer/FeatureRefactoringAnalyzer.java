@@ -101,13 +101,25 @@ public class FeatureRefactoringAnalyzer {
 		return null;
 	}
 
+	public void saveDisciplining(LinkedList<RefactoringDocument> modfiles)
+		throws FileNotFoundException,
+				TransformerFactoryConfigurationError,
+				TransformerException {
+		for (RefactoringDocument doc: modfiles) {
+			doc.saveDocument(this.outputDir.getAbsolutePath()
+					+ File.separatorChar + "Base"
+					+ File.separatorChar + "Test.xml");
+		}
+
+		initProjectDir();
+	}
+
 	public void saveRefactorings(Set<String> affectedFiles,
 			LinkedList<RefactoringDocument> modFiles)
 			throws FileNotFoundException, TransformerFactoryConfigurationError,
 			TransformerException {
-		for (String file : affectedFiles) {
-			this.backend.removeFileFromList(file);
-		}
+		for (String file : affectedFiles)
+				this.backend.removeFileFromList(file);
 
 		for (RefactoringDocument doc : modFiles) {
 			String featureName = doc.getFeatureName();
@@ -216,7 +228,8 @@ public class FeatureRefactoringAnalyzer {
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
 			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval, providehooknamesval);
-			afeat.analyze();
+			LinkedList<RefactoringDocument> modfiles = afeat.analyze();
+			a.saveDisciplining(modfiles);
 			afeats.add(afeat.getAnalyzedFeature());
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
 			.iterateOccurrences();

@@ -15,12 +15,17 @@ public:
 
 
 void LinkedList::insert( int newData ) {
+#if DLINKED3
 	if (newData > 5) {
 		newData = 5;
 	}
-#if DLINKED3
 	else {
 		newData = 4;
+	}
+#endif
+#if !DLINKED3
+	if (newData > 5) {
+		newData = 5;
 	}
 #endif
 }

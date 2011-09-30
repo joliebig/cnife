@@ -21,6 +21,7 @@ import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 
 import org.javatuples.Pair;
+import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -84,20 +85,31 @@ public class AnalyzeFeature {
 		LinkedList<File> srcmlannovariants = Src2Srcml.runAll(packedvariants);
 		LinkedList<NodeList> disannotatednodes = Src2Srcml.extractNodesFromAll(srcmlannovariants);
 
-		Node parentnode = n.getParentNode();
 		boolean replacedalready = false;
 		Node lastaddition = null;
+		Node importednode = null;
+		Document doc = n.getOwnerDocument();
+		Node pn = n.getParentNode();
 
 		for (NodeList nl: disannotatednodes) {
 			for (int i = 0; i < nl.getLength(); i++) {
+				lastaddition = importednode;
+				importednode = doc.importNode(nl.item(i), true);
+
+				// fix linebreaks
+				Node cn = importednode.getLastChild();
+				cn.setTextContent(cn.getTextContent()+"\n");
+
+				// replace first child, afterwards insert
 				if (!replacedalready) {
-					lastaddition = nl.item(i);
-					parentnode.replaceChild(lastaddition, n);
+					pn.replaceChild(importednode, n);
+					replacedalready = true;
 				} else {
-					lastaddition = parentnode.insertBefore(nl.item(i), lastaddition);
+					pn.insertBefore(importednode, lastaddition.getNextSibling());
 				}
 			}
 		}
+		System.out.println("after: \n" + pn.getTextContent());
 	}
 
 	private void expandElseBlock(CriticalOccurrence occ) {
@@ -108,7 +120,8 @@ public class AnalyzeFeature {
 		expandBlock(occ, occ.getPrepNodes()[0].getNode().getParentNode().getParentNode());
 	}
 
-	public void analyze() {
+	public LinkedList<RefactoringDocument> analyze() {
+		LinkedList<RefactoringDocument> modifiedfiles = new LinkedList<RefactoringDocument>();
 		this.analyzedFeature = new AnalyzedFeature();
 		this.analyzedFeature.setName(this.feature.getName());
 
@@ -135,12 +148,14 @@ public class AnalyzeFeature {
 					hasElseBlock = hasElseBlock(belse);
 					hasCaseBlock = hasCaseBlock(bcase);
 
-					if (hasCaseBlock) {
+					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
 						expandCaseBlock(occ);
+						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
 					}
 
-					if (hasElseBlock) {
+					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expandElseBlock(occ);
+						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
 					}
 
 					isImpossible = hasDefines(occ);
@@ -152,7 +167,7 @@ public class AnalyzeFeature {
 						occ.setType("impossible (local #define)");
 					}
 
-					if (!hasCaseBlock)
+					if (!hasCaseBlock && !hasElseBlock)
 						setContainer(occ);
 				} catch (XPathExpressionException e) {
 					e.printStackTrace();
@@ -225,6 +240,7 @@ public class AnalyzeFeature {
 				this.analyzedFeature.addOccurrence(current);
 			}
 		}
+		return modifiedfiles;
 	}
 
 	private Pair<NodeList, NodeList> extractNodeList(CriticalOccurrence occ, String uperbound, String lowerbound) throws XPathExpressionException {
