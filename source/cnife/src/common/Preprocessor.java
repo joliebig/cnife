@@ -168,21 +168,6 @@ public class Preprocessor {
 		return res;
 	}
 
-	/**
-	 * This method returns a linked list of all siblings for a given Node n.
-	 * @param n
-	 * @return
-	 */
-	private static LinkedList<Node> getSiblings(Node n) {
-		LinkedList<Node> res = new LinkedList<Node>();
-
-		while (n != null) {
-			res.add(n);
-			n = n.getNextSibling();
-		}
-
-		return res;
-	}
 
 	/**
 	 * Method puts the code of pnodes in a file and returns the file-handle.
@@ -200,7 +185,7 @@ public class Preprocessor {
 			Node endif = pnodes[1].getNode();
 			ofd.write(ifdef.getParentNode().getTextContent()+"\n");
 
-			if (!getSiblings(ifdef).contains(endif))
+			if (!XMLTools.getSiblings(ifdef).contains(endif))
 				ofd.write(endif.getTextContent()+"\n");
 
 			ofd.close();
