@@ -1,11 +1,13 @@
 package analyzer;
 
+import backend.PreprocessorNode;
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
 import common.NodeTools;
 import common.Preprocessor;
 import common.QueryBuilder;
 import common.Src2Srcml;
+import common.XMLTools;
 import common.xmlTemplates.NewFileTemplate;
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +77,27 @@ public class AnalyzeFeature {
 		return this.crits;
 	}
 
+
+	/**
+	 * This method removes the critical occurence from the document, which is
+	 * replaced by it's expanded versions in expandBlock
+	 * @param occ
+	 * @param n
+	 * @return next sibling of endif node
+	 */
+	private Node removeNodes(CriticalOccurrence occ, Node n) {
+		Node ifdef = occ.getPrepNodes()[0].getNode();
+		Node endif = occ.getPrepNodes()[1].getNode();
+		Node res = endif.getNextSibling();
+		LinkedList<Node> siblings = XMLTools.getSiblings(ifdef);
+
+		if (!siblings.contains(endif))
+			endif.getParentNode().removeChild(endif);
+		n.getParentNode().removeChild(n);
+
+		return res;
+	}
+
 	private void expandBlock(CriticalOccurrence occ, Node n) {
 		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(n);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
@@ -85,31 +108,27 @@ public class AnalyzeFeature {
 		LinkedList<File> srcmlannovariants = Src2Srcml.runAll(packedvariants);
 		LinkedList<NodeList> disannotatednodes = Src2Srcml.extractNodesFromAll(srcmlannovariants);
 
-		boolean replacedalready = false;
-		Node lastaddition = null;
 		Node importednode = null;
 		Document doc = n.getOwnerDocument();
 		Node pn = n.getParentNode();
+		Node lastaddition = removeNodes(occ, n);
 
 		for (NodeList nl: disannotatednodes) {
 			for (int i = 0; i < nl.getLength(); i++) {
-				lastaddition = importednode;
+
 				importednode = doc.importNode(nl.item(i), true);
 
 				// fix linebreaks
 				Node cn = importednode.getLastChild();
 				cn.setTextContent(cn.getTextContent()+"\n");
 
-				// replace first child, afterwards insert
-				if (!replacedalready) {
-					pn.replaceChild(importednode, n);
-					replacedalready = true;
-				} else {
+				if (lastaddition != null)
 					pn.insertBefore(importednode, lastaddition.getNextSibling());
-				}
+				else
+					pn.insertBefore(importednode, null);
+				lastaddition = importednode;
 			}
 		}
-		System.out.println("after: \n" + pn.getTextContent());
 	}
 
 	private void expandElseBlock(CriticalOccurrence occ) {
@@ -151,11 +170,13 @@ public class AnalyzeFeature {
 					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
 						expandCaseBlock(occ);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+						continue;
 					}
 
 					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expandElseBlock(occ);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+						continue;
 					}
 
 					isImpossible = hasDefines(occ);
