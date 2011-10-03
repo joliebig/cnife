@@ -183,9 +183,15 @@ public class Preprocessor {
 			BufferedWriter ofd = new BufferedWriter(new FileWriter(res));
 			Node ifdef = pnodes[0].getNode();
 			Node endif = pnodes[1].getNode();
-			ofd.write(ifdef.getParentNode().getTextContent()+"\n");
+			Node parentnode = ifdef;
 
-			if (!XMLTools.getSiblings(ifdef).contains(endif))
+			while (!(parentnode.getNodeName().startsWith("if")
+				|| parentnode.getNodeName().startsWith("switch")))
+				parentnode = parentnode.getParentNode();
+				
+			ofd.write(parentnode.getTextContent()+"\n");
+
+			if (parentnode.getNodeName().startsWith("if"))
 				ofd.write(endif.getTextContent()+"\n");
 
 			ofd.close();

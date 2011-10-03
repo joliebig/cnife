@@ -92,7 +92,16 @@ public class AnalyzeFeature {
 
 		if (!siblings.contains(endif))
 			endif.getParentNode().removeChild(endif);
-		n.getParentNode().removeChild(n);
+		Node parentnode = ifdef;
+		Node childnode = null;
+		
+		while (!(parentnode.getNodeName().startsWith("if")
+			|| parentnode.getNodeName().startsWith("switch"))) {
+			childnode = parentnode;
+			parentnode = parentnode.getParentNode();
+		}
+
+		parentnode.removeChild(childnode);
 
 		return res;
 	}
@@ -163,6 +172,16 @@ public class AnalyzeFeature {
 				try {
 					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BLOCK_BELOW, ELSE_BLOCK_BEFORE);
 					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
+					
+					isImpossible = hasDefines(occ);
+					if (!isImpossible) {
+						isImpossible = hasGoto(occ);
+						if (isImpossible)
+							occ.setType("impossible (local goto)");
+					} else {
+						occ.setType("impossible (local #define)");
+					}
+
 					hasElseBlock = hasElseBlock(belse);
 					hasCaseBlock = hasCaseBlock(bcase);
 
@@ -176,15 +195,6 @@ public class AnalyzeFeature {
 						expandElseBlock(occ);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
 						continue;
-					}
-
-					isImpossible = hasDefines(occ);
-					if (!isImpossible) {
-						isImpossible = hasGoto(occ);
-						if (isImpossible)
-							occ.setType("impossible (local goto)");
-					} else {
-						occ.setType("impossible (local #define)");
 					}
 
 					if (!hasCaseBlock && !hasElseBlock)

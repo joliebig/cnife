@@ -215,6 +215,7 @@ public class FeatureRefactoringAnalyzer {
 
 		int simple = 0;
 		int hook = 0;
+		int ugly = 0;
 		int impc = 0;
 		int omit = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
@@ -263,69 +264,8 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("Finished. Statistics:");
 		System.out.println("the good: " + simple);
 		System.out.println("the bad " + hook);
-		System.out.println("the ugly ");
+		System.out.println("the ugly " + ugly);
 		System.out.println("impossibles: " + impc);
 		System.out.println("omitted (user intervention): " + omit);
 	}
-
-	/*
-	public static void main5(String[] args) throws SAXException, IOException,
-			ParserConfigurationException, XPathExpressionException,
-			TransformerFactoryConfigurationError, TransformerException {
-		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(new File(
-				"BerkleyDB_HASH"), null);
-		int impc = 0;
-		int implc = 0;
-		int simple = 0;
-		int hook = 0;
-		HashMap<String, Integer> types = new HashMap<String, Integer>();
-
-		LinkedList<String> list = a.getFeatureNames();
-		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
-		System.out.println("Feature-Anzahl: " + list.size());
-		IdentifiedFeature feat;
-		for (String name : list) {
-			feat = a.backend.getIdentifiedFeatureByName(name);
-			System.out.println("Feature: " + name);
-			System.out.println("gesamt LOCs: " + feat.getLOCs());
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, false, false);
-			afeat.analyze();
-			afeats.add(afeat.getAnalyzedFeature());
-			System.out.println("LOCs" + feat.getLOCs());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
-			while (it.hasNext()) {
-				PreprocessorOccurrence occ = it.next();
-				System.out.println("Linenumber: "
-						+ occ.getPrepNodes()[0].getLineNumber());
-				System.out.println("in File: " + occ.getDocFileName());
-				System.out.println("LOCs in File: " + occ.getLinesOfCode());
-				System.out.println("Found type: " + occ.getType() + "\n");
-				if ((occ.getType().startsWith("impossible"))
-						|| (occ.getType().startsWith("unknown"))) {
-					impc++;
-					implc = (int) (implc + occ.getLinesOfCode());
-				} else if (occ.getType().startsWith("Hook")) {
-					hook++;
-				} else {
-					simple++;
-				}
-				if (types.containsKey(occ.getType()))
-					types.put(occ.getType(), Integer.valueOf(((Integer) types
-							.get(occ.getType())).intValue() + 1));
-				else
-					types.put(occ.getType(), new Integer(1));
-			}
-			System.out
-					.println("-------------------------------------------------------------\n");
-			afeat.refactor();
-		}
-
-		Set<String> keys = types.keySet();
-		for (String type : keys) {
-			System.out.println(type + ": " + types.get(type));
-		}
-		System.out.println("einfache: " + simple + " hooks " + hook);
-		System.out.println("unmögliche: " + impc + " LOCs " + implc);
-	}
-	*/
 }
