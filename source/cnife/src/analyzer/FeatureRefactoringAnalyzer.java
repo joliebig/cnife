@@ -1,9 +1,5 @@
 package analyzer;
 
-import analyzer.visitors.FeatureVisitor;
-import backend.storage.IdentifiedFeature;
-import backend.storage.IdentifiedFeatureList;
-import backend.storage.PreprocessorOccurrence;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileNotFoundException;
@@ -17,6 +13,10 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import org.xml.sax.SAXException;
 
+import analyzer.visitors.FeatureVisitor;
+import backend.storage.IdentifiedFeature;
+import backend.storage.IdentifiedFeatureList;
+import backend.storage.PreprocessorOccurrence;
 
 import refactoring.RefactoringDocument;
 

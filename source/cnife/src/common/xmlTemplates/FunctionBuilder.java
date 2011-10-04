@@ -16,12 +16,6 @@ import common.QueryBuilder;
 
 public class FunctionBuilder {
 	private static String TEMPLATE_FILE = "./function_vorlage.xml";
-/*	private static final String DECL_NODE_QUERY = "/src:unit/src:function";
-	private static final String CALL_NODE_QUERY = "/src:unit/src:expr_stmt";
-	private static final String NAME_NODES = "/src:unit/(src:function union src:expr_stmt/src:expr/src:call)/src:name";
-	private static final String TYPE_NODE = "/src:unit/src:function/src:type/src:name";
-	private static final String DECL_PARAMETERS = "src:unit/src:function/src:parameterlist/src:param";
-	private static final String CALL_PARAMETERS = "src:unit/src:expr_stmt/src:expr/src:call/src:argument_list/src:argument";*/
 	private Node functionDeclNode = null;
 	private Node functionCallNode = null;
 	private Document templateDoc = null;

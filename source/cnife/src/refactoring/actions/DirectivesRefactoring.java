@@ -16,7 +16,6 @@ import refactoring.RefactoringAction;
 import refactoring.RefactoringDocument;
 
 public class DirectivesRefactoring extends RefactoringAction {
-	// private static final String ENTRY_POINT = "/src:unit/src:comment[text()=\"//---refactored defines\"]";
 
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 			RefactoringDocument neg, PreprocessorOccurrence occ) {

@@ -20,8 +20,6 @@ import refactoring.RefactoringDocument;
 
 public class HookRefactoring extends RefactoringAction {
 	private static String FIND_FUNCTION_CONTAINER = "./(ancestor::src:function union ancestor::src:constructor)";
-	// private static final String BODY_ENTRY_POINT = "./src:block/src:comment[text()=\"//--functionbody\"]";
-	// private static final String ENTRY_POINT = "/src:unit/src:class/src:block/src:comment[text()=\"//---refactored functions\"]";
 
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 			RefactoringDocument neg, PreprocessorOccurrence occ) {

@@ -16,7 +16,6 @@ import refactoring.RefactoringAction;
 import refactoring.RefactoringDocument;
 
 public class CompleteFunctionRefactoring extends RefactoringAction {
-	// private static final String ENTRY_POINT = "/src:unit/src:class/src:block/src:comment[text()=\"//---refactored functions\"]";
 
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 			RefactoringDocument neg, PreprocessorOccurrence occ) {

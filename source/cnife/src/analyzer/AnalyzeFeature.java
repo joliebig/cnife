@@ -180,7 +180,7 @@ public class AnalyzeFeature {
 
 					isImpossible = hasDefines(occ);
 					if (isImpossible) occ.setType("impossible (local #define)");
-					isImpossible = hasGoto(occ);
+					isImpossible |= hasGoto(occ);
 					if (isImpossible) occ.setType("impossible (local goto)");
 
 					hasElseBlock = hasElseBlock(belse);

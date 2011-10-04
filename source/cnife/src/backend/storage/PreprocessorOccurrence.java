@@ -1,7 +1,5 @@
 package backend.storage;
 
-import analyzer.FeatureSearcher;
-import backend.PreprocessorNode;
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
@@ -10,9 +8,9 @@ import javax.xml.xpath.XPathExpressionException;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
 
+import analyzer.FeatureSearcher;
+import backend.PreprocessorNode;
 import common.XMLTools;
-
-
 import scanner.PreprocessorTree;
 
 public class PreprocessorOccurrence {

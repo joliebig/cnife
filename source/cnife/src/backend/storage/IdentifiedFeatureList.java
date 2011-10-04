@@ -18,11 +18,6 @@ public class IdentifiedFeatureList {
 		return this.list.values().iterator();
 	}
 
-	/** @deprecated */
-	public void add(IdentifiedFeature feature) {
-		this.list.put(feature.getName(), feature);
-	}
-
 	public void add(String featureName, PreprocessorOccurrence occurrence) {
 		IdentifiedFeature feature = null;
 		if (this.list.containsKey(featureName)) {
