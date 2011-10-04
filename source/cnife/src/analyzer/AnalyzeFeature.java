@@ -82,12 +82,12 @@ public class AnalyzeFeature {
 	 * replaced by it's expanded versions in expandBlock
 	 * @param occ
 	 * @param n
-	 * @return next sibling of endif node
+	 * @return Pair of parentnode and next childnode (necessary to addition of expanded nodes)
 	 */
-	private Node removeNodes(CriticalOccurrence occ, Node n) {
+	private Pair<Node, Node> removeNodes(CriticalOccurrence occ, Node n) {
 		Node ifdef = occ.getPrepNodes()[0].getNode();
 		Node endif = occ.getPrepNodes()[1].getNode();
-		Node res = endif.getNextSibling();
+
 		LinkedList<Node> siblings = XMLTools.getSiblings(ifdef);
 
 		if (!siblings.contains(endif))
@@ -95,15 +95,18 @@ public class AnalyzeFeature {
 		Node parentnode = ifdef;
 		Node childnode = null;
 
-		while (!(parentnode.getNodeName().startsWith("if")
-			|| parentnode.getNodeName().startsWith("switch"))) {
+		while (parentnode != null) {
 			childnode = parentnode;
 			parentnode = parentnode.getParentNode();
+			if (childnode.getNodeName().startsWith("switch")
+					|| childnode.getNodeName().startsWith("if"))
+				break;
 		}
-
+		Node res = childnode.getNextSibling().getNextSibling();
 		parentnode.removeChild(childnode);
 
-		return res;
+		if (res.getNodeType() == Node.TEXT_NODE) return new Pair<Node, Node>(parentnode, null);
+		else return new Pair<Node, Node>(parentnode, res);
 	}
 
 	private void expandBlock(CriticalOccurrence occ, Node n) {
@@ -118,23 +121,25 @@ public class AnalyzeFeature {
 
 		Node importednode = null;
 		Document doc = n.getOwnerDocument();
-		Node pn = n.getParentNode();
-		Node lastaddition = removeNodes(occ, n);
+		Pair<Node, Node> rm = removeNodes(occ, n);
+		Node pn = rm.getValue0();
+		Node insbefore = rm.getValue1();
 
 		for (NodeList nl: disannotatednodes) {
 			for (int i = 0; i < nl.getLength(); i++) {
 
 				importednode = doc.importNode(nl.item(i), true);
 
-				// fix linebreaks
+				// fixes linebreaks
 				Node cn = importednode.getLastChild();
-				cn.setTextContent(cn.getTextContent()+"\n");
+				cn.appendChild(doc.createTextNode("\n"));
+				if (i == 0) importednode.insertBefore(doc.createTextNode("\n"), importednode.getFirstChild());
 
-				if (lastaddition != null)
-					pn.insertBefore(importednode, lastaddition.getNextSibling());
+				if (insbefore != null)
+					pn.insertBefore(importednode, insbefore);
 				else
-					pn.insertBefore(importednode, null);
-				lastaddition = importednode;
+					pn.appendChild(importednode);
+				insbefore = importednode.getNextSibling();
 			}
 		}
 	}
