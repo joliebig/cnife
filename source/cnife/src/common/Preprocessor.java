@@ -174,7 +174,7 @@ public class Preprocessor {
 	 * @param pnodes
 	 * @return
 	 */
-	public static File writeCode2File(PreprocessorNode pnodes[]) {
+	public static File writeCode2File(PreprocessorNode pnodes[], Boolean wendif) {
 
 		File res = null;
 		try {
@@ -191,7 +191,7 @@ public class Preprocessor {
 
 			ofd.write(parentnode.getTextContent()+"\n");
 
-			if (parentnode.getNodeName().startsWith("if"))
+			if (wendif)
 				ofd.write(endif.getTextContent()+"\n");
 
 			ofd.close();

@@ -69,6 +69,10 @@ public class AnalyzeFeature {
 
 	private static String CASE_BLOCK_BEFORE = "./parent::src:case";
 
+	private static String EXPR_BELOW = "./ancestor::src:condition";
+
+	private static String EXPR_BEFORE = "./ancestor::src:condition";
+
 	public AnalyzeFeature(IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames) {
 		this.feature = feature;
 		this.detectclones = detectclones;
@@ -115,10 +119,10 @@ public class AnalyzeFeature {
 		else return new Pair<Node, Node>(parentnode, res);
 	}
 
-	private void expandBlock(CriticalOccurrence occ, Node n) {
+	private void expandBlock(CriticalOccurrence occ, Node n, Boolean wendif) {
 		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(n);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
-		File unprocessedfile = Preprocessor.writeCode2File(occ.getPrepNodes());
+		File unprocessedfile = Preprocessor.writeCode2File(occ.getPrepNodes(), wendif);
 		LinkedList<File> generatedvariants = Preprocessor.runAll(confs, fnames, unprocessedfile);
 
 		LinkedList<File> packedvariants = Src2Srcml.prepareAllFiles(generatedvariants);
@@ -148,12 +152,22 @@ public class AnalyzeFeature {
 		}
 	}
 
+	private Node lookupNode(Node n, String t) {
+		while (n != null && !n.getNodeName().startsWith(t))
+			n = n.getParentNode();
+		return n;
+	}
+
 	private void expandElseBlock(CriticalOccurrence occ) {
-		expandBlock(occ, occ.getPrepNodes()[0].getNode().getParentNode());
+		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), true);
 	}
 
 	private void expandCaseBlock(CriticalOccurrence occ) {
-		expandBlock(occ, occ.getPrepNodes()[0].getNode().getParentNode().getParentNode());
+		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "switch"), false);
+	}
+
+	private void expandExprBlock(CriticalOccurrence occ) {
+		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), false);
 	}
 
 	public LinkedList<RefactoringDocument> analyze() {
@@ -177,10 +191,12 @@ public class AnalyzeFeature {
 				boolean isImpossible = false;
 				boolean hasElseBlock = false;
 				boolean hasCaseBlock = false;
+				boolean hasExprBlock = false;
 
 				try {
 					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BLOCK_BELOW, ELSE_BLOCK_BEFORE);
 					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
+					Pair<NodeList, NodeList> bexpr = extractNodeList(occ, EXPR_BELOW, EXPR_BEFORE);
 
 					isImpossible = hasDefines(occ);
 					if (isImpossible) occ.setType(AnalyzeFeature.IMPOSSIBLE_LOCAL_DEFINE);
@@ -189,6 +205,7 @@ public class AnalyzeFeature {
 
 					hasElseBlock = hasElseBlock(belse);
 					hasCaseBlock = hasCaseBlock(bcase);
+					hasExprBlock = hasExprBlock(bexpr);
 
 					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
 						expandCaseBlock(occ);
@@ -198,6 +215,12 @@ public class AnalyzeFeature {
 
 					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expandElseBlock(occ);
+						occ.setType(AnalyzeFeature.UGLY);
+						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+					}
+
+					if (hasExprBlock && !current.getType().equals("HookRefactoring")) {
+						expandExprBlock(occ);
 						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
 					}
@@ -314,6 +337,14 @@ public class AnalyzeFeature {
 
 	private boolean hasCaseBlock(Pair<NodeList, NodeList> b) {
 
+		if (b.getValue0().getLength() > 0
+				&& b.getValue1().getLength() > 0)
+			return b.getValue0().item(0) == b.getValue1().item(0);
+		else
+			return false;
+	}
+
+	private boolean hasExprBlock(Pair<NodeList, NodeList> b) {
 		if (b.getValue0().getLength() > 0
 				&& b.getValue1().getLength() > 0)
 			return b.getValue0().item(0) == b.getValue1().item(0);
