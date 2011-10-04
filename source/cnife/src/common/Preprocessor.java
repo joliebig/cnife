@@ -188,7 +188,7 @@ public class Preprocessor {
 			while (!(parentnode.getNodeName().startsWith("if")
 				|| parentnode.getNodeName().startsWith("switch")))
 				parentnode = parentnode.getParentNode();
-				
+
 			ofd.write(parentnode.getTextContent()+"\n");
 
 			if (parentnode.getNodeName().startsWith("if"))

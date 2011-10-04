@@ -56,7 +56,7 @@ public class AnalyzeFeature {
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
 
-	private static String ELSE_BLOCK_BELOW = "./following::src:else";
+	private static String ELSE_BLOCK_BELOW = "./following-sibling::src:else";
 
 	private static String ELSE_BLOCK_BEFORE = "./preceding::src:if/src:else";
 
@@ -94,7 +94,7 @@ public class AnalyzeFeature {
 			endif.getParentNode().removeChild(endif);
 		Node parentnode = ifdef;
 		Node childnode = null;
-		
+
 		while (!(parentnode.getNodeName().startsWith("if")
 			|| parentnode.getNodeName().startsWith("switch"))) {
 			childnode = parentnode;
@@ -172,7 +172,7 @@ public class AnalyzeFeature {
 				try {
 					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BLOCK_BELOW, ELSE_BLOCK_BEFORE);
 					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
-					
+
 					isImpossible = hasDefines(occ);
 					if (isImpossible) occ.setType("impossible (local #define)");
 					isImpossible = hasGoto(occ);
