@@ -33,7 +33,12 @@ import refactoring.RefactoringStrategy;
 
 public class AnalyzeFeature {
 	private static final String IMPOSSIBLE = "impossible";
+	private static final String IMPOSSIBLE_LOCAL_DECLARATION = "impossible (local declaration)";
+	private static final String IMPOSSIBLE_LOCAL_DEFINE = "impossible (local #define)";
+	private static final String IMPOSSIBLE_LOCAL_GOTO = "impossible (local goto)";
 	private static final String UNKNOWN = "unknown";
+	private static final String UGLY = "ugly";
+	private int numugly = 0;
 	private IdentifiedFeature feature;
 	private AnalyzedFeature analyzedFeature = null;
 	private LinkedList<CriticalOccurrence> crits;
@@ -105,7 +110,8 @@ public class AnalyzeFeature {
 		Node res = childnode.getNextSibling().getNextSibling();
 		parentnode.removeChild(childnode);
 
-		if (res.getNodeType() == Node.TEXT_NODE) return new Pair<Node, Node>(parentnode, null);
+		if (res == null) return new Pair<Node, Node>(parentnode, null);
+		else if (res.getNodeType() == Node.TEXT_NODE) return new Pair<Node, Node>(parentnode, res.getPreviousSibling());
 		else return new Pair<Node, Node>(parentnode, res);
 	}
 
@@ -124,21 +130,19 @@ public class AnalyzeFeature {
 		Pair<Node, Node> rm = removeNodes(occ, n);
 		Node pn = rm.getValue0();
 		Node insbefore = rm.getValue1();
+		this.numugly += disannotatednodes.size();
 
 		for (NodeList nl: disannotatednodes) {
 			for (int i = 0; i < nl.getLength(); i++) {
 
 				importednode = doc.importNode(nl.item(i), true);
 
-				// fixes linebreaks
-				Node cn = importednode.getLastChild();
-				cn.appendChild(doc.createTextNode("\n"));
-				if (i == 0) importednode.insertBefore(doc.createTextNode("\n"), importednode.getFirstChild());
+				if (insbefore != null) pn.insertBefore(importednode, insbefore);
+				else pn.appendChild(importednode);
 
-				if (insbefore != null)
-					pn.insertBefore(importednode, insbefore);
-				else
-					pn.appendChild(importednode);
+				// fixes linebreaks
+				importednode.getParentNode().insertBefore(doc.createTextNode("\n"), importednode);
+
 				insbefore = importednode.getNextSibling();
 			}
 		}
@@ -179,23 +183,23 @@ public class AnalyzeFeature {
 					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
 
 					isImpossible = hasDefines(occ);
-					if (isImpossible) occ.setType("impossible (local #define)");
+					if (isImpossible) occ.setType(AnalyzeFeature.IMPOSSIBLE_LOCAL_DEFINE);
 					isImpossible |= hasGoto(occ);
-					if (isImpossible) occ.setType("impossible (local goto)");
+					if (isImpossible) occ.setType(AnalyzeFeature.IMPOSSIBLE_LOCAL_GOTO);
 
 					hasElseBlock = hasElseBlock(belse);
 					hasCaseBlock = hasCaseBlock(bcase);
 
 					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
 						expandCaseBlock(occ);
+						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
-						continue;
 					}
 
 					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expandElseBlock(occ);
+						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
-						continue;
 					}
 
 					if (!hasCaseBlock && !hasElseBlock)
@@ -241,7 +245,8 @@ public class AnalyzeFeature {
 				}
 
 				if ((!occ.getType().startsWith(AnalyzeFeature.IMPOSSIBLE))
-						&& (!occ.getType().startsWith(AnalyzeFeature.UNKNOWN))) {
+						&& (!occ.getType().startsWith(AnalyzeFeature.UNKNOWN))
+						&& (!occ.getType().startsWith(AnalyzeFeature.UGLY))) {
 					try {
 						occ.setCritNodeType(RefactoringStrategy.SIMPLE_HOOK);
 						if (cloneMap.containsKey(occ.getDocFileName())) {
@@ -354,7 +359,7 @@ public class AnalyzeFeature {
 			if (functionNode == null) {
 				System.out.println("Null-Function? " + occ.getDocFileName()
 						+ " at line " + occ.getPrepNodes()[i].getLineNumber());
-				occ.setType("impossible");
+				occ.setType(AnalyzeFeature.IMPOSSIBLE);
 			} else {
 				Node functionChild = functionNode.getFirstChild();
 				StringBuilder functionString = new StringBuilder("");
@@ -404,7 +409,7 @@ public class AnalyzeFeature {
 		NodeList declList = NodeTools.intersectUpperLower(declBelowIfList,
 				declBeforeEndList);
 		if (declList.getLength() > 0) {
-			occ.setType("impossible (local declaration)");
+			occ.setType(AnalyzeFeature.IMPOSSIBLE_LOCAL_DECLARATION);
 		}
 
 		LinkedList<String> ownLocalVariables = new LinkedList<String>();
@@ -592,4 +597,6 @@ public class AnalyzeFeature {
 	public AnalyzedFeature getAnalyzedFeature() {
 		return this.analyzedFeature;
 	}
+
+	public int getNumUgyl() { return this.numugly; }
 }

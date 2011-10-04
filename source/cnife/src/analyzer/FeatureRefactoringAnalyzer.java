@@ -233,6 +233,7 @@ public class FeatureRefactoringAnalyzer {
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
 			.iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
+			ugly += afeat.getNumUgyl();
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();
 				System.out.println("\nFound type: "
@@ -262,10 +263,10 @@ public class FeatureRefactoringAnalyzer {
 			}
 		}
 		System.out.println("Finished. Statistics:");
-		System.out.println("the good: " + simple);
-		System.out.println("the bad " + hook);
-		System.out.println("the ugly " + ugly);
+		System.out.println("the good   : " + simple);
+		System.out.println("the bad    : " + hook);
+		System.out.println("the ugly   : " + ugly + " (this run ugly is next-run bad)");
 		System.out.println("impossibles: " + impc);
-		System.out.println("omitted (user intervention): " + omit);
+		System.out.println("omitted    : " + omit + " (user intervention)");
 	}
 }
