@@ -174,13 +174,9 @@ public class AnalyzeFeature {
 					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
 					
 					isImpossible = hasDefines(occ);
-					if (!isImpossible) {
-						isImpossible = hasGoto(occ);
-						if (isImpossible)
-							occ.setType("impossible (local goto)");
-					} else {
-						occ.setType("impossible (local #define)");
-					}
+					if (isImpossible) occ.setType("impossible (local #define)");
+					isImpossible = hasGoto(occ);
+					if (isImpossible) occ.setType("impossible (local goto)");
 
 					hasElseBlock = hasElseBlock(belse);
 					hasCaseBlock = hasCaseBlock(bcase);
@@ -299,7 +295,11 @@ public class AnalyzeFeature {
 				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
 				XPathConstants.NODESET);
 
-		return lower.item(0) != upper.item(0);
+		if (lower.getLength() > 0
+			&& upper.getLength() > 0)
+			return lower.item(0) == upper.item(0);
+		else
+			return false;
 	}
 
 	private boolean hasCaseBlock(Pair<NodeList, NodeList> b) {
@@ -331,8 +331,10 @@ public class AnalyzeFeature {
 				occ.getPrepNodes()[(occ.getPrepNodes().length - 1)].getNode(),
 				XPathConstants.NODESET);
 
-		return (lower.getLength() != 0) && (upper.getLength() != 0)
-				&& (lower.item(0) != upper.item(0));
+		if (lower.getLength() > 0 && upper.getLength() > 0)
+			return lower.item(0) == upper.item(0);
+		else
+			return false;
 	}
 
 	private void setContainer(CriticalOccurrence occ)
