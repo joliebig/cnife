@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C" dir="" filename="function_vorlage.h">
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="function_vorlage.h">
 <function>	<type><name>void</name></type> <name>vorlageFunction</name><parameterlist>(<param><decl><type><name>var</name></type> <name>testVar</name></decl></param>)</parameterlist>
 	<block>{
 	<comment>//--functionbody</comment>
