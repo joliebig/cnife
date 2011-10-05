@@ -213,11 +213,12 @@ public class FeatureRefactoringAnalyzer {
 			System.exit(2);
 		}
 
-		int simple = 0;
-		int hook = 0;
+		int good = 0;
+		int bad = 0;
 		int ugly = 0;
-		int impc = 0;
+		int impossible = 0;
 		int omit = 0;
+		int unknown = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
 				projectDirectory, annotationfilterlist);
 		LinkedList<String> list = a.getFeatureNames();
@@ -244,16 +245,11 @@ public class FeatureRefactoringAnalyzer {
 						+ occ.getDocFileName());
 				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
 					occ.setType("toomit");
-				if ((occ.getType().startsWith("impossible"))
-						|| (occ.getType().startsWith("unknown")))
-					impc++;
-				else if (occ.getType().startsWith("Hook"))
-					hook++;
-				else if (occ.getType().startsWith("toomit"))
-					omit++;
-				else {
-					simple++;
-				}
+				if (occ.getType().startsWith("impossible")) impossible++;
+				else if (occ.getType().startsWith("unknown")) unknown++;
+				else if (occ.getType().startsWith("Hook")) bad++;
+				else if (occ.getType().startsWith("toomit")) omit++;
+				else good++;
 			}
 			System.out.println("-------------------------------------------------------------\n");
 			if (refactorval) {
@@ -263,10 +259,10 @@ public class FeatureRefactoringAnalyzer {
 			}
 		}
 		System.out.println("Finished. Statistics:");
-		System.out.println("the good   : " + simple);
-		System.out.println("the bad    : " + hook);
+		System.out.println("the good   : " + good);
+		System.out.println("the bad    : " + bad);
 		System.out.println("the ugly   : " + ugly + " (this run ugly is next-run bad)");
-		System.out.println("impossibles: " + impc);
+		System.out.println("impossibles: " + impossible);
 		System.out.println("omitted    : " + omit + " (user intervention)");
 	}
 }

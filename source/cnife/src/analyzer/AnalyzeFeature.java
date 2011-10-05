@@ -46,6 +46,7 @@ public class AnalyzeFeature {
 	private Boolean providehooknames;
 	private InputStreamReader istreamreader;
 	private BufferedReader bufreader;
+	private static int hookcounter = 1;
 
 	private static String EXPR_NAMES_BELOW_IF_QUERY = "./(following::src:expr[not(contains(.,\"->\"))]/src:name union following::src:expr/src:name[1])";
 
@@ -61,13 +62,13 @@ public class AnalyzeFeature {
 
 	private static String FIND_NEXT_DEFINE = "./following::* intersect //cpp:define";
 
-	private static String ELSE_BLOCK_BELOW = "./following-sibling::src:else";
+	private static String ELSE_BELOW = "./following-sibling::src:else";
 
-	private static String ELSE_BLOCK_BEFORE = "./preceding::src:if/src:else";
+	private static String ELSE_BEFORE = "./preceding::src:if/src:else";
 
-	private static String CASE_BLOCK_BELOW = "./following::src:case";
+	private static String CASE_BELOW = "./following::src:case";
 
-	private static String CASE_BLOCK_BEFORE = "./parent::src:case";
+	private static String CASE_BEFORE = "./parent::src:case";
 
 	private static String EXPR_BELOW = "./ancestor::src:condition";
 
@@ -115,8 +116,11 @@ public class AnalyzeFeature {
 		parentnode.removeChild(childnode);
 
 		if (res == null) return new Pair<Node, Node>(parentnode, null);
-		else if (res.getNodeType() == Node.TEXT_NODE) return new Pair<Node, Node>(parentnode, res.getPreviousSibling());
-		else return new Pair<Node, Node>(parentnode, res);
+		else {
+			while (res.getNodeType() == Node.TEXT_NODE)
+				res = res.getPreviousSibling();
+			return new Pair<Node, Node>(parentnode, res);
+		}
 	}
 
 	private void expandBlock(CriticalOccurrence occ, Node n, Boolean wendif) {
@@ -194,8 +198,8 @@ public class AnalyzeFeature {
 				boolean hasExprBlock = false;
 
 				try {
-					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BLOCK_BELOW, ELSE_BLOCK_BEFORE);
-					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BLOCK_BELOW, CASE_BLOCK_BEFORE);
+					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BELOW, ELSE_BEFORE);
+					Pair<NodeList, NodeList> bcase = extractNodeList(occ, CASE_BELOW, CASE_BEFORE);
 					Pair<NodeList, NodeList> bexpr = extractNodeList(occ, EXPR_BELOW, EXPR_BEFORE);
 
 					isImpossible = hasDefines(occ);
@@ -264,7 +268,8 @@ public class AnalyzeFeature {
 					}
 					occsInFunction.add(occ);
 				} else {
-					occ.setType(AnalyzeFeature.IMPOSSIBLE);
+					if (!occ.getType().startsWith(AnalyzeFeature.UNKNOWN))
+						occ.setType(AnalyzeFeature.IMPOSSIBLE);
 				}
 
 				if ((!occ.getType().startsWith(AnalyzeFeature.IMPOSSIBLE))
@@ -457,7 +462,7 @@ public class AnalyzeFeature {
 			String varName = exprList.item(i).getTextContent();
 
 			if (declNames.contains(varName)) {
-				occ.setType("impossible (local declaration)");
+				occ.setType(AnalyzeFeature.IMPOSSIBLE_LOCAL_DECLARATION);
 			} else if ((!duplicateEliminator.contains(varName))
 					&& (isLocalVar(occ.getPrepNodes()[0].getNode(), varName))) {
 				localVariableDependencies.add(varName);
@@ -582,7 +587,6 @@ public class AnalyzeFeature {
 
 		for (String key : files.keySet()) {
 			SimpleHookCloneFinder cloneFinder = new SimpleHookCloneFinder();
-			int counter = 0;
 			int clonecounter = 0;
 			HashMap<Node, LinkedList<CriticalOccurrence>> nodes = files.get(key);
 			if (nodes != null)
@@ -612,8 +616,8 @@ public class AnalyzeFeature {
 									e.printStackTrace();
 								}
 							} else {
-								counter++;
-								occ.setHookFunctionName(name + "HookFunction" + counter);
+								occ.setHookFunctionName(name + "HookFunction" + AnalyzeFeature.hookcounter);
+								AnalyzeFeature.hookcounter = AnalyzeFeature.hookcounter + 1;
 							}
 						} else {
 							clonecounter++;

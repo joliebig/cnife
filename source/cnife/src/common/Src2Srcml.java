@@ -145,7 +145,7 @@ public class Src2Srcml {
 	 * @return
 	 */
 	public static LinkedList<String> getConfigurationParameter(Node n) {
-		String FEATURE_NAMES = "//cpp:if//src:expr/src:name";
+		String FEATURE_NAMES = "./*//cpp:if//src:expr/src:name";
 		Set<String> res = new HashSet<String>();
 		try {
 			XPathExpression names = QueryBuilder.instance().getExpression(FEATURE_NAMES);

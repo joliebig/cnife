@@ -44,7 +44,6 @@ import scanner.patterns.CompleteFunctionPattern;
 import scanner.patterns.CompletePrivatePublicBlock;
 import scanner.patterns.DirectivesPattern;
 import scanner.patterns.InFunctionOccurrencesPattern;
-import scanner.patterns.SwitchCasePattern;
 
 public class FeatureSearcher {
 	private static final String ALL_RELEVANT_DIRECTIVES_XPATH = "//(cpp:if union cpp:ifdef union cpp:ifndef union cpp:else union cpp:endif)";
@@ -108,7 +107,6 @@ public class FeatureSearcher {
 			FeaturePattern pattern3 = new InFunctionOccurrencesPattern();
 			FeaturePattern pattern4 = new ClassIntroductionPattern();
 			FeaturePattern pattern5 = new DirectivesPattern();
-			FeaturePattern pattern6 = new SwitchCasePattern();
 
 			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>();
 			if (annotationfilter == null || annotationfilter.contains("CompletePrivatePublicBlockPattern"))
@@ -121,8 +119,6 @@ public class FeatureSearcher {
 				occs.addAll(pattern2.checkDoc(doc, tree));
 			if (annotationfilter == null || annotationfilter.contains("InFunctionOccurrencesPattern"))
 				occs.addAll(pattern3.checkDoc(doc, tree));
-			if (annotationfilter == null || annotationfilter.contains("SwitchCasePattern"))
-				occs.addAll(pattern6.checkDoc(doc, tree));
 
 			FeaturePattern remains = new RemainingOccurrencesPattern();
 			occs.addAll(remains.checkDoc(doc, tree));
