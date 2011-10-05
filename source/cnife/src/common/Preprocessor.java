@@ -117,7 +117,7 @@ public class Preprocessor {
 		while (i.hasNext()) {
 			Pair<Boolean, String> e = i.next();
 			if (!e.getValue0()) buf.append("!");
-			buf.append("defined(" + e.getValue1() + ")");
+			buf.append(e.getValue1());
 
 			if (i.hasNext()) buf.append(" && ");
 		}
