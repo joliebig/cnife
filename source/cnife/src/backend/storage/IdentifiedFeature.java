@@ -13,7 +13,7 @@ public class IdentifiedFeature {
 
 	public IdentifiedFeature() {
 		this.list = new LinkedList<PreprocessorOccurrence>();
-		this.fileOccurrences = 
+		this.fileOccurrences =
 			new HashMap<String, LinkedList<PreprocessorOccurrence>>();
 	}
 
@@ -62,9 +62,21 @@ public class IdentifiedFeature {
 		occInFile.add(occ);
 	}
 
+	/**
+	 * removes a preprocessor occurrence from the backend
+	 * @param occ
+	 */
+	public void removeOccurrence(PreprocessorOccurrence occ) {
+		// remove occurrence from file-occurrences
+		this.fileOccurrences.remove(occ.getDocFileName());
+
+		// remove occurrence from the list itself
+		this.list.remove(occ);
+	}
+
 	public void removeWholeFileFromFeature(String fileName) {
 		if (this.fileOccurrences.containsKey(fileName)) {
-			LinkedList<PreprocessorOccurrence> file = 
+			LinkedList<PreprocessorOccurrence> file =
 				fileOccurrences.get(fileName);
 			for (PreprocessorOccurrence occ : file) {
 				this.LOCs -= occ.getLinesOfCode();

@@ -261,7 +261,7 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("Finished. Statistics:");
 		System.out.println("the good   : " + good);
 		System.out.println("the bad    : " + bad);
-		System.out.println("the ugly   : " + ugly + " (this run ugly is next-run bad)");
+		System.out.println("the ugly   : " + ugly + " (this run ugly is next-run bad or impossible)");
 		System.out.println("impossibles: " + impossible);
 		System.out.println("omitted    : " + omit + " (user intervention)");
 	}

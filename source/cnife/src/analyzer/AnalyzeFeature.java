@@ -211,18 +211,24 @@ public class AnalyzeFeature {
 						expandCaseBlock(occ);
 						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+						this.feature.removeOccurrence(occ);
+						continue;
 					}
 
 					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expandElseBlock(occ);
 						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+						this.feature.removeOccurrence(occ);
+						continue;
 					}
 
 					if (hasExprBlock && !current.getType().equals("HookRefactoring")) {
 						expandExprBlock(occ);
 						occ.setType(AnalyzeFeature.UGLY);
 						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+						this.feature.removeOccurrence(occ);
+						continue;
 					}
 
 					if (!hasCaseBlock && !hasElseBlock)
