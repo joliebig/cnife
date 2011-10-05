@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="Class.h" language="C++"><class><specifier>public</specifier> class <name>Class</name> <block>{<private type="default">
+</private><public>public:
+    <function_decl><type><name>void</name></type> <name>foo</name><parameter_list>()</parameter_list>;</function_decl>
+</public>}</block>;</class>
+
+<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/switch/Base/ClassHookFunction1</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>a</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>void</name></type> <name><name>Class</name>::<name>foo</name></name><parameter_list>()</parameter_list> <block>{
+    <decl_stmt><decl><type><name>int</name></type> <name>a</name></decl>;</decl_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/switch/Base/ClassHookFunction1</name><argument_list>(<argument><expr><name>a</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>b</name></decl>;</decl_stmt>
+}</block></function>
+</unit>
