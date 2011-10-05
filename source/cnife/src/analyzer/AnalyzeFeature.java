@@ -112,15 +112,11 @@ public class AnalyzeFeature {
 					|| childnode.getNodeName().startsWith("if"))
 				break;
 		}
-		Node res = childnode.getNextSibling().getNextSibling();
+		Node res = childnode.getNextSibling();
 		parentnode.removeChild(childnode);
 
 		if (res == null) return new Pair<Node, Node>(parentnode, null);
-		else {
-			while (res.getNodeType() == Node.TEXT_NODE)
-				res = res.getPreviousSibling();
-			return new Pair<Node, Node>(parentnode, res);
-		}
+		else return new Pair<Node, Node>(parentnode, res);
 	}
 
 	private void expandBlock(CriticalOccurrence occ, Node n, Boolean wendif) {
@@ -146,7 +142,7 @@ public class AnalyzeFeature {
 				importednode = doc.importNode(nl.item(i), true);
 
 				if (insbefore != null) pn.insertBefore(importednode, insbefore);
-				else pn.appendChild(importednode);
+				else pn.insertBefore(importednode, pn.getLastChild());
 
 				// fixes linebreaks
 				importednode.getParentNode().insertBefore(doc.createTextNode("\n"), importednode);
