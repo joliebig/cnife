@@ -218,7 +218,6 @@ public class FeatureRefactoringAnalyzer {
 		int ugly = 0;
 		int impossible = 0;
 		int omit = 0;
-		int unknown = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
 				projectDirectory, annotationfilterlist);
 		LinkedList<String> list = a.getFeatureNames();
@@ -246,7 +245,7 @@ public class FeatureRefactoringAnalyzer {
 				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
 					occ.setType("toomit");
 				if (occ.getType().startsWith("impossible")) impossible++;
-				else if (occ.getType().startsWith("unknown")) unknown++;
+				else if (occ.getType().startsWith("unknown")) impossible++;
 				else if (occ.getType().startsWith("Hook")) bad++;
 				else if (occ.getType().startsWith("toomit")) omit++;
 				else good++;

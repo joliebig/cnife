@@ -12,7 +12,8 @@ public class RefactoringFactory {
 
 	public RefactoringAction getAction(String actionId) {
 		if ((actionId.equals("CompleteFunctionRefactoring"))
-				|| (actionId.equals("CompletePubPrivRefactoring")))
+				|| (actionId.equals("CompletePubPrivRefactoring"))
+				|| (actionId.equals("CompleteFunctionRefactoringInline")))
 			return new CompleteFunctionRefactoring();
 		if (actionId.equals("ClassIntroductionRefactoring"))
 			return new ClassIntroductionRefactoring();
