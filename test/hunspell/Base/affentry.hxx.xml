@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="affentry.hxx"><cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>_AFFIX_HXX_</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive> <name>_AFFIX_HXX_</name></cpp:define>
-
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"atypes.hxx"</cpp:file></cpp:include>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="affentry.hxx"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"atypes.hxx"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"baseaffix.hxx"</cpp:file></cpp:include>
 <comment type="line">//#include "affixmgr.hxx"</comment>
 <class_decl>class <name>AffixMgr</name>;</class_decl>
@@ -129,8 +126,5 @@
   <function_decl><type><name>inline</name> <name>int</name></type>    <name>test_condition</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>st</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>begin</name></decl></param>)</parameter_list>;</function_decl>
 
 </public>}</block>;</class>
-
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-
 
 </unit>
