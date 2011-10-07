@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="FTVHelp.h"><comment type="block">/******************************************************************************
+ *
+ * Copyright (C) 1997-2008 by Dimitri van Heesch.
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation under the terms of the GNU General Public License is hereby 
+ * granted. No representations are made about the suitability of this software 
+ * for any purpose. It is provided "as is" without express or implied warranty.
+ * See the GNU General Public License for more details.
+ *
+ * Documents produced by Doxygen are derivative works derived from the
+ * input used in their production; they are not affected by this license.
+ *
+ */</comment>
+
+<comment type="block">/******************************************************************************
+ * ftvhelp.h,v 1.0 2000/09/06 16:09:00
+ *
+ * Kenney Wong &lt;kwong@ea.com&gt;
+ *
+ * Folder Tree View for offline help on browsers that do not support HTML Help.
+ */</comment>
+
+<cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"qtbc.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;qtextstream.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;qlist.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"index.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"config.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"doxygen.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"message.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"language.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"htmlgen.h"</cpp:file></cpp:include>
+
+<class_decl>class <name>QFile</name>;</class_decl>
+<struct_decl>struct <name>FTVNode</name>;</struct_decl>
+
+<struct>struct <name>FTVImageInfo</name>
+<block>{<public type="default">
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>alt</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>const</name> <name>unsigned</name> <name>char</name> *</type><name>data</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>int</name></type> <name>len</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>unsigned</name> <name>short</name></type> <name>width</name>, <name>height</name></decl>;</decl_stmt>
+</public>}</block>;</struct>
+
+<decl_stmt><decl><type><name>extern</name> <name>FTVImageInfo</name></type> <name><name>image_info</name><index>[]</index></name></decl>;</decl_stmt>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_blank</name>        0</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_doc</name>          1</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_folderclosed</name> 2</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_folderopen</name>   3</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_lastnode</name>     4</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_link</name>         5</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_mlastnode</name>    6</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_mnode</name>        7</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_node</name>         8</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_plastnode</name>    9</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_pnode</name>       10</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_vertline</name>    11</cpp:define>
+
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTV_S</name>(name) #name</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTV_ICON_FILE</name>(name) "ftv2" FTV_S(name) ".png"</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTVIMG_INDEX</name>(name) FTVIMG_ ## name</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTV_INFO</name>(name) ( image_info[FTVIMG_INDEX(name)] )</cpp:define>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>FTV_IMGATTRIBS</name>(name) \
+    "src=\"" FTV_ICON_FILE(name) "\" " \
+    "alt=\"" &lt;&lt; FTV_INFO(name).alt &lt;&lt; "\" " \
+    "width=\"" &lt;&lt; FTV_INFO(name).width &lt;&lt; "\" " \
+    "height=\"" &lt;&lt; FTV_INFO(name).height &lt;&lt; "\" "</cpp:define>
+
+<comment type="block">/*! A class that generates a dynamic tree view side panel.
+ */</comment>
+<class>class <name>FTVHelp</name> <super>: <specifier>public</specifier> <name>IndexIntf</name></super>
+<block>{<private type="default">
+  </private><public>public:
+    <constructor_decl><name>FTVHelp</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>topLevelIndex</name> =<init> <expr>true</expr></init></decl></param>)</parameter_list>;</constructor_decl>
+    <destructor_decl><name>~<name>FTVHelp</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+    <function_decl><type><name>void</name></type> <name>initialize</name><parameter_list>()</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>finalize</name><parameter_list>()</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>incContentsDepth</name><parameter_list>()</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>decContentsDepth</name><parameter_list>()</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>addContentsItem</name><parameter_list>(<param><decl><type><name>bool</name></type> <name>isDir</name></decl></param>,
+                         <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>,
+                         <param><decl><type><name>const</name> <name>char</name> *</type><name>ref</name></decl></param>,
+                         <param><decl><type><name>const</name> <name>char</name> *</type><name>file</name></decl></param>,
+                         <param><decl><type><name>const</name> <name>char</name> *</type><name>anchor</name></decl></param>)</parameter_list>;</function_decl>
+    <comment type="line">//void addIndexItem(const char *, const char *, </comment>
+    <comment type="line">//                  const char *, const char *,</comment>
+    <comment type="line">//                  const char *, const MemberDef *) {}</comment>
+    <function><type><name>void</name></type> <name>addIndexItem</name><parameter_list>(<param><decl><type><name>Definition</name> *</type></decl></param>,<param><decl><type><name>MemberDef</name> *</type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>,<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>addIndexFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>addImageFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>addStyleSheetFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
+    <function><type><name>void</name></type> <name>generateTreeView</name><parameter_list>(<param><decl><type><name>QString</name>*</type> <name>OutString</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>
+<block>{
+  <decl_stmt><decl><type><name>QCString</name></type> <name>fileName</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>QFile</name></type> <name>f</name></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>searchEngine</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"SEARCHENGINE"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  <decl_stmt><decl><type><name>static</name> <name>bool</name></type> <name>serverBasedSearch</name> =<init> <expr><call><name>Config_getBool</name><argument_list>(<argument><expr>"SERVER_BASED_SEARCH"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+  
+  <expr_stmt><expr><call><name>generateTreeViewImages</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+  
+  <comment type="line">// If top level index, generate alternative index.html as a frame</comment>
+  <if>if <condition>(<expr><name>m_topLevelIndex</name></expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>fileName</name>=<call><name>Config_getString</name><argument_list>(<argument><expr>"HTML_OUTPUT"</expr></argument>)</argument_list></call>+"/index"+<name><name>Doxygen</name>::<name>htmlFileExtension</name></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>f</name>.<call><name>setName</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if <condition>(<expr>!<name>f</name>.<call><name>open</name><argument_list>(<argument><expr><name>IO_WriteOnly</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><call><name>err</name><argument_list>(<argument><expr>"Cannot open file %s for writing!\n"</expr></argument>,<argument><expr><name>fileName</name>.<call><name>data</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return;</return>
+    }</block></then>
+    <else>else
+    <block>{
+      <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>f</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>QT_VERSION</name> &gt;= 200</expr></cpp:if>
+      <expr_stmt><expr><name>t</name>.<call><name>setEncoding</name><argument_list>(<argument><expr><name><name>QTextStream</name>::<name>UnicodeUTF8</name></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+      <comment type="line">//t &lt;&lt; "&lt;!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\"&gt;\n";</comment>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"&gt;\n"</expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;html xmlns=\"http://www.w3.org/1999/xhtml\"&gt;\n&lt;head&gt;\n"</expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;meta http-equiv=\"Content-Type\" content=\"text/xhtml;charset=UTF-8\"/&gt;\n"</expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;title&gt;"</expr>;</expr_stmt> 
+      <if>if <condition>(<expr><call><name>Config_getString</name><argument_list>(<argument><expr>"PROJECT_NAME"</expr></argument>)</argument_list></call>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+      <block>{
+        <expr_stmt><expr><name>t</name> &lt;&lt; "Doxygen Documentation"</expr>;</expr_stmt>
+      }</block></then>
+      <else>else
+      <block>{
+        <expr_stmt><expr><name>t</name> &lt;&lt; <call><name>Config_getString</name><argument_list>(<argument><expr>"PROJECT_NAME"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></else></if>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;/title&gt;\n&lt;/head&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;frameset cols=\"" &lt;&lt; <call><name>Config_getInt</name><argument_list>(<argument><expr>"TREEVIEW_WIDTH"</expr></argument>)</argument_list></call> &lt;&lt; ",*\"&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;frame src=\"tree" &lt;&lt; <name><name>Doxygen</name>::<name>htmlFileExtension</name></name> &lt;&lt; "\" name=\"treefrm\"/&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;frame src=\"main" &lt;&lt; <name><name>Doxygen</name>::<name>htmlFileExtension</name></name> &lt;&lt; "\" name=\"basefrm\"/&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;noframes&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;body&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;a href=\"main" &lt;&lt; <name><name>Doxygen</name>::<name>htmlFileExtension</name></name> &lt;&lt; "\"&gt;Frames are disabled. Click here to go to the main page.&lt;/a&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;/body&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;/noframes&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;/frameset&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;/html&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>f</name>.<call><name>close</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+
+  <comment type="line">// Generate tree view</comment>
+  <if>if <condition>(<expr>!<name>OutString</name></expr>)</condition><then>
+    <expr_stmt><expr><name>OutString</name> = new <name>QString</name></expr>;</expr_stmt></then></if>
+  <function_decl><type><name>QTextOStream</name></type> <name>t</name><parameter_list>(<param><decl><type><name>OutString</name></type></decl></param>)</parameter_list>;</function_decl>
+  <expr_stmt><expr><name>t</name>.<call><name>setEncoding</name><argument_list>(<argument><expr><name><name>QTextStream</name>::<name>UnicodeUTF8</name></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <if>if <condition>(<expr><name>m_topLevelIndex</name></expr>)</condition><then>
+  <block>{
+    <if>if <condition>(<expr><name>searchEngine</name></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;!-- This comment will put IE 6, 7 and 8 in quirks mode --&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\"&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;head&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;meta http-equiv=\"Content-Type\" content=\"text/xhtml;charset=UTF-8\"/&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;meta http-equiv=\"Content-Style-Type\" content=\"text/css\" /&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;meta http-equiv=\"Content-Language\" content=\"en\" /&gt;\n"</expr>;</expr_stmt>
+    <if>if <condition>(<expr><name>searchEngine</name></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;link href=\"search/search.css\" rel=\"stylesheet\" type=\"text/css\"/&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;script type=\"text/javaScript\" src=\"search/search.js\"&gt;&lt;/script&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;link rel=\"stylesheet\" href=\""</expr>;</expr_stmt>
+    <decl_stmt><decl><type><name>QCString</name></type> <name>cssname</name>=<init><expr><call><name>Config_getString</name><argument_list>(<argument><expr>"HTML_STYLESHEET"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if <condition>(<expr><name>cssname</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; "doxygen.css"</expr>;</expr_stmt>
+    }</block></then>
+    <else>else
+    <block>{
+      <function_decl><type><name>QFileInfo</name></type> <name>cssfi</name><parameter_list>(<param><decl><type><name>cssname</name></type></decl></param>)</parameter_list>;</function_decl>
+      <if>if <condition>(<expr>!<name>cssfi</name>.<call><name>exists</name><argument_list>()</argument_list></call></expr>)</condition><then>
+      <block>{
+        <expr_stmt><expr><call><name>err</name><argument_list>(<argument><expr>"Error: user specified HTML style sheet file does not exist!\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then></if>
+      <expr_stmt><expr><name>t</name> &lt;&lt; <name>cssfi</name>.<call><name>fileName</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "\"/&gt;" &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;title&gt;TreeView&lt;/title&gt;\n"</expr>;</expr_stmt>
+  }</block></then></if>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;script type=\"text/javascript\"&gt;\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;!-- // Hide script from old browsers\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    \n"</expr>;</expr_stmt>
+
+  <comment type="block">/* User has clicked on a node (folder or +/-) in the tree */</comment>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    function toggleFolder(id, imageNode) \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      var folder = document.getElementById(id);\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      var l = imageNode.src.length;\n"</expr>;</expr_stmt>
+  <comment type="block">/* If the user clicks on the book icon, we move left one image so 
+   * the code (below) will also adjust the '+' icon. 
+   */</comment>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      if (imageNode.src.substring(l-20,l)==\"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>folderclosed</name></expr></argument>)</argument_list></call> "\" || \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          imageNode.src.substring(l-18,l)==\"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>folderopen</name></expr></argument>)</argument_list></call>  "\")\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        imageNode = imageNode.previousSibling;\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        l = imageNode.src.length;\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      if (folder == null) \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      } \n"</expr>;</expr_stmt>
+  <comment type="block">/* Node controls a open section, we need to close it */</comment>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      else if (folder.style.display == \"block\") \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        if (imageNode != null) \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          imageNode.nextSibling.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>folderclosed</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          if (imageNode.src.substring(l-13,l) == \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>mnode</name></expr></argument>)</argument_list></call> "\")\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "            imageNode.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>pnode</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          else if (imageNode.src.substring(l-17,l) == \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>mlastnode</name></expr></argument>)</argument_list></call> "\")\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "            imageNode.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>plastnode</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        folder.style.display = \"none\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      } \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      else \n"</expr>;</expr_stmt> <comment type="block">/* section is closed, we need to open it */</comment>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        if (imageNode != null) \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          imageNode.nextSibling.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>folderopen</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          if (imageNode.src.substring(l-13,l) == \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>pnode</name></expr></argument>)</argument_list></call> "\")\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "            imageNode.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>mnode</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          else if (imageNode.src.substring(l-17,l) == \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>plastnode</name></expr></argument>)</argument_list></call> "\")\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          {\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "            imageNode.src = \"" <call><name>FTV_ICON_FILE</name><argument_list>(<argument><expr><name>mlastnode</name></expr></argument>)</argument_list></call> "\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "          }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "        folder.style.display = \"block\";\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    }\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    // End script hiding --&gt;        \n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;/script&gt;\n"</expr>;</expr_stmt>
+  <if>if <condition>(<expr><name>m_topLevelIndex</name></expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;/head&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;body class=\"ftvtree\""</expr>;</expr_stmt>
+    <if>if <condition>(<expr><name>searchEngine</name> &amp;&amp; !<name>serverBasedSearch</name></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; " onload='searchBox.OnSelectItem(0);'"</expr>;</expr_stmt>
+    }</block></then></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "&gt;\n"</expr>;</expr_stmt>
+    <if>if <condition>(<expr><name>searchEngine</name></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;script type=\"text/javascript\"&gt;&lt;!--\n"</expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "      var searchBox = new SearchBox(\"searchBox\", \"search\", true, '" 
+        &lt;&lt; <name>theTranslator</name>-&gt;<call><name>trSearch</name><argument_list>()</argument_list></call> &lt;&lt; "');\n"</expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; "      --&gt;&lt;/script&gt;\n"</expr>;</expr_stmt>
+      <if>if <condition>(<expr>!<name>serverBasedSearch</name></expr>)</condition><then>
+      <block>{
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;div id=\"MSearchBox\" class=\"MSearchBoxInactive\"&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;div class=\"MSearchBoxRow\"&gt;&lt;span class=\"MSearchBoxLeft\"&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;a id=\"MSearchClose\" href=\"javascript:searchBox.CloseResultsWindow()\"&gt;"
+          &lt;&lt; "&lt;img id=\"MSearchCloseImg\" border=\"0\" src=\"search/close.png\" alt=\"\"/&gt;&lt;/a&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;input type=\"text\" id=\"MSearchField\" value=\"" 
+          &lt;&lt; <name>theTranslator</name>-&gt;<call><name>trSearch</name><argument_list>()</argument_list></call> &lt;&lt; "\" accesskey=\"S\"\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           onfocus=\"searchBox.OnSearchFieldFocus(true)\" \n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           onblur=\"searchBox.OnSearchFieldFocus(false)\" \n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           onkeyup=\"searchBox.OnSearchFieldChange(event)\"/&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;/span&gt;&lt;span class=\"MSearchBoxRight\"&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;img id=\"MSearchSelect\" src=\"search/search.png\"\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           onmouseover=\"return searchBox.OnSearchSelectShow()\"\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           onmouseout=\"return searchBox.OnSearchSelectHide()\"\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "           alt=\"\"/&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;/span&gt;&lt;/div&gt;&lt;div class=\"MSearchBoxSpacer\"&gt;&amp;nbsp;&lt;/div&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;/div&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><call><name><name>HtmlGenerator</name>::<name>writeSearchFooter</name></name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><call><name>QCString</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      }</block></then>
+      <else>else
+      <block>{
+        <expr_stmt><expr><name>t</name> &lt;&lt; "        &lt;div id=\"MSearchBox\" class=\"MSearchBoxInactive\"&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "            &lt;form id=\"FSearchBox\" action=\"search.php\" method=\"get\" target=\"basefrm\"&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "              &lt;img id=\"MSearchSelect\" src=\"search/search.png\" alt=\"\"/&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "              &lt;input type=\"text\" id=\"MSearchField\" name=\"query\" value=\""
+          &lt;&lt; <name>theTranslator</name>-&gt;<call><name>trSearch</name><argument_list>()</argument_list></call> &lt;&lt; "\" size=\"20\" accesskey=\"S\" \n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "                     onfocus=\"searchBox.OnSearchFieldFocus(true)\" \n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "                     onblur=\"searchBox.OnSearchFieldFocus(false)\"/&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "            &lt;/form&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "          &lt;div class=\"MSearchBoxSpacer\"&gt;&amp;nbsp;&lt;/div&gt;\n"</expr>;</expr_stmt>
+        <expr_stmt><expr><name>t</name> &lt;&lt; "        &lt;/div&gt;\n"</expr>;</expr_stmt>
+      }</block></else></if>
+    }</block></then></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;div class=\"directory\"&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;h3 class=\"swap\"&gt;&lt;span&gt;"</expr>;</expr_stmt>
+    <decl_stmt><decl><type><name>QCString</name> &amp;</type><name>projName</name> =<init> <expr><call><name>Config_getString</name><argument_list>(<argument><expr>"PROJECT_NAME"</expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
+    <if>if <condition>(<expr><name>projName</name>.<call><name>isEmpty</name><argument_list>()</argument_list></call></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; "Root"</expr>;</expr_stmt>
+    }</block></then>
+    <else>else
+    <block>{
+      <expr_stmt><expr><name>t</name> &lt;&lt; <name>projName</name></expr>;</expr_stmt>
+    }</block></else></if>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;/span&gt;&lt;/h3&gt;\n"</expr>;</expr_stmt>
+  }</block></then>
+  <else>else
+  <block>{
+    <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;div class=\"directory-alt\"&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;br/&gt;\n"</expr>;</expr_stmt>
+  }</block></else></if>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;div style=\"display: block;\"&gt;\n"</expr>;</expr_stmt>
+
+  <expr_stmt><expr><call><name>generateTree</name><argument_list>(<argument><expr><name>t</name></expr></argument>,<argument><expr><name><name>m_indentNodes</name><index>[<expr>0</expr>]</index></name></expr></argument>,<argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+  <expr_stmt><expr><name>t</name> &lt;&lt; "      &lt;/div&gt;\n"</expr>;</expr_stmt>
+  <expr_stmt><expr><name>t</name> &lt;&lt; "    &lt;/div&gt;\n"</expr>;</expr_stmt>
+  
+  <if>if <condition>(<expr><name>m_topLevelIndex</name></expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>t</name> &lt;&lt; "  &lt;/body&gt;\n"</expr>;</expr_stmt>
+    <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;/html&gt;\n"</expr>;</expr_stmt>
+  }</block></then></if>
+  
+  <if>if <condition>(<expr><name>m_topLevelIndex</name></expr>)</condition><then>
+  <block>{
+    <expr_stmt><expr><name>fileName</name>=<call><name>Config_getString</name><argument_list>(<argument><expr>"HTML_OUTPUT"</expr></argument>)</argument_list></call>+"/tree"+<name><name>Doxygen</name>::<name>htmlFileExtension</name></name></expr>;</expr_stmt>
+    <expr_stmt><expr><name>f</name>.<call><name>setName</name><argument_list>(<argument><expr><name>fileName</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+    <if>if <condition>(<expr>!<name>f</name>.<call><name>open</name><argument_list>(<argument><expr><name>IO_WriteOnly</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+    <block>{
+      <expr_stmt><expr><call><name>err</name><argument_list>(<argument><expr>"Cannot open file %s for writing!\n"</expr></argument>,<argument><expr><name>fileName</name>.<call><name>data</name><argument_list>()</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <return>return;</return>
+    }</block></then>
+    <else>else
+    <block>{
+      <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>f</name></expr></argument>)</argument_list></decl>;</decl_stmt>
+      <expr_stmt><expr><name>t</name>.<call><name>setEncoding</name><argument_list>(<argument><expr><name><name>QTextStream</name>::<name>UnicodeUTF8</name></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+      <expr_stmt><expr><name>t</name> &lt;&lt; *<name>OutString</name> &lt;&lt; <name>endl</name></expr>;</expr_stmt>
+      <expr_stmt><expr><name>f</name>.<call><name>close</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+    }</block></else></if>
+  }</block></then></if>
+}</block></function>
+  </public><private>private:
+    <function_decl><type><name>void</name></type> <name>generateTreeViewImages</name><parameter_list>()</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>generateTree</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>,<param><decl><type><name>const</name> <name><name>QList</name><argument_list>&lt;<argument><name>FTVNode</name></argument>&gt;</argument_list></name> &amp;</type><name>nl</name></decl></param>,<param><decl><type><name>int</name></type> <name>level</name></decl></param>)</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>generateIndent</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>,<param><decl><type><name>FTVNode</name> *</type><name>n</name></decl></param>,<param><decl><type><name>int</name></type> <name>level</name></decl></param>)</parameter_list>;</function_decl>
+    <function_decl><type><name>void</name></type> <name>generateLink</name><parameter_list>(<param><decl><type><name>QTextStream</name> &amp;</type><name>t</name></decl></param>,<param><decl><type><name>FTVNode</name> *</type><name>n</name></decl></param>)</parameter_list>;</function_decl>
+    <decl_stmt><decl><type><name><name>QList</name><argument_list>&lt;<argument><name>FTVNode</name></argument>&gt;</argument_list></name> *</type><name>m_indentNodes</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>int</name></type> <name>m_indent</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>bool</name></type> <name>m_topLevelIndex</name></decl>;</decl_stmt>
+</private>}</block>;</class>
+
+</unit>

@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashAutop.h" language="C++"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;ctype.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Crypto.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_dispatch.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_am.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"hash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"log.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"txn.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashAutop.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbDispatch.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashAuto.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Txn.h"</cpp:file></cpp:include>
+
+
+
+<class>class <name>CHashAutop</name>
+<block>{<private type="default">
+</private><public>public:
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>HAVE_HASH</name></cpp:ifndef>
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>ham_init_print</name><argument_list>(<argument><expr><name>DB_ENV</name> *<name>dbenv</name></expr></argument>, <argument><expr><call><name>int</name> <argument_list>(<argument><expr>***<name>dtabp</name></expr></argument>)</argument_list></call><call><name>__P</name><argument_list>(<argument><expr>(<name>DB_ENV</name> *, <name>DBT</name> *, <name>DB_LSN</name> *, <name>db_recops</name>, <name>void</name> *)</expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>size_t</name> *<name>dtabsizep</name></expr></argument>)</argument_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dtabp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dtabsizep</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></decl></decl_stmt>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_insdel_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_newpage_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_splitdata_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_replace_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_copypage_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_metagroup_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_groupalloc_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_curadj_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_chgpg_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>	<comment type="line">//#ifndef HAVE_HASH</comment>
+
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_init_print __P((DB_ENV *, int (***)(DB_ENV *,
+	* PUBLIC:     DBT *, DB_LSN *, db_recops, void *), size_t *));
+	*/</comment>
+	<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>ham_init_print</name><argument_list>(<argument><expr><name>DB_ENV</name> *<name>dbenv</name></expr></argument>, <argument><expr><call><name>int</name> <argument_list>(<argument><expr>***<name>dtabp</name></expr></argument>)</argument_list></call><call><name>__P</name><argument_list>(<argument><expr>(<name>DB_ENV</name> *, <name>DBT</name> *, <name>DB_LSN</name> *, <name>db_recops</name>, <name>void</name> *)</expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>size_t</name> *<name>dtabsizep</name></expr></argument>)</argument_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_insdel_print</name></expr></argument>, <argument><expr><name>DB___ham_insdel</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_newpage_print</name></expr></argument>, <argument><expr><name>DB___ham_newpage</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_splitdata_print</name></expr></argument>, <argument><expr><name>DB___ham_splitdata</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_replace_print</name></expr></argument>, <argument><expr><name>DB___ham_replace</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_copypage_print</name></expr></argument>, <argument><expr><name>DB___ham_copypage</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_metagroup_print</name></expr></argument>, <argument><expr><name>DB___ham_metagroup</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_groupalloc_print</name></expr></argument>, <argument><expr><name>DB___ham_groupalloc</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_curadj_print</name></expr></argument>, <argument><expr><name>DB___ham_curadj</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbDispatch</name>::<name>db_add_recovery</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dtabp</name></expr></argument>, <argument><expr><name>dtabsizep</name></expr></argument>,
+			<argument><expr><name>ham_chgpg_print</name></expr></argument>, <argument><expr><name>DB___ham_chgpg</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></decl></decl_stmt>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_insdel_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_insdel_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_insdel_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>i</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ch</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_insdel_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_insdel%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\topcode: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tndx: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>ndx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tkey: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>key</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>key</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tdata: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>data</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>data</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_newpage_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_newpage_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_newpage_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_newpage_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_newpage%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\topcode: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tprev_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tprevlsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prevlsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prevlsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnew_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>new_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnext_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>next_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnextlsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nextlsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nextlsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_splitdata_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_splitdata_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_splitdata_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>i</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ch</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_splitdata_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_splitdata%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\topcode: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>opcode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpageimage: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>pageimage</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>pageimage</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_replace_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_replace_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_replace_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>i</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ch</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_replace_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_replace%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tndx: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>ndx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\toff: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>off</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tolditem: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>olditem</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>olditem</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnewitem: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>newitem</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>newitem</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmakedup: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>makedup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_copypage_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_copypage_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_copypage_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>i</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ch</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_copypage_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_copypage%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnext_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>next_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnextlsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nextlsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nextlsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnnext_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nnext_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnnextlsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nnextlsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>nnextlsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpage: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>argp</name>-&gt;<name>page</name>.<name>size</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
+			<expr_stmt><expr><name>ch</name> = ((<name>u_int8_t</name> *)<name>argp</name>-&gt;<name>page</name>.<name>data</name>)[<name>i</name>]</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr><call><name>isprint</name><argument_list>(<argument><expr><name>ch</name></expr></argument>)</argument_list></call> || <name>ch</name> == 0x0a ? "%c" : "%#x "</expr></argument>, <argument><expr><name>ch</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></for>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_metagroup_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_metagroup_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_metagroup_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_metagroup_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_metagroup%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tbucket: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>bucket</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmmpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>mmpgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmmetalsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>mmetalsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>mmetalsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>mpgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmetalsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>metalsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>metalsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpagelsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pagelsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnewalloc: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>newalloc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tlast_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>last_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_groupalloc_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_groupalloc_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_groupalloc_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_groupalloc_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_groupalloc%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmeta_lsn: [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>meta_lsn</name>.<name>file</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>meta_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tstart_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>start_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnum: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>num</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfree: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>free</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tlast_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>last_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_curadj_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_curadj_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_curadj_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_curadj_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_curadj%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tpgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tindx: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>indx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tlen: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>len</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tdup_off: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>dup_off</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tadd: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>add</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tis_dup: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>is_dup</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\torder: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>order</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* PUBLIC: int __ham_chgpg_print __P((DB_ENV *, DBT *, DB_LSN *,
+	* PUBLIC:     db_recops, void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_chgpg_print</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>dbtp</name></decl></param>, <param><decl><type><name>DB_LSN</name> *</type><name>lsnp</name></decl></param>, <param><decl><type><name>db_recops</name></type> <name>notused2</name></decl></param>, <param><decl><type><name>void</name> *</type><name>notused3</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>__ham_chgpg_args</name> *</type><name>argp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>notused2</name> = <name>DB_TXN_PRINT</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>notused3</name> = <name>NULL</name></expr>;</expr_stmt>
+
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CHashAuto</name>::<name>ham_chgpg_read</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dbtp</name>-&gt;<name>data</name></expr></argument>, <argument><expr>&amp;<name>argp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(
+			<argument><expr>"[%lu][%lu]__ham_chgpg%s: rec: %lu txnid %lx prevlsn [%lu][%lu]\n"</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>lsnp</name>-&gt;<name>offset</name></expr></argument>,
+			<argument><expr>(<name>argp</name>-&gt;<name>type</name> &amp; <name>DB_debug_FLAG</name>) ? "_debug" : ""</expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>type</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>txnid</name>-&gt;<name>txnid</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>file</name></expr></argument>,
+			<argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>prev_lsn</name>.<name>offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tfileid: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>fileid</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tmode: %ld\n"</expr></argument>, <argument><expr>(<name>long</name>)<name>argp</name>-&gt;<name>mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\told_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>old_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnew_pgno: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>new_pgno</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\told_indx: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>old_indx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\tnew_indx: %lu\n"</expr></argument>, <argument><expr>(<name>u_long</name>)<name>argp</name>-&gt;<name>new_indx</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>(<name>void</name>)<call><name>printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COsAlloc::os_free</name><parameter_list>(<param><decl><type><name>dbenv</name></type></decl></param>, <param><decl><type><name>argp</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>	<comment type="line">//#ifndef HAVE_HASH #else</comment>
+
+</public>}</block>;</class>
+</unit>

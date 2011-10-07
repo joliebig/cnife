@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashConv.h" language="C++"><comment type="block">/*-
+* See the file LICENSE for redistribution information.
+*
+* Copyright (c) 1996-2005
+*	Sleepycat Software.  All rights reserved.
+*
+* $Id: HashConv.cpp,v 1.4 2006/08/16 17:43:20 rosenmue Exp $
+*/</comment>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_swap.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"hash.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"HashConv.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"DbConv.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Hash.h"</cpp:file></cpp:include>
+
+
+
+<class>class <name>CHashConv</name>
+<block>{<private type="default">
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>HAVE_HASH</name></cpp:ifndef>
+
+</private><public>public:
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgin</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dummydbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>pg</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>pp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>cookie</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgout</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dummydbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>pg</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>pp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>cookie</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<return>return <expr>(<call><name><name>CHash</name>::<name>db_no_hash_am</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+	<function_decl><type><name>static</name> <name>int</name></type> <name>ham_mswap</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pg</name></decl></param>)</parameter_list>;</function_decl>
+
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>	<comment type="line">//#ifndef HAVE_HASH</comment>
+
+	<comment type="block">/*
+	* __ham_pgin --
+	*	Convert host-specific page layout from the host-independent format
+	*	stored on disk.
+	*
+	* PUBLIC: int __ham_pgin __P((DB_ENV *, DB *, db_pgno_t, void *, DBT *));
+	*/</comment>
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgin</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_PGINFO</name> *</type><name>pginfo</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>PAGE</name> *</type><name>h</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>h</name> = <call><name>static_cast<argument_list>&lt;<argument><name>PAGE</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>pginfo</name> = (<name>DB_PGINFO</name> *)<name>cookie</name>-&gt;<name>data</name></expr>;</expr_stmt>
+
+		<comment type="block">/*
+		* The hash access method does blind reads of pages, causing them
+		* to be created.  If the type field isn't set it's one of them,
+		* initialize the rest of the page and return.
+		*/</comment>
+		<if>if <condition>(<expr><name>h</name>-&gt;<name>type</name> != <name>P_HASHMETA</name> &amp;&amp; <name>h</name>-&gt;<name>pgno</name> == <name>PGNO_INVALID</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr><call><name>P_INIT</name><argument_list>(<argument><expr><name>pp</name></expr></argument>, <argument><expr>(<name>db_indx_t</name>)<name>pginfo</name>-&gt;<name>db_pagesize</name></expr></argument>,
+				<argument><expr><name>pg</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr><name>PGNO_INVALID</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>P_HASH</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>(0)</expr>;</return>
+		}</block></then></if>
+
+		<if>if <condition>(<expr>!<call><name>F_ISSET</name><argument_list>(<argument><expr><name>pginfo</name></expr></argument>, <argument><expr><name>DB_AM_SWAP</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+
+		<return>return <expr>(<name>h</name>-&gt;<name>type</name> == <name>P_HASHMETA</name> ?  <call><name>ham_mswap</name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call> :
+			<call><name><name>CDbConv</name>::<name>db_byteswap</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dummydbp</name></expr></argument>, <argument><expr><name>pg</name></expr></argument>, <argument><expr><call><name>static_cast<argument_list>&lt;<argument><name>PAGE</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>pginfo</name>-&gt;<name>db_pagesize</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_pgout --
+	*	Convert host-specific page layout to the host-independent format
+	*	stored on disk.
+	*
+	* PUBLIC: int __ham_pgout __P((DB_ENV *, DB *, db_pgno_t, void *, DBT *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_pgout</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB</name> *</type><name>dummydbp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pg</name></decl></param>, <param><decl><type><name>void</name> *</type><name>pp</name></decl></param>, <param><decl><type><name>DBT</name> *</type><name>cookie</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_PGINFO</name> *</type><name>pginfo</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>PAGE</name> *</type><name>h</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><name>pginfo</name> = (<name>DB_PGINFO</name> *)<name>cookie</name>-&gt;<name>data</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr>!<call><name>F_ISSET</name><argument_list>(<argument><expr><name>pginfo</name></expr></argument>, <argument><expr><name>DB_AM_SWAP</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+
+		<expr_stmt><expr><name>h</name> = <call><name>static_cast<argument_list>&lt;<argument><name>PAGE</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<return>return <expr>(<name>h</name>-&gt;<name>type</name> == <name>P_HASHMETA</name> ?  <call><name>ham_mswap</name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call> :
+			<call><name><name>CDbConv</name>::<name>db_byteswap</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>dummydbp</name></expr></argument>, <argument><expr><name>pg</name></expr></argument>, <argument><expr><call><name>static_cast<argument_list>&lt;<argument><name>PAGE</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>pp</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>pginfo</name>-&gt;<name>db_pagesize</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call>)</expr>;</return>
+	}</block></function>
+
+	<comment type="block">/*
+	* __ham_mswap --
+	*	Swap the bytes on the hash metadata page.
+	*
+	* PUBLIC: int __ham_mswap __P((void *));
+	*/</comment>
+
+	<function><type><name>static</name> <name>int</name></type> <name>ham_mswap</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>pg</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>u_int8_t</name> *</type><name>p</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
+
+		<expr_stmt><expr><call><name><name>CDbConv</name>::<name>db_metaswap</name></name><argument_list>(<argument><expr><call><name>static_cast<argument_list>&lt;<argument><name>PAGE</name>*</argument>&gt;</argument_list></name><argument_list>(<argument><expr><name>pg</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<expr_stmt><expr><name>p</name> = (<name>u_int8_t</name> *)<name>pg</name> + <call><name>sizeof</name><argument_list>(<argument><expr><name>DBMETA</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* max_bucket */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* high_mask */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* low_mask */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* ffactor */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* nelem */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* h_charkey */</comment>
+		<for>for (<init><expr><name>i</name> = 0</expr>;</init> <condition><expr><name>i</name> &lt; <name>NCACHED</name></expr>;</condition> <incr><expr>++<name>i</name></expr></incr>)
+			<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl></for>	<comment type="block">/* spares */</comment>
+		<expr_stmt><expr><name>p</name> += 59 * <call><name>sizeof</name><argument_list>(<argument><expr><name>u_int32_t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt> <comment type="block">/* unused */</comment>
+		<constructor_decl><name>SWAP32</name><parameter_list>(<param><decl><type><name>p</name></type></decl></param>)</parameter_list>;</constructor_decl>		<comment type="block">/* crypto_magic */</comment>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>	<comment type="line">//#ifndef HAVE_HASH</comment>
+
+</public>}</block>;</class>
+
+
+</unit>
