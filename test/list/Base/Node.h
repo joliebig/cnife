@@ -1,4 +1,4 @@
-#include "Config.cpp"
+#include "Config.h"
 
 class Node {
 public:

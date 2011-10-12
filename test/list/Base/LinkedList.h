@@ -1,6 +1,6 @@
 #include <iostream>
-#include "Config.cpp"
-#include "Node.cpp"
+#include "Config.h"
+#include "Node.h"
 
 using namespace std;
 
