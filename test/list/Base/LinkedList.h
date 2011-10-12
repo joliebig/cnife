@@ -41,11 +41,11 @@ LinkedList::~LinkedList() {
 void LinkedList::insert( int newData ) {
 	Node *n = new Node();
 	n->data = newData;
-#if SORTALGO == BUBBLESORT || SORTALGO == INSERTIONSORT
+#if SORTALGO_EQ_BUBBLESORT || SORTALGO_EQ_INSERTIONSORT
 	Node *a = NULL;
 	Node *b = NULL;
 #endif
-#if SORTALGO == BUBBLESORT
+#if SORTALGO_EQ_BUBBLESORT
 	Node *c = NULL;
 	Node *e = NULL;
 	Node *tmp = NULL;
@@ -54,12 +54,12 @@ void LinkedList::insert( int newData ) {
 	if (NULL == first) {
 		first = n;
 	} else {
-#if SORTALGO == INSERTIONSORT
+#if SORTALGO_EQ_INSERTIONSORT
 		a = first;
 		b = first->next;
 
 		if (first->data
-#if SORTORDER == UPWARD
+#if SORTORDER_EQ_UPWARD
 			>
 #else
 			<
@@ -71,11 +71,11 @@ void LinkedList::insert( int newData ) {
 			first->prev = n;
 #endif
 			first = n;
-#if SORTALGO == INSERTIONSORT
+#if SORTALGO_EQ_INSERTIONSORT
 			return;
 		}
 		while (NULL != b && b->data
-#if SORTORDER == UPWARD
+#if SORTORDER_EQ_UPWARD
 			<
 #else
 			>
@@ -94,13 +94,13 @@ void LinkedList::insert( int newData ) {
 #endif
 	}
 
-#if SORTALGO == BUBBLESORT
+#if SORTALGO_EQ_BUBBLESORT
 	while (e != first->next) {
 		c = a = first;
 		b = a->next;
 		while (a != e) {
 			if (a->data
-#if SORTORDER == UPWARD
+#if SORTORDER_EQ_UPWARD
 				>
 #else
 				<
