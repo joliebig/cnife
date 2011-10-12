@@ -1,20 +1,13 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsTmpdir.h">
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsTmpdir.h" language="C++">
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsTmpdir.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"common/DbErr.h"</cpp:file></cpp:include>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>macintosh</name></cpp:ifdef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;TFileSpec.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 
 
 <class>class <name>COsTmpdir</name>

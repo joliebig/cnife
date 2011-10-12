@@ -1,18 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsOflags.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsOflags.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/stat.h&gt;</cpp:file></cpp:include>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_SHMGET</name></cpp:ifdef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/ipc.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/shm.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;fcntl.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsOflags.h"</cpp:file></cpp:include>
@@ -24,7 +13,10 @@
 <class>class <name>COsOflags</name>
 <block>{<private type="default">
 </private><public>public:
-	<function><type><name>static</name> <name>u_int32_t</name></type> <name>db_oflags</name><parameter_list>(<param><decl><type><name>int</name></type> <name>oflags</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOflagsHookFunction8</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>u_int32_t</name></type> <name>db_oflags</name><parameter_list>(<param><decl><type><name>int</name></type> <name>oflags</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>dbflags</name></decl>;</decl_stmt>
 	
@@ -42,9 +34,7 @@
 		 * an exact science as few POSIX implementations have a flag value
 		 * for O_RDONLY, it's simply the lack of a write flag.
 		 */</comment>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>O_ACCMODE</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>O_ACCMODE</name>	(O_RDONLY | O_RDWR | O_WRONLY)</cpp:define>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOflagsHookFunction8</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 		<switch>switch <condition>(<expr><name>oflags</name> &amp; <name>O_ACCMODE</name></expr>)</condition> <block>{
 		<case>case <expr><name>O_RDWR</name></expr>:
 		</case><case>case <expr><name>O_WRONLY</name></expr>:
@@ -56,63 +46,7 @@
 		<return>return <expr>(<name>dbflags</name>)</expr>;</return>
 	}</block></function>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>DB_WIN32</name></cpp:ifdef>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IRUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IRUSR</name>	<name>S_IREAD</name></cpp:define>		<comment type="block">/* R for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWUSR</name>	<name>S_IWRITE</name></cpp:define>	<comment type="block">/* W for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXUSR</name>	0</cpp:define>		<comment type="block">/* X for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IRGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IRGRP</name>	0</cpp:define>		<comment type="block">/* R for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWGRP</name>	0</cpp:define>		<comment type="block">/* W for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXGRP</name>	0</cpp:define>		<comment type="block">/* X for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IROTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IROTH</name>	0</cpp:define>		<comment type="block">/* R for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWOTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWOTH</name>	0</cpp:define>		<comment type="block">/* W for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXOTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXOTH</name>	0</cpp:define>		<comment type="block">/* X for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IRUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IRUSR</name>	0000400</cpp:define>		<comment type="block">/* R for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWUSR</name>	0000200</cpp:define>		<comment type="block">/* W for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXUSR</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXUSR</name>	0000100</cpp:define>		<comment type="block">/* X for owner */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IRGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IRGRP</name>	0000040</cpp:define>		<comment type="block">/* R for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWGRP</name>	0000020</cpp:define>		<comment type="block">/* W for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXGRP</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXGRP</name>	0000010</cpp:define>		<comment type="block">/* X for group */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IROTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IROTH</name>	0000004</cpp:define>		<comment type="block">/* R for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IWOTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IWOTH</name>	0000002</cpp:define>		<comment type="block">/* W for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive>	<name>S_IXOTH</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>S_IXOTH</name>	0000001</cpp:define>		<comment type="block">/* X for other */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* DB_WIN32 */</comment>
+<comment type="block">/* DB_WIN32 */</comment>
 
 	<function><type><name>static</name> <name>int</name></type> <name>db_omode</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>perm</name></decl></param>)</parameter_list>
 	<block>{
@@ -139,39 +73,15 @@
 		<return>return <expr>(<name>mode</name>)</expr>;</return>
 	}</block></function>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_SHMGET</name></cpp:ifdef>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SHM_R</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>SHM_R</name>	0400</cpp:define>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>SHM_W</name></cpp:ifndef>
-<cpp:define>#<cpp:directive>define</cpp:directive>	<name>SHM_W</name>	0200</cpp:define>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
-	<function><type><name>static</name> <name>int</name></type> <name>db_shm_mode</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>)</parameter_list>
-	<block>{
-		<decl_stmt><decl><type><name>int</name></type> <name>mode</name></decl>;</decl_stmt>
+
+
+
+
+ 
+
 	
-		<comment type="block">/* Default to r/w owner, r/w group. */</comment>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> == 0</expr>)</condition><then>
-			<return>return <expr>(<name>SHM_R</name> | <name>SHM_W</name> | <name>SHM_R</name> &gt;&gt; 3 | <name>SHM_W</name> &gt;&gt; 3)</expr>;</return></then></if>
-	
-		<expr_stmt><expr><name>mode</name> = 0</expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IRUSR</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_R</name></expr>;</expr_stmt></then></if>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IWUSR</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_W</name></expr>;</expr_stmt></then></if>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IRGRP</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_R</name> &gt;&gt; 3</expr>;</expr_stmt></then></if>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IWGRP</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_W</name> &gt;&gt; 3</expr>;</expr_stmt></then></if>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IROTH</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_R</name> &gt;&gt; 6</expr>;</expr_stmt></then></if>
-		<if>if <condition>(<expr><name>dbenv</name>-&gt;<name>db_mode</name> &amp; <name>S_IWOTH</name></expr>)</condition><then>
-			<expr_stmt><expr><name>mode</name> |= <name>SHM_W</name> &gt;&gt; 6</expr>;</expr_stmt></then></if>
-		<return>return <expr>(<name>mode</name>)</expr>;</return>
-	}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 </public>}</block>;</class>
 
 

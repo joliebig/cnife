@@ -1,20 +1,13 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsId.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsId.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"dbinc/mutex_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsId.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 
 
 
@@ -25,7 +18,19 @@
 <class>class <name>COsId</name>
 <block>{<private type="default">
 </private><public>public:
-	<function><type><name>static</name> <name>void</name></type> <name>os_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>pid_t</name> *</type><name>pidp</name></decl></param>, <param><decl><type><name>db_threadid_t</name> *</type><name>tidp</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction18</name><parameterlist>(<param><decl><type><name>db_threadid_t</name> *&amp;</type> <name>tidp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction18</name><parameterlist>(<param><decl><type><name>db_threadid_t</name> *&amp;</type> <name>tidp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction28</name><parameterlist>(<param><decl><type><name>pid_t</name> *&amp;</type> <name>pidp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction28</name><parameterlist>(<param><decl><type><name>pid_t</name> *&amp;</type> <name>pidp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>void</name></type> <name>os_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>pid_t</name> *</type><name>pidp</name></decl></param>, <param><decl><type><name>db_threadid_t</name> *</type><name>tidp</name></decl></param>)</parameter_list>
 	<block>{
 		<comment type="block">/*
 		 * We can't depend on dbenv not being NULL, this routine is called
@@ -37,32 +42,22 @@
 		 */</comment>
 		<if>if <condition>(<expr><name>pidp</name> != <name>NULL</name></expr>)</condition><then> <block>{
 			<if>if <condition>(<expr><name>dbenv</name> == <name>NULL</name></expr>)</condition><then> <block>{
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_VXWORKS</name></expr></argument>)</argument_list></call></expr></cpp:if>
-				<expr_stmt><expr>*<name>pidp</name> = <call><name>taskIdSelf</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-				<expr_stmt><expr>*<name>pidp</name> = <call><name>getpid</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction28</name><argument_list>(<argument><expr><name>pidp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction28</name><argument_list>(<argument><expr><name>pidp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 			}</block></then> <else>else
 				<expr_stmt><expr>*<name>pidp</name> = <name>dbenv</name>-&gt;<name>pid_cache</name></expr>;</expr_stmt></else></if>
 		}</block></then></if>
 	
 		<if>if <condition>(<expr><name>tidp</name> != <name>NULL</name></expr>)</condition><then> <block>{
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>DB_WIN32</name></expr></argument>)</argument_list></call></expr></cpp:if>
-			<expr_stmt><expr>*<name>tidp</name> = <call><name>GetCurrentThreadId</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_UI_THREADS</name></expr></argument>)</argument_list></call></expr></cpp:elif>
-			<expr_stmt><expr>*<name>tidp</name> = <call><name>thr_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:elif>#<cpp:directive>elif</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_SOLARIS_LWP</name></expr></argument>)</argument_list></call> || \
-		<call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_PTHREADS</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PTHREAD_SELF</name></expr></argument>)</argument_list></call></expr></cpp:elif>
-			<expr_stmt><expr>*<name>tidp</name> = <call><name>pthread_self</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-			<comment type="block">/*
-			 * Default to just getpid.
-			 */</comment>
-			<expr_stmt><expr>*<name>tidp</name> = 0</expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction18</name><argument_list>(<argument><expr><name>tidp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction18</name><argument_list>(<argument><expr><name>tidp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		}</block></then></if>
 	}</block></function>
-	<function><type><name>static</name> <name>void</name></type> <name>os_unique_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>idp</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction7</name><parameterlist>(<param><decl><type><name>static</name> <name>int</name>&amp;</type> <name>first</name></decl></param>, <param><decl><type><name>u_int32_t</name>&amp;</type> <name>id</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction21</name><parameterlist>(<param><decl><type><name>u_int32_t</name>&amp;</type> <name>id</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>void</name></type> <name>os_unique_id</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>u_int32_t</name> *</type><name>idp</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>first</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>pid_t</name></type> <name>pid</name></decl>;</decl_stmt>
@@ -85,15 +80,10 @@
 		 * that's not all that easy to do.  Seed and use srand()/rand(), if
 		 * we can find them.
 		 */</comment>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_SRAND</name></expr></cpp:if>
-		<if>if <condition>(<expr><name>first</name> == 1</expr>)</condition><then>
-			<expr_stmt><expr><call><name>srand</name><argument_list>(<argument><expr>(<name>u_int</name>)<name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction7</name><argument_list>(<argument><expr><name>first</name></expr></argument>, <argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<expr_stmt><expr><name>first</name> = 0</expr>;</expr_stmt>
 	
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_RAND</name></expr></cpp:if>
-		<expr_stmt><expr><name>id</name> ^= (<name>u_int</name>)<call><name>rand</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsIdHookFunction21</name><argument_list>(<argument><expr><name>id</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
 		<expr_stmt><expr>*<name>idp</name> = <name>id</name></expr>;</expr_stmt>
 	}</block></function>

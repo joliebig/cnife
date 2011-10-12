@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="LinkedList.h" language="C++"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.cpp"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Node.cpp"</cpp:file></cpp:include>
 
@@ -20,17 +19,16 @@
 		<function_decl><type><name>void</name></type> <name>displayNode</name><parameter_list>( <param><decl><type><name>Node</name>*</type></decl></param> )</parameter_list>;</function_decl>
 
 		<decl_stmt><decl><type><name>Node</name>*</type> <name>first</name></decl>;</decl_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-		<decl_stmt><decl><type><name>Node</name>*</type> <name>last</name></decl>;</decl_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 
 </private>}</block>;</class>
 
-<constructor><name><name>LinkedList</name>::<name>LinkedList</name></name><parameter_list>()</parameter_list> <block>{
+<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction2</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><constructor><name><name>LinkedList</name>::<name>LinkedList</name></name><parameter_list>()</parameter_list> <block>{
 	<expr_stmt><expr><name>first</name> = <name>NULL</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-	<expr_stmt><expr><name>last</name> = <name>NULL</name></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction2</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 	<return>return;</return>
 }</block></constructor>
 
@@ -39,7 +37,106 @@
 	<return>return;</return>
 }</block></destructor>
 
-<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>insert</name></name><parameter_list>( <param><decl><type><name>int</name></type> <name>newData</name></decl></param> )</parameter_list> <block>{
+<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction3</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>e</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>c</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>tmp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction1</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction2</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction3</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction4</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction5</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction6</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction7</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction8</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction9</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction10</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction11</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction12</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction13</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction14</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction15</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction16</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction17</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction18</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction19</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction20</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction21</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction22</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction23</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction24</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction25</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction26</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction27</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction28</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction29</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction30</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction31</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction32</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>n</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>a</name></decl></param>, <param><decl><type><name>Node</name> *&amp;</type> <name>b</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>void</name></type> <name><name>LinkedList</name>::<name>insert</name></name><parameter_list>( <param><decl><type><name>int</name></type> <name>newData</name></decl></param> )</parameter_list> <block>{
 	<decl_stmt><decl><type><name>Node</name> *</type><name>n</name> =<init> <expr>new <call><name>Node</name><argument_list>()</argument_list></call></expr></init></decl>;</decl_stmt>
 	<expr_stmt><expr><name>n</name>-&gt;<name>data</name> = <name>newData</name></expr>;</expr_stmt>
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>BUBBLESORT</name> || <name>SORTALGO</name> == <name>INSERTIONSORT</name></expr></cpp:if>
@@ -52,94 +149,47 @@
 	<decl_stmt><decl><type><name>Node</name> *</type><name>tmp</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
 <cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
-	<if>if <condition>(<expr><name>NULL</name> == <name>first</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><name>first</name> = <name>n</name></expr>;</expr_stmt>
-	}</block></then> <else>else <block>{
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>INSERTIONSORT</name></expr></cpp:if>
-		<expr_stmt><expr><name>a</name> = <name>first</name></expr>;</expr_stmt>
-		<expr_stmt><expr><name>b</name> = <name>first</name>-&gt;<name>next</name></expr>;</expr_stmt>
+	
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction30</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction14</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction25</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction10</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction1</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction27</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction2</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction13</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction17</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction5</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction9</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction3</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction8</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction7</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction18</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction32</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction6</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction16</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction12</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction11</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction29</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction23</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction22</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction15</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction20</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction28</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction26</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction31</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction19</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction21</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction24</name><argument_list>(<argument><expr><name>n</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction4</name><argument_list>(<argument><expr><name>n</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 
-		<if>if <condition>(<expr><name>first</name>-&gt;<name>data</name>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTORDER</name> == <name>UPWARD</name></expr></cpp:if>
-			&gt;
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-			&lt;
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-			<name>n</name>-&gt;<name>data</name></expr>)</condition><then> <block>{
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-			<expr_stmt><expr><name>n</name>-&gt;<name>next</name> = <name>first</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-			<expr_stmt><expr><name>first</name>-&gt;<name>prev</name> = <name>n</name></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-			<expr_stmt><expr><name>first</name> = <name>n</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>INSERTIONSORT</name></expr></cpp:if>
-			<return>return;</return>
-		}</block></then></if>
-		<while>while <condition>(<expr><name>NULL</name> != <name>b</name> &amp;&amp; <name>b</name>-&gt;<name>data</name>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTORDER</name> == <name>UPWARD</name></expr></cpp:if>
-			&lt;
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-			&gt;
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-			<name>n</name>-&gt;<name>data</name></expr>)</condition> <block>{
-			<expr_stmt><expr><name>a</name> = <name>a</name>-&gt;<name>next</name></expr>;</expr_stmt>
-			<expr_stmt><expr><name>b</name> = <name>b</name>-&gt;<name>next</name></expr>;</expr_stmt>
-		}</block></while>
-		<expr_stmt><expr><name>a</name>-&gt;<name>next</name> = <name>n</name></expr>;</expr_stmt>
-		<expr_stmt><expr><name>n</name>-&gt;<name>next</name> = <name>b</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-		<expr_stmt><expr><name>n</name>-&gt;<name>prev</name> = <name>a</name></expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>NULL</name> != <name>b</name></expr>)</condition><then>
-			<expr_stmt><expr><name>b</name>-&gt;<name>prev</name> = <name>n</name></expr>;</expr_stmt></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-	}</block></else></if>
-
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTALGO</name> == <name>BUBBLESORT</name></expr></cpp:if>
-	<while>while <condition>(<expr><name>e</name> != <name>first</name>-&gt;<name>next</name></expr>)</condition> <block>{
-		<expr_stmt><expr><name>c</name> = <name>a</name> = <name>first</name></expr>;</expr_stmt>
-		<expr_stmt><expr><name>b</name> = <name>a</name>-&gt;<name>next</name></expr>;</expr_stmt>
-		<while>while <condition>(<expr><name>a</name> != <name>e</name></expr>)</condition> <block>{
-			<if>if <condition>(<expr><name>a</name>-&gt;<name>data</name>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>SORTORDER</name> == <name>UPWARD</name></expr></cpp:if>
-				&gt;
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-				&lt;
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-				<name>b</name>-&gt;<name>data</name></expr>)</condition><then> <block>{
-				<if>if <condition>(<expr><name>a</name> == <name>first</name></expr>)</condition><then> <block>{
-					<expr_stmt><expr><name>tmp</name> = <name>b</name>-&gt;<name>next</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>b</name>-&gt;<name>next</name> = <name>a</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>a</name>-&gt;<name>next</name> = <name>tmp</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-					<expr_stmt><expr><name>a</name>-&gt;<name>prev</name> = <name>b</name></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-					<expr_stmt><expr><name>first</name> = <name>b</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>c</name> = <name>b</name></expr>;</expr_stmt>
-				}</block></then> <else>else <block>{
-					<expr_stmt><expr><name>tmp</name> = <name>b</name>-&gt;<name>next</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>b</name>-&gt;<name>next</name> = <name>a</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>a</name>-&gt;<name>next</name> = <name>tmp</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>c</name>-&gt;<name>next</name> = <name>b</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-					<expr_stmt><expr><name>b</name>-&gt;<name>prev</name> = <name>c</name></expr>;</expr_stmt>
-					<expr_stmt><expr><name>a</name>-&gt;<name>prev</name> = <name>b</name></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-					<expr_stmt><expr><name>c</name> = <name>b</name></expr>;</expr_stmt>
-				}</block></else></if>
-			}</block></then> <else>else <block>{
-				<expr_stmt><expr><name>c</name> = <name>a</name></expr>;</expr_stmt>
-				<expr_stmt><expr><name>a</name> = <name>a</name>-&gt;<name>next</name></expr>;</expr_stmt>
-			}</block></else></if>
-			<expr_stmt><expr><name>b</name> = <name>a</name>-&gt;<name>next</name></expr>;</expr_stmt>
-			<if>if <condition>(<expr><name>b</name> == <name>e</name></expr>)</condition><then>
-				<expr_stmt><expr><name>e</name> == <name>a</name></expr>;</expr_stmt></then></if>
-		}</block></while>
-	}</block></while>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction3</name><argument_list>(<argument><expr><name>e</name></expr></argument>, <argument><expr><name>c</name></expr></argument>, <argument><expr><name>a</name></expr></argument>, <argument><expr><name>b</name></expr></argument>, <argument><expr><name>tmp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 }</block></function>
 
-<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>deleteAllNodes</name></name><parameter_list>()</parameter_list> <block>{
+<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction1</name><parameterlist>(<param><decl><type><name>Node</name> *&amp;</type> <name>two</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>void</name></type> <name><name>LinkedList</name>::<name>deleteAllNodes</name></name><parameter_list>()</parameter_list> <block>{
 	<decl_stmt><decl><type><name>Node</name> *</type><name>one</name></decl>;</decl_stmt>
 	<decl_stmt><decl><type><name>Node</name> *</type><name>two</name></decl>;</decl_stmt>
 
@@ -150,10 +200,7 @@
 		<expr_stmt><expr><name>one</name> = <name>first</name></expr>;</expr_stmt>
 		<expr_stmt><expr><name>first</name> = <name>two</name> = <name>first</name>-&gt;<name>next</name></expr>;</expr_stmt>
 		<expr_stmt><expr><name>one</name>-&gt;<name>next</name> = <name>NULL</name></expr>;</expr_stmt>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
-		<if>if <condition>(<expr><name>two</name> != <name>NULL</name></expr>)</condition><then>
-			<expr_stmt><expr><name>two</name>-&gt;<name>prev</name> = <name>NULL</name></expr>;</expr_stmt></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/list/Base/LinkedListHookFunction1</name><argument_list>(<argument><expr><name>two</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<expr_stmt><expr>delete <name>one</name></expr>;</expr_stmt>
 	}</block></while>
 }</block></function>

@@ -1,12 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsRegion.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsRegion.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsRegion.h"</cpp:file></cpp:include>
@@ -18,7 +13,13 @@
 <class>class <name>COsRegion</name>
 <block>{<private type="default">
 </private><public>public:
-	<function><type><name>static</name> <name>int</name></type> <name>os_r_attach</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>REGINFO</name> *</type><name>infop</name></decl></param>, <param><decl><type><name>REGION</name> *</type><name>rp</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRegionHookFunction1</name><parameterlist>(<param><decl><type><name>REGION</name> *&amp;</type> <name>rp</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRegionHookFunction29</name><parameterlist>(<param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_r_attach</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>REGINFO</name> *</type><name>infop</name></decl></param>, <param><decl><type><name>REGION</name> *</type><name>rp</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
 	
@@ -36,14 +37,7 @@
 }</cpp:define>
 		<expr_stmt><expr><call><name>OS_VMROUNDOFF</name><argument_list>(<argument><expr><name>rp</name>-&gt;<name>size</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>DB_REGIONSIZE_MAX</name></cpp:ifdef>
-		<comment type="block">/* Some architectures have hard limits on the maximum region size. */</comment>
-		<if>if <condition>(<expr><name>rp</name>-&gt;<name>size</name> &gt; <name>DB_REGIONSIZE_MAX</name></expr>)</condition><then> <block>{
-			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"region size %lu is too large; maximum is %lu"</expr></argument>,
-			    <argument><expr>(<name>u_long</name>)<name>rp</name>-&gt;<name>size</name></expr></argument>, <argument><expr>(<name>u_long</name>)<name>DB_REGIONSIZE_MAX</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-			<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
-		}</block></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRegionHookFunction1</name><argument_list>(<argument><expr><name>rp</name></expr></argument>, <argument><expr><name>dbenv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
 		<comment type="block">/*
 		 * If a region is private, malloc the memory.
@@ -54,22 +48,7 @@
 		 * I don't know of any architectures (yet!) where malloc is a problem.
 		 */</comment>
 		<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>DB_ENV_PRIVATE</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_MUTEX_HPPA_MSEM_INIT</name></expr></argument>)</argument_list></call></expr></cpp:if>
-			<comment type="block">/*
-			 * !!!
-			 * There exist spinlocks that don't work in malloc memory, e.g.,
-			 * the HP/UX msemaphore interface.  If we don't have locks that
-			 * will work in malloc memory, we better not be private or not
-			 * be threaded.
-			 */</comment>
-			<if>if <condition>(<expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>DB_ENV_THREAD</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
-				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%s"</expr></argument>,
-	    <argument><expr>"architecture does not support locks inside process-local (malloc) memory"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-				<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%s"</expr></argument>,
-	    <argument><expr>"application may not specify both DB_PRIVATE and DB_THREAD"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-				<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
-			}</block></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRegionHookFunction29</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_malloc</name></name><argument_list>(
 			    <argument><expr><name>dbenv</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>REGENV</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr>&amp;<name>infop</name>-&gt;<name>addr</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
 				<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>

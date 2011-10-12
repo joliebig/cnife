@@ -1,33 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsSleep.h">
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsSleep.h" language="C++">
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_SYS_SELECT_H</name></cpp:ifdef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/select.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/times.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;time.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;selectLib.h&gt;</cpp:file></cpp:include>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>TIME_WITH_SYS_TIME</name></expr></cpp:if>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/time.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;time.h&gt;</cpp:file></cpp:include>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_SYS_TIME_H</name></expr></cpp:if>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/time.h&gt;</cpp:file></cpp:include>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;time.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* HAVE_SYS_TIME_H */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* TIME_WITH SYS_TIME */</comment>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="block">/* HAVE_VXWORKS */</comment>
-
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsSleep.h"</cpp:file></cpp:include>

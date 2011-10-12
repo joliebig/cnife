@@ -1,25 +1,24 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsTruncate.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsTruncate.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsTruncate.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsErrno.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 
 <class>class <name>COsTruncate</name>
 <block>{<private type="default">
 </private><public>public:
-	<function><type><name>static</name> <name>int</name></type> <name>os_truncate</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>pgsize</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsTruncateHookFunction35</name><parameterlist>(<param><decl><type><name>off_t</name>&amp;</type> <name>offset</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsTruncateHookFunction35</name><parameterlist>(<param><decl><type><name>off_t</name>&amp;</type> <name>offset</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_truncate</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>pgsize</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>off_t</name></type> <name>offset</name></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
@@ -33,11 +32,7 @@
 		<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ftruncate</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
 			<expr_stmt><expr><name>ret</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_ftruncate</name></expr></argument>)</argument_list></call>(<name>fhp</name>-&gt;<name>fd</name>, <name>offset</name>)</expr>;</expr_stmt></then>
 		<else>else <block>{
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FTRUNCATE</name></cpp:ifdef>
-			<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>ftruncate</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>offset</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-			<expr_stmt><expr><name>ret</name> = <name>DB_OPNOTSUP</name></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsTruncateHookFunction35</name><argument_list>(<argument><expr><name>offset</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsTruncateHookFunction35</name><argument_list>(<argument><expr><name>offset</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		}</block></else></if>
 	
 		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then>

@@ -1,28 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsDir.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsDir.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>HAVE_DIRENT_H</name></expr></cpp:if>
-<cpp:include># <cpp:directive>include</cpp:directive> <cpp:file>&lt;dirent.h&gt;</cpp:file></cpp:include>
-<cpp:define># <cpp:directive>define</cpp:directive> <name>NAMLEN</name>(dirent) strlen((dirent)-&gt;d_name)</cpp:define>
-<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
-<cpp:define># <cpp:directive>define</cpp:directive> <name>dirent</name> <name>direct</name></cpp:define>
-<cpp:define># <cpp:directive>define</cpp:directive> <name>NAMLEN</name>(dirent) (dirent)-&gt;d_namlen</cpp:define>
-<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_SYS_NDIR_H</name></expr></cpp:if>
-<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/ndir.h&gt;</cpp:file></cpp:include>
-<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_SYS_DIR_H</name></expr></cpp:if>
-<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/dir.h&gt;</cpp:file></cpp:include>
-<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:if># <cpp:directive>if</cpp:directive> <expr><name>HAVE_NDIR_H</name></expr></cpp:if>
-<cpp:include>#  <cpp:directive>include</cpp:directive> <cpp:file>&lt;ndir.h&gt;</cpp:file></cpp:include>
-<cpp:endif># <cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsDir.h"</cpp:file></cpp:include>

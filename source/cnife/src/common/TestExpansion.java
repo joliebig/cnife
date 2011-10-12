@@ -14,7 +14,13 @@ public class TestExpansion {
 		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(switchstmt);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
 		File ofd = Preprocessor.writeCode2File(switchstmt.getTextContent());
-		LinkedList<File> nfd = Preprocessor.runAll(confs, fnames, ofd);
+		LinkedList<File> nfd = new LinkedList<File>();
+		try {
+			nfd = Preprocessor.runAll(confs, fnames, ofd);
+		} catch (ExpansionFailedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		LinkedList<File> nfd1 = Src2Srcml.prepareAllFiles(nfd);
 		LinkedList<File> nfd2 = Src2Srcml.runAll(nfd1);
 		LinkedList<NodeList> nfd3 = Src2Srcml.extractNodesFromAll(nfd2);

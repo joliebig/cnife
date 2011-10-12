@@ -49,9 +49,11 @@ public class Preprocessor {
 	 * @param conf
 	 * @param infile
 	 * @param outfile
+	 * @throws ExpansionFailedException
 	 */
-	public static File run(LinkedList<Pair<Boolean, String>> conf, File infile) {
+	public static File run(LinkedList<Pair<Boolean, String>> conf, File infile) throws ExpansionFailedException {
 		File outfile = null;
+		int exitval = 0;
 		try {
 			outfile = File.createTempFile("test_se_", ".c", tmpdir);
 			Runtime rt = Runtime.getRuntime();
@@ -70,13 +72,19 @@ public class Preprocessor {
 			cppcmd += " " + outfile.getAbsolutePath(); // output file
 
 			Process pr = rt.exec(cppcmd);
-			int exitval = pr.waitFor();
+			exitval = pr.waitFor();
 			if (exitval != 0)
 				System.out.println("preprocessor exited with error code " + exitval);
-		} catch (Exception e) {
+		} catch (IOException e) {
+			System.out.println(e.toString());
+			e.printStackTrace();
+		} catch (InterruptedException e) {
 			System.out.println(e.toString());
 			e.printStackTrace();
 		}
+
+		if (exitval != 0)
+			throw new ExpansionFailedException();
 
 		return processCPPOutput(conf, outfile);
 	}
@@ -88,8 +96,9 @@ public class Preprocessor {
 	 * @param p
 	 * @param infile
 	 * @return
+	 * @throws ExpansionFailedException
 	 */
-	public static LinkedList<File> runAll(LinkedList<LinkedList<Boolean>> confs, LinkedList<String> p, File infile) {
+	public static LinkedList<File> runAll(LinkedList<LinkedList<Boolean>> confs, LinkedList<String> p, File infile) throws ExpansionFailedException {
 		LinkedList<File> res = new LinkedList<File>();
 		LinkedList<Pair<Boolean, String>> cc = null;
 

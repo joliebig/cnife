@@ -2,6 +2,7 @@ package analyzer;
 
 import backend.storage.IdentifiedFeature;
 import backend.storage.PreprocessorOccurrence;
+import common.ExpansionFailedException;
 import common.NodeTools;
 import common.Preprocessor;
 import common.QueryBuilder;
@@ -119,11 +120,16 @@ public class AnalyzeFeature {
 		else return new Pair<Node, Node>(parentnode, res);
 	}
 
-	private void expandBlock(CriticalOccurrence occ, Node n, Boolean wendif) {
+	private boolean expandBlock(CriticalOccurrence occ, Node n, Boolean wendif) {
 		LinkedList<String> fnames = Src2Srcml.getConfigurationParameter(n);
 		LinkedList<LinkedList<Boolean>> confs = Preprocessor.combinations(fnames.size());
 		File unprocessedfile = Preprocessor.writeCode2File(occ.getPrepNodes(), wendif);
-		LinkedList<File> generatedvariants = Preprocessor.runAll(confs, fnames, unprocessedfile);
+		LinkedList<File> generatedvariants = new LinkedList<File>();
+		try {
+			generatedvariants = Preprocessor.runAll(confs, fnames, unprocessedfile);
+		} catch (ExpansionFailedException e) {
+			return false;
+		}
 
 		LinkedList<File> packedvariants = Src2Srcml.prepareAllFiles(generatedvariants);
 		LinkedList<File> srcmlannovariants = Src2Srcml.runAll(packedvariants);
@@ -150,6 +156,8 @@ public class AnalyzeFeature {
 				insbefore = importednode.getNextSibling();
 			}
 		}
+
+		return true;
 	}
 
 	private Node lookupNode(Node n, String t) {
@@ -158,21 +166,25 @@ public class AnalyzeFeature {
 		return n;
 	}
 
-	private void expandElseBlock(CriticalOccurrence occ) {
-		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), true);
+	private boolean expandElseBlock(CriticalOccurrence occ) {
+		return expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), true);
 	}
 
-	private void expandCaseBlock(CriticalOccurrence occ) {
-		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "switch"), false);
+	private boolean expandCaseBlock(CriticalOccurrence occ) {
+		return expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "switch"), false);
 	}
 
-	private void expandExprBlock(CriticalOccurrence occ) {
-		expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), false);
+	private boolean expandExprBlock(CriticalOccurrence occ) {
+		return expandBlock(occ, lookupNode(occ.getPrepNodes()[0].getNode(), "if"), false);
 	}
 
 	public LinkedList<RefactoringDocument> analyze() {
 		LinkedList<RefactoringDocument> modifiedfiles = new LinkedList<RefactoringDocument>();
 		this.analyzedFeature = new AnalyzedFeature();
+
+		if (this.feature == null)
+			return new LinkedList<RefactoringDocument>();
+
 		this.analyzedFeature.setName(this.feature.getName());
 
 		Iterator<PreprocessorOccurrence> it = this.feature.iterateOccurrences();
@@ -192,6 +204,7 @@ public class AnalyzeFeature {
 				boolean hasElseBlock = false;
 				boolean hasCaseBlock = false;
 				boolean hasExprBlock = false;
+				boolean expansionWorked = true;
 
 				try {
 					Pair<NodeList, NodeList> belse = extractNodeList(occ, ELSE_BELOW, ELSE_BEFORE);
@@ -208,30 +221,36 @@ public class AnalyzeFeature {
 					hasExprBlock = hasExprBlock(bexpr);
 
 					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
-						expandCaseBlock(occ);
-						occ.setType(AnalyzeFeature.UGLY);
-						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
-						this.feature.removeOccurrence(occ);
-						continue;
+						expansionWorked = expandCaseBlock(occ);
+						if (expansionWorked) {
+							occ.setType(AnalyzeFeature.UGLY);
+							modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+							this.feature.removeOccurrence(occ);
+							continue;
+						}
 					}
 
 					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
-						expandElseBlock(occ);
-						occ.setType(AnalyzeFeature.UGLY);
-						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
-						this.feature.removeOccurrence(occ);
-						continue;
+						expansionWorked = expandElseBlock(occ);
+						if (expansionWorked) {
+							occ.setType(AnalyzeFeature.UGLY);
+							modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+							this.feature.removeOccurrence(occ);
+							continue;
+						}
 					}
 
 					if (hasExprBlock && !current.getType().equals("HookRefactoring")) {
-						expandExprBlock(occ);
-						occ.setType(AnalyzeFeature.UGLY);
-						modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
-						this.feature.removeOccurrence(occ);
-						continue;
+						expansionWorked = expandExprBlock(occ);
+						if (expansionWorked) {
+							occ.setType(AnalyzeFeature.UGLY);
+							modifiedfiles.add(new RefactoringDocument(occ.getDocument()));
+							this.feature.removeOccurrence(occ);
+							continue;
+						}
 					}
 
-					if (!hasCaseBlock && !hasElseBlock)
+					if (!hasCaseBlock && !hasElseBlock && !hasExprBlock)
 						setContainer(occ);
 				} catch (XPathExpressionException e) {
 					e.printStackTrace();
@@ -395,8 +414,6 @@ public class AnalyzeFeature {
 			functionNode = (Node) expr.evaluate(
 					occ.getPrepNodes()[i].getNode(), XPathConstants.NODE);
 			if (functionNode == null) {
-				System.out.println("Null-Function? " + occ.getDocFileName()
-						+ " at line " + occ.getPrepNodes()[i].getLineNumber());
 				occ.setType(AnalyzeFeature.IMPOSSIBLE);
 			} else {
 				Node functionChild = functionNode.getFirstChild();
@@ -586,6 +603,9 @@ public class AnalyzeFeature {
 	private void setHookNames() {
 		HashMap<String, HashMap<Node, LinkedList<CriticalOccurrence>>> files =
 			analyzedFeature.getAffectedFiles();
+
+		if (files == null)
+			return;
 
 		for (String key : files.keySet()) {
 			SimpleHookCloneFinder cloneFinder = new SimpleHookCloneFinder();

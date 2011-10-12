@@ -253,8 +253,10 @@ public class FeatureRefactoringAnalyzer {
 			System.out.println("-------------------------------------------------------------\n");
 			if (refactorval) {
 				LinkedList<RefactoringDocument> modFiles = afeat.refactor();
-				a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles()
-					.keySet(), modFiles);
+
+				if (afeat.getAnalyzedFeature().getAffectedFiles() != null)
+					a.saveRefactorings(afeat.getAnalyzedFeature().getAffectedFiles()
+							.keySet(), modFiles);
 			}
 		}
 		System.out.println("Finished. Statistics:");

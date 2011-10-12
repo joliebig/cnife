@@ -1,26 +1,21 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="OsHandle.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsHandle.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
 
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;fcntl.h&gt;</cpp:file></cpp:include>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsHandle.h"</cpp:file></cpp:include>
 
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
-<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 
 
 <class>class <name>COsHandle</name>
 <block>{<private type="default">
 </private><public>public:
-	<function><type><name>static</name> <name>int</name></type> <name>os_openhandle</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
+	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsHandleHookFunction22</name><parameterlist>(<param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>)</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_openhandle</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>int</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>u_int</name></type> <name>nrepeat</name>, <name>retries</name></decl>;</decl_stmt>
@@ -110,15 +105,7 @@
 			<if>if <condition>(<expr><name>fhp</name>-&gt;<name>fd</name> != -1</expr>)</condition><then> <block>{
 				<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
-<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_FCNTL_F_SETFD</name></expr></argument>)</argument_list></call></expr></cpp:if>
-				<comment type="block">/* Deny file descriptor access to any child process. */</comment>
-				<if>if <condition>(<expr><call><name>fcntl</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>F_SETFD</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call> == -1</expr>)</condition><then> <block>{
-					<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-					<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>,
-					    <argument><expr>"fcntl(F_SETFD): %s"</expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-					<goto>goto <name>err</name>;</goto>
-				}</block></then></if>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsHandleHookFunction22</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>, <argument><expr><name>dbenv</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 				<break>break;</break>
 			}</block></then></if>
 	

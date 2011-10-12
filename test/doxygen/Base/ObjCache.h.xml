@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="ObjCache.h"><comment type="block">/******************************************************************************
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="ObjCache.h" language="C++"><comment type="block">/******************************************************************************
  *
  * $Id:$
  *
@@ -83,7 +82,13 @@
      *  Returns a handle to the object, which can be used by the use()
      *  function, each time the object is used.
      */</comment>
-	  <function><type><name>int</name></type> <name>add</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>,<param><decl><type><name>void</name> **</type><name>victim</name></decl></param>)</parameter_list>
+	  <function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/doxygen/Base/ObjCacheHookFunction1</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/doxygen/Base/ObjCacheHookFunction2</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>int</name></type> <name>add</name><parameter_list>(<param><decl><type><name>void</name> *</type><name>obj</name></decl></param>,<param><decl><type><name>void</name> **</type><name>victim</name></decl></param>)</parameter_list>
 	  <block>{
 		  <expr_stmt><expr>*<name>victim</name>=0</expr>;</expr_stmt>
 
@@ -94,9 +99,7 @@
 		  <block>{
 			  <comment type="line">//printf("moveToFront=%d\n",hnode-&gt;index);</comment>
 			  <expr_stmt><expr><call><name>moveToFront</name><argument_list>(<argument><expr><name>hnode</name>-&gt;<name>index</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
-			  <expr_stmt><expr><name>hits</name>++</expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/doxygen/Base/ObjCacheHookFunction1</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 		  }</block></then>
 		  <else>else <comment type="line">// object not in the cache.</comment>
 		  <block>{
@@ -132,9 +135,7 @@
 			  <expr_stmt><expr><name>hnode</name> = <call><name>hashInsert</name><argument_list>(<argument><expr><name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 			  <expr_stmt><expr><name>hnode</name>-&gt;<name>index</name> = <name>m_head</name></expr>;</expr_stmt>
 			  <expr_stmt><expr>*<name>victim</name> = <name>lruObj</name></expr>;</expr_stmt>
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
-			  <expr_stmt><expr><name>misses</name>++</expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/doxygen/Base/ObjCacheHookFunction2</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 		  }</block></else></if>
 		  <return>return <expr><name>m_head</name></expr>;</return>
 	  }</block></function>
@@ -173,39 +174,11 @@
 
 
     <comment type="block">/*! Debug function. Prints the LRU list */</comment>
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_DEBUG</name></cpp:ifdef>
-<cpp:define>#<cpp:directive>define</cpp:directive> <name>cache_debug_printf</name> <name>printf</name></cpp:define>
-	<function><type><name>void</name></type> <name>printLRU</name><parameter_list>()</parameter_list>
-	<block>{
-		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"MRU-&gt;LRU: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<decl_stmt><decl><type><name>int</name></type> <name>index</name> =<init> <expr><name>m_head</name></expr></init></decl>;</decl_stmt>
-		<while>while <condition>(<expr><name>index</name>!=-1</expr>)</condition>
-		<block>{
-			<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"%d=%p "</expr></argument>,<argument><expr><name>index</name></expr></argument>,<argument><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-			<expr_stmt><expr><name>index</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>next</name></expr>;</expr_stmt>
-		}</block></while>
-		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<comment type="block">/*! Print miss/hits statistics */</comment>
 
-		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"LRU-&gt;MRU: "</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<expr_stmt><expr><name>index</name> = <name>m_tail</name></expr>;</expr_stmt>
-		<while>while <condition>(<expr><name>index</name>!=-1</expr>)</condition>
-		<block>{
-			<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"%d=%p "</expr></argument>,<argument><expr><name>index</name></expr></argument>,<argument><expr><name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>obj</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-			<expr_stmt><expr><name>index</name> = <name><name>m_cache</name><index>[<expr><name>index</name></expr>]</index></name>.<name>prev</name></expr>;</expr_stmt>
-		}</block></while>
-		<expr_stmt><expr><call><name>cache_debug_printf</name><argument_list>(<argument><expr>"\n"</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-    <comment type="block">/*! Print miss/hits statistics */</comment>
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
-<cpp:define>#<cpp:directive>define</cpp:directive> <name>cache_stats_printf</name> <name>printf</name></cpp:define>
-	<function><type><name>void</name></type> <name>printStats</name><parameter_list>()</parameter_list>
-	<block>{
-		<expr_stmt><expr><call><name>cache_stats_printf</name><argument_list>(<argument><expr>"ObjCache: hits=%d misses=%d hit ratio=%f\n"</expr></argument>,<argument><expr><name>hits</name></expr></argument>,<argument><expr><name>misses</name></expr></argument>,<argument><expr><name>hits</name>*100.0/(<name>hits</name>+<name>misses</name>)</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
-  </public><private>private:
+  
+    </public><private>private:
 	  <function><type><name>void</name></type> <name>moveToFront</name><parameter_list>(<param><decl><type><name>int</name></type> <name>index</name></decl></param>)</parameter_list>
 	  <block>{
 		  <decl_stmt><decl><type><name>int</name></type> <name>prev</name>,<name>next</name></decl>;</decl_stmt>
@@ -340,10 +313,7 @@
     <decl_stmt><decl><type><name>int</name></type>        <name>m_freeCacheNodes</name></decl>;</decl_stmt>
     <decl_stmt><decl><type><name>int</name></type>        <name>m_lastHandle</name></decl>;</decl_stmt>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>CACHE_STATS</name></cpp:ifdef>
-    <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>misses</name></decl>;</decl_stmt>
-    <decl_stmt><decl><type><name>static</name> <name>int</name></type> <name>hits</name></decl>;</decl_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
 </private>}</block>;</class>
 
 </unit>
