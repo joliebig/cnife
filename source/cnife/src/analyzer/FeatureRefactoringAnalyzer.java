@@ -174,6 +174,10 @@ public class FeatureRefactoringAnalyzer {
 		CmdLineParser.Option annotationfilter = cmdparser.addStringOption('a',
 				"annotationfilter");
 
+		// apply expansions?
+		CmdLineParser.Option applyexpansions = cmdparser.addBooleanOption('e',
+				"applyexpansions");
+
 		try {
 			cmdparser.parse(args);
 		} catch (CmdLineParser.OptionException e) {
@@ -194,6 +198,8 @@ public class FeatureRefactoringAnalyzer {
 		Boolean refactorval = (Boolean) cmdparser.getOptionValue(refactor, Boolean.FALSE);
 		Boolean providehooknamesval = (Boolean) cmdparser.getOptionValue(
 				providehooknames, Boolean.FALSE);
+		Boolean applyexpansionsval = (Boolean) cmdparser.getOptionValue(
+				applyexpansions, Boolean.FALSE);
 		Integer stmttrafoval = (Integer) cmdparser.getOptionValue(stmttrafo, 0);
 		String s = (String) cmdparser.getOptionValue(annotationfilter, null);
 		String[] slist = null;
@@ -233,15 +239,31 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("Found " + list.size() + " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
-			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval, providehooknamesval);
+			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval,
+					providehooknamesval, applyexpansionsval);
 			LinkedList<RefactoringDocument> modfiles = afeat.analyze();
 			a.saveDisciplining(modfiles);
 			afeats.add(afeat.getAnalyzedFeature());
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
 
-			if (feat != null)
-				System.out.println("processing " + feat.size() + " annotations ");
+			if (feat != null) {
+				int annotationcounter = 0;
+				PreprocessorOccurrence c = null;
+				String ifdeftype = null;
+
+				for (Iterator<PreprocessorOccurrence> i = feat.iterateOccurrences(); i.hasNext(); ) {
+					c = i.next();
+					for (int j = 0; j < c.getPrepNodes().length; j++) {
+						ifdeftype = c.getPrepNodes()[j].getType();
+
+						if (ifdeftype.equals("ifdef")) annotationcounter++;
+						if (ifdeftype.equals("else")) annotationcounter++;
+					}
+				}
+				System.out.println("processing " + annotationcounter + " annotations ");
+			}
+
 			ugly += afeat.getNumUgly();
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();

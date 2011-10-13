@@ -45,6 +45,7 @@ public class AnalyzeFeature {
 	private LinkedList<CriticalOccurrence> crits;
 	private Boolean detectclones;
 	private Boolean providehooknames;
+	private Boolean applyexpansions;
 	private InputStreamReader istreamreader;
 	private BufferedReader bufreader;
 	private static int hookcounter = 1;
@@ -75,10 +76,11 @@ public class AnalyzeFeature {
 
 	private static String EXPR_BEFORE = "./ancestor::src:condition";
 
-	public AnalyzeFeature(IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames) {
+	public AnalyzeFeature(IdentifiedFeature feature, Boolean detectclones, Boolean providehooknames, Boolean applyexpansions) {
 		this.feature = feature;
 		this.detectclones = detectclones;
 		this.providehooknames = providehooknames;
+		this.applyexpansions = applyexpansions;
 		this.istreamreader = new InputStreamReader(System.in);
 		this.bufreader = new BufferedReader(istreamreader);
 	}
@@ -220,7 +222,7 @@ public class AnalyzeFeature {
 					hasCaseBlock = hasCaseBlock(bcase);
 					hasExprBlock = hasExprBlock(bexpr);
 
-					if (hasCaseBlock && !current.getType().equals("HookRefactoring")) {
+					if (applyexpansions && hasCaseBlock && !current.getType().equals("HookRefactoring")) {
 						expansionWorked = expandCaseBlock(occ);
 						if (expansionWorked) {
 							occ.setType(AnalyzeFeature.UGLY);
@@ -230,7 +232,7 @@ public class AnalyzeFeature {
 						}
 					}
 
-					if (hasElseBlock && !current.getType().equals("HookRefactoring")) {
+					if (applyexpansions && hasElseBlock && !current.getType().equals("HookRefactoring")) {
 						expansionWorked = expandElseBlock(occ);
 						if (expansionWorked) {
 							occ.setType(AnalyzeFeature.UGLY);
@@ -240,7 +242,7 @@ public class AnalyzeFeature {
 						}
 					}
 
-					if (hasExprBlock && !current.getType().equals("HookRefactoring")) {
+					if (applyexpansions && hasExprBlock && !current.getType().equals("HookRefactoring")) {
 						expansionWorked = expandExprBlock(occ);
 						if (expansionWorked) {
 							occ.setType(AnalyzeFeature.UGLY);
