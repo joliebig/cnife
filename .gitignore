@@ -1,3 +1,4 @@
 bin
 binary
-test
+test/*/*
+!/test/*/Base
