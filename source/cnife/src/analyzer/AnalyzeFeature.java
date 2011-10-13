@@ -48,6 +48,7 @@ public class AnalyzeFeature {
 	private Boolean applyexpansions;
 	private InputStreamReader istreamreader;
 	private BufferedReader bufreader;
+	private int clonecounter = 0;
 	private static int hookcounter = 1;
 
 	private static String EXPR_NAMES_BELOW_IF_QUERY = "./(following::src:expr[not(contains(.,\"->\"))]/src:name union following::src:expr/src:name[1])";
@@ -611,7 +612,6 @@ public class AnalyzeFeature {
 
 		for (String key : files.keySet()) {
 			SimpleHookCloneFinder cloneFinder = new SimpleHookCloneFinder();
-			int clonecounter = 0;
 			HashMap<Node, LinkedList<CriticalOccurrence>> nodes = files.get(key);
 			if (nodes != null)
 				for (Node node : nodes.keySet()) {
@@ -644,8 +644,7 @@ public class AnalyzeFeature {
 								AnalyzeFeature.hookcounter = AnalyzeFeature.hookcounter + 1;
 							}
 						} else {
-							clonecounter++;
-							System.out.println("CLONES: " + clonecounter);
+							this.clonecounter++;
 							occ.setHookFunctionName(occ.getDupe().getHookFunctionName());
 						}
 					}
@@ -658,4 +657,5 @@ public class AnalyzeFeature {
 	}
 
 	public int getNumUgly() { return this.numugly; }
+	public int getNumClones() { return this.clonecounter ; }
 }

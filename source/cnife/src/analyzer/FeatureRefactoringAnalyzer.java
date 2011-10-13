@@ -226,6 +226,8 @@ public class FeatureRefactoringAnalyzer {
 		int omit = 0;
 		int unknown = 0;
 
+		int clones = 0;
+
 		int c_good = 0;
 		int c_bad = 0;
 		int c_ugly = 0;
@@ -247,6 +249,7 @@ public class FeatureRefactoringAnalyzer {
 			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
 
+			// print number of annotations that belong to feature name
 			if (feat != null) {
 				int annotationcounter = 0;
 				PreprocessorOccurrence c = null;
@@ -265,6 +268,8 @@ public class FeatureRefactoringAnalyzer {
 			}
 
 			ugly += afeat.getNumUgly();
+			clones += afeat.getNumClones();
+
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();
 				System.out.println("\nFound type: "
@@ -325,5 +330,6 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("impossibles: " + impossible);
 		System.out.println("omitted    : " + omit + " (user intervention)");
 		System.out.println("unknown    : " + unknown + " (no classification)");
+		System.out.println("clones     : " + clones);
 	}
 }

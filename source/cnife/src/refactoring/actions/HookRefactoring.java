@@ -20,6 +20,7 @@ import refactoring.RefactoringDocument;
 
 public class HookRefactoring extends RefactoringAction {
 	private static String FIND_FUNCTION_CONTAINER = "./(ancestor::src:function union ancestor::src:constructor)";
+	private static int dupcalls = 0;
 
 	protected void doRefactoring(Document from, RefactoringDocument pos,
 			RefactoringDocument neg, PreprocessorOccurrence occ) {
@@ -92,7 +93,8 @@ public class HookRefactoring extends RefactoringAction {
 
 	private void insertDupeHookCall(PreprocessorNode[] nodes, Document from,
 			FunctionBuilder fb) {
-		System.out.println("dup call");
+		System.out.println("inserting duplication hook call: " + dupcalls);
+		dupcalls++;
 		Node functionCallNode = fb.buildCallNode();
 		PreprocessorNode start = nodes[0];
 		Node importedCall = start.getNode().getOwnerDocument()
