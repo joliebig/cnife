@@ -89,4 +89,8 @@ public class IdentifiedFeature {
 	public boolean isEmpty() {
 		return this.list.isEmpty();
 	}
+
+	public int size() {
+		return this.list.size();
+	}
 }

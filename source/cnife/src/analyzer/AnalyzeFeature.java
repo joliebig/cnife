@@ -655,5 +655,5 @@ public class AnalyzeFeature {
 		return this.analyzedFeature;
 	}
 
-	public int getNumUgyl() { return this.numugly; }
+	public int getNumUgly() { return this.numugly; }
 }

@@ -218,22 +218,31 @@ public class FeatureRefactoringAnalyzer {
 		int ugly = 0;
 		int impossible = 0;
 		int omit = 0;
+		int unknown = 0;
+
+		int c_good = 0;
+		int c_bad = 0;
+		int c_ugly = 0;
+		int c_impossible = 0;
+		int c_omit = 0;
+		int c_unknown = 0;
 		FeatureRefactoringAnalyzer a = new FeatureRefactoringAnalyzer(
 				projectDirectory, annotationfilterlist);
 		LinkedList<String> list = a.getFeatureNames();
 		LinkedList<AnalyzedFeature> afeats = new LinkedList<AnalyzedFeature>();
-		System.out.println("Found " + list.size()
-				+ " different feature candidates");
+		System.out.println("Found " + list.size() + " different feature candidates");
 		for (String name : list) {
 			IdentifiedFeature feat = a.backend.getIdentifiedFeatureByName(name);
 			AnalyzeFeature afeat = new AnalyzeFeature(feat, detectclonesval, providehooknamesval);
 			LinkedList<RefactoringDocument> modfiles = afeat.analyze();
 			a.saveDisciplining(modfiles);
 			afeats.add(afeat.getAnalyzedFeature());
-			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature()
-			.iterateOccurrences();
+			Iterator<PreprocessorOccurrence> it = afeat.getAnalyzedFeature().iterateOccurrences();
 			System.out.println("processing Feature " + name + " ...");
-			ugly += afeat.getNumUgyl();
+
+			if (feat != null)
+				System.out.println("processing " + feat.size() + " annotations ");
+			ugly += afeat.getNumUgly();
 			while (it.hasNext()) {
 				PreprocessorOccurrence occ = (PreprocessorOccurrence) it.next();
 				System.out.println("\nFound type: "
@@ -242,14 +251,42 @@ public class FeatureRefactoringAnalyzer {
 						+ occ.getPrepNodes()[0].getLineNumber()
 						+ "\nin File: "
 						+ occ.getDocFileName());
+
+				boolean haselse = false;
+				for (int i = 0; i < occ.getPrepNodes().length; i++) {
+					haselse |= occ.getPrepNodes()[i].getType().equals("else");
+				}
+
 				if (stmttrafoval > 0 && occ.getLinesOfCode() <= stmttrafoval)
 					occ.setType("toomit");
-				if (occ.getType().startsWith("impossible")) impossible++;
-				else if (occ.getType().startsWith("unknown")) impossible++;
-				else if (occ.getType().startsWith("Hook")) bad++;
-				else if (occ.getType().startsWith("toomit")) omit++;
-				else good++;
+				if (occ.getType().startsWith("impossible")) {
+					impossible++;c_impossible++;
+					if (haselse) {impossible++; c_impossible++;}
+				}
+				else if (occ.getType().startsWith("unknown")) {
+					unknown++; c_unknown++;
+					if (haselse) {unknown++; c_unknown++;}
+				}
+				else if (occ.getType().startsWith("Hook")) {
+					bad++; c_bad++;
+					if (haselse) {bad++; c_bad++;}
+				}
+				else if (occ.getType().startsWith("toomit")) {
+					omit++; c_omit++;
+					if (haselse) {omit++; c_omit++;}
+				}
+				else {
+					good++; c_good++;
+					if (haselse) {good++; c_good++;}
+				}
 			}
+			System.out.println("good: " + c_good + " || bad: " + c_bad + " || ugly: "
+					+ c_ugly + " || impossibles: " + c_impossible + " || unknown: " + c_unknown);
+			c_good = 0;
+			c_bad = 0;
+			c_ugly = 0;
+			c_impossible = 0;
+			c_unknown = 0;
 			System.out.println("-------------------------------------------------------------\n");
 			if (refactorval) {
 				LinkedList<RefactoringDocument> modFiles = afeat.refactor();
@@ -265,5 +302,6 @@ public class FeatureRefactoringAnalyzer {
 		System.out.println("the ugly   : " + ugly + " (this run ugly is next-run bad or impossible)");
 		System.out.println("impossibles: " + impossible);
 		System.out.println("omitted    : " + omit + " (user intervention)");
+		System.out.println("unknown    : " + unknown + " (no classification)");
 	}
 }
