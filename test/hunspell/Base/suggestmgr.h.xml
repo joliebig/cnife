@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="suggestmgr.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="suggestmgr.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 
 <cpp:define>#<cpp:directive>define</cpp:directive> <name>MAXSWL</name> 100</cpp:define>
 <cpp:define>#<cpp:directive>define</cpp:directive> <name>MAXSWUTF8L</name> (MAXSWL * 4)</cpp:define>
@@ -340,60 +339,7 @@
 
 <comment type="line">// generate suggestions for a word with typical mistake</comment>
 <comment type="line">//    pass in address of array of char * pointers</comment>
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HUNSPELL_EXPERIMENTAL</name></cpp:ifdef>
-<function><type><name>int</name></type> <name><name>SuggestMgr</name>::<name>suggest_auto</name></name><parameter_list>(<param><decl><type><name>char</name>***</type> <name>slst</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>w</name></decl></param>, <param><decl><type><name>int</name></type> <name>nsug</name></decl></param>)</parameter_list>
-<block>{
-	<decl_stmt><decl><type><name>int</name></type> <name>nocompoundtwowords</name> =<init> <expr>0</expr></init></decl>;</decl_stmt>
-	<decl_stmt><decl><type><name>char</name> **</type> <name>wlst</name></decl>;</decl_stmt>
-
-	<decl_stmt><decl><type><name>char</name></type> <name><name>w2</name><index>[<expr><name>MAXWORDUTF8LEN</name></expr>]</index></name></decl>;</decl_stmt>
-	<decl_stmt><decl><type><name>const</name> <name>char</name> *</type> <name>word</name> =<init> <expr><name>w</name></expr></init></decl>;</decl_stmt>
-
-	<comment type="line">// word reversing wrapper for complex prefixes</comment>
-	<if>if <condition>(<expr><name>complexprefixes</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><call><name>strcpy</name><argument_list>(<argument><expr><name>w2</name></expr></argument>, <argument><expr><name>w</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>reverseword_utf</name><argument_list>(<argument><expr><name>w2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then> <else>else <expr_stmt><expr><call><name>reverseword</name><argument_list>(<argument><expr><name>w2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
-		<expr_stmt><expr><name>word</name> = <name>w2</name></expr>;</expr_stmt>
-	}</block></then></if>
-
-	<if>if <condition>(<expr>*<name>slst</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><name>wlst</name> = *<name>slst</name></expr>;</expr_stmt>
-	}</block></then> <else>else <block>{
-		<expr_stmt><expr><name>wlst</name> = (<name>char</name> **) <call><name>malloc</name><argument_list>(<argument><expr><name>maxSug</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>char</name> *</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>wlst</name> == <name>NULL</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
-	}</block></else></if>
-
-	<for>for (<init><decl><type><name>int</name></type> <name>cpdsuggest</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr>(<name>cpdsuggest</name>&lt;2) &amp;&amp; (<name>nocompoundtwowords</name>==0)</expr>;</condition> <incr><expr><name>cpdsuggest</name>++</expr></incr>) <block>{
-
-		<comment type="line">// perhaps we made a typical fault of spelling</comment>
-		<if>if <condition>(<expr>(<name>nsug</name> &lt; <name>maxSug</name>) &amp;&amp; (<name>nsug</name> &gt; -1)</expr>)</condition><then>
-			<expr_stmt><expr><name>nsug</name> = <call><name>replchars</name><argument_list>(<argument><expr><name>wlst</name></expr></argument>, <argument><expr><name>word</name></expr></argument>, <argument><expr><name>nsug</name></expr></argument>, <argument><expr><name>cpdsuggest</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
-
-		<comment type="line">// perhaps we made chose the wrong char from a related set</comment>
-		<if>if <condition>(<expr>(<name>nsug</name> &lt; <name>maxSug</name>) &amp;&amp; (<name>nsug</name> &gt; -1)</expr>)</condition><then>
-			<expr_stmt><expr><name>nsug</name> = <call><name>mapchars</name><argument_list>(<argument><expr><name>wlst</name></expr></argument>, <argument><expr><name>word</name></expr></argument>, <argument><expr><name>nsug</name></expr></argument>, <argument><expr><name>cpdsuggest</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
-
-		<if>if <condition>(<expr>(<name>cpdsuggest</name>==0) &amp;&amp; (<name>nsug</name>&gt;0)</expr>)</condition><then> <expr_stmt><expr><name>nocompoundtwowords</name>=1</expr>;</expr_stmt></then></if>
-
-		<comment type="line">// perhaps we forgot to hit space and two words ran together</comment>
-
-		<if>if <condition>(<expr>(<name>nsug</name> &lt; <name>maxSug</name>) &amp;&amp; (<name>nsug</name> &gt; -1) &amp;&amp; <call><name>check_forbidden</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><call><name>strlen</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
-			<expr_stmt><expr><name>nsug</name> = <call><name>twowords</name><argument_list>(<argument><expr><name>wlst</name></expr></argument>, <argument><expr><name>word</name></expr></argument>, <argument><expr><name>nsug</name></expr></argument>, <argument><expr><name>cpdsuggest</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		}</block></then></if>
-
-	}</block></for> <comment type="line">// repeating ``for'' statement compounding support</comment>
-
-	<if>if <condition>(<expr><name>nsug</name> &lt; 0</expr>)</condition><then> <block>{
-		<for>for (<init><decl><type><name>int</name></type> <name>i</name>=<init><expr>0</expr></init></decl>;</init><condition><expr><name>i</name>&lt;<name>maxSug</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>)
-			<if>if <condition>(<expr><name><name>wlst</name><index>[<expr><name>i</name></expr>]</index></name> != <name>NULL</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name><name>wlst</name><index>[<expr><name>i</name></expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if></for>
-		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>wlst</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<return>return <expr>-1</expr>;</return>
-	}</block></then></if>
-
-	<expr_stmt><expr>*<name>slst</name> = <name>wlst</name></expr>;</expr_stmt>
-	<return>return <expr><name>nsug</name></expr>;</return>
-}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
+<comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
 
 <comment type="line">// suggestions for an uppercase word (html -&gt; HTML)</comment>
 <function><type><name>int</name></type> <name><name>SuggestMgr</name>::<name>capchars_utf</name></name><parameter_list>(<param><decl><type><name>char</name> **</type> <name>wlst</name></decl></param>, <param><decl><type><name>const</name> <name>w_char</name> *</type> <name>word</name></decl></param>, <param><decl><type><name>int</name></type> <name>wl</name></decl></param>, <param><decl><type><name>int</name></type> <name>ns</name></decl></param>, <param><decl><type><name>int</name></type> <name>cpdsuggest</name></decl></param>)</parameter_list>
@@ -1534,47 +1480,7 @@
 	<return>return <expr>0</expr>;</return>
 }</block></function>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HUNSPELL_EXPERIMENTAL</name></cpp:ifdef>
-<comment type="line">// suggest possible stems</comment>
-<function><type><name>int</name></type> <name><name>SuggestMgr</name>::<name>suggest_pos_stems</name></name><parameter_list>(<param><decl><type><name>char</name>***</type> <name>slst</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>w</name></decl></param>, <param><decl><type><name>int</name></type> <name>nsug</name></decl></param>)</parameter_list>
-<block>{
-	<decl_stmt><decl><type><name>char</name> **</type> <name>wlst</name></decl>;</decl_stmt>    
-
-	<decl_stmt><decl><type>struct <name>hentry</name> *</type> <name>rv</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
-
-	<decl_stmt><decl><type><name>char</name></type> <name><name>w2</name><index>[<expr><name>MAXSWUTF8L</name></expr>]</index></name></decl>;</decl_stmt>
-	<decl_stmt><decl><type><name>const</name> <name>char</name> *</type> <name>word</name> =<init> <expr><name>w</name></expr></init></decl>;</decl_stmt>
-
-	<comment type="line">// word reversing wrapper for complex prefixes</comment>
-	<if>if <condition>(<expr><name>complexprefixes</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><call><name>strcpy</name><argument_list>(<argument><expr><name>w2</name></expr></argument>, <argument><expr><name>w</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>utf8</name></expr>)</condition><then> <expr_stmt><expr><call><name>reverseword_utf</name><argument_list>(<argument><expr><name>w2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then> <else>else <expr_stmt><expr><call><name>reverseword</name><argument_list>(<argument><expr><name>w2</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
-		<expr_stmt><expr><name>word</name> = <name>w2</name></expr>;</expr_stmt>
-	}</block></then></if>
-
-	<decl_stmt><decl><type><name>int</name></type> <name>wl</name> =<init> <expr><call><name>strlen</name><argument_list>(<argument><expr><name>word</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
-
-
-	<if>if <condition>(<expr>*<name>slst</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><name>wlst</name> = *<name>slst</name></expr>;</expr_stmt>
-	}</block></then> <else>else <block>{
-		<expr_stmt><expr><name>wlst</name> = (<name>char</name> **) <call><name>calloc</name><argument_list>(<argument><expr><name>maxSug</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>char</name> *</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<if>if <condition>(<expr><name>wlst</name> == <name>NULL</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
-	}</block></else></if>
-
-	<expr_stmt><expr><name>rv</name> = <name>pAMgr</name>-&gt;<call><name>suffix_check</name><argument_list>(<argument><expr><name>word</name></expr></argument>, <argument><expr><name>wl</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>wlst</name></expr></argument>, <argument><expr><name>maxSug</name></expr></argument>, <argument><expr>&amp;<name>nsug</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-
-	<comment type="line">// delete dash from end of word</comment>
-	<if>if <condition>(<expr><name>nsug</name> &gt; 0</expr>)</condition><then> <block>{
-		<for>for (<init><decl><type><name>int</name></type> <name>j</name>=<init><expr>0</expr></init></decl>;</init> <condition><expr><name>j</name> &lt; <name>nsug</name></expr>;</condition> <incr><expr><name>j</name>++</expr></incr>) <block>{
-			<if>if <condition>(<expr><name><name>wlst</name><index>[<expr><name>j</name></expr>]</index><index>[<expr><call><name>strlen</name><argument_list>(<argument><expr><name><name>wlst</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call> - 1</expr>]</index></name> == '-'</expr>)</condition><then> <expr_stmt><expr><name><name>wlst</name><index>[<expr><name>j</name></expr>]</index><index>[<expr><call><name>strlen</name><argument_list>(<argument><expr><name><name>wlst</name><index>[<expr><name>j</name></expr>]</index></name></expr></argument>)</argument_list></call> - 1</expr>]</index></name> = '\0'</expr>;</expr_stmt></then></if>
-		}</block></for>
-	}</block></then></if>
-
-	<expr_stmt><expr>*<name>slst</name> = <name>wlst</name></expr>;</expr_stmt>
-	<return>return <expr><name>nsug</name></expr>;</return>
-}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
+<comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
 
 
 <function><type><name>char</name> *</type> <name><name>SuggestMgr</name>::<name>suggest_morph</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>w</name></decl></param>)</parameter_list>
@@ -1632,23 +1538,7 @@
 	<return>return <expr>(*<name>result</name>) ? <call><name>mystrdup</name><argument_list>(<argument><expr><call><name>line_uniq</name><argument_list>(<argument><expr><name>result</name></expr></argument>, <argument><expr><name>MSEP_REC</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call> : <name>NULL</name></expr>;</return>
 }</block></function>
 
-<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HUNSPELL_EXPERIMENTAL</name></cpp:ifdef>
-<function><type><name>char</name> *</type> <name><name>SuggestMgr</name>::<name>suggest_morph_for_spelling_error</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>word</name></decl></param>)</parameter_list>
-<block>{
-	<decl_stmt><decl><type><name>char</name> *</type> <name>p</name> =<init> <expr><name>NULL</name></expr></init></decl>;</decl_stmt>
-	<decl_stmt><decl><type><name>char</name> **</type> <name>wlst</name> =<init> <expr>(<name>char</name> **) <call><name>calloc</name><argument_list>(<argument><expr><name>maxSug</name></expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>char</name> *</expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
-	<if>if <condition>(<expr>!**<name>wlst</name></expr>)</condition><then> <return>return <expr><name>NULL</name></expr>;</return></then></if>
-	<comment type="line">// we will use only the first suggestion</comment>
-	<for>for (<init><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; <name>maxSug</name> - 1</expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <expr_stmt><expr><name><name>wlst</name><index>[<expr><name>i</name></expr>]</index></name> = ""</expr>;</expr_stmt></for>
-	<decl_stmt><decl><type><name>int</name></type> <name>ns</name> =<init> <expr><call><name>suggest</name><argument_list>(<argument><expr>&amp;<name>wlst</name></expr></argument>, <argument><expr><name>word</name></expr></argument>, <argument><expr><name>maxSug</name> - 1</expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
-	<if>if <condition>(<expr><name>ns</name> == <name>maxSug</name></expr>)</condition><then> <block>{
-		<expr_stmt><expr><name>p</name> = <call><name>suggest_morph</name><argument_list>(<argument><expr><name><name>wlst</name><index>[<expr><name>maxSug</name> - 1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name><name>wlst</name><index>[<expr><name>maxSug</name> - 1</expr>]</index></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></then></if>
-	<if>if <condition>(<expr><name>wlst</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>wlst</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
-	<return>return <expr><name>p</name></expr>;</return>
-}</block></function>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif> <comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
+<comment type="line">// END OF HUNSPELL_EXPERIMENTAL CODE</comment>
 
 <comment type="block">/* affixation */</comment>
 <function><type><name>char</name> *</type> <name><name>SuggestMgr</name>::<name>suggest_hentry_gen</name></name><parameter_list>(<param><decl><type><name>hentry</name> *</type> <name>rv</name></decl></param>, <param><decl><type><name>char</name> *</type> <name>pattern</name></decl></param>)</parameter_list>
@@ -2059,4 +1949,4 @@
 	<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>result</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	<return>return <expr><name>len</name></expr>;</return>
 }</block></function>
-</unit>
+   </unit>

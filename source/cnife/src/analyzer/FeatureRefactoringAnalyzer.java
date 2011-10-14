@@ -268,6 +268,7 @@ public class FeatureRefactoringAnalyzer {
 			}
 
 			ugly += afeat.getNumUgly();
+			c_ugly += afeat.getNumUgly();
 			clones += afeat.getNumClones();
 
 			while (it.hasNext()) {

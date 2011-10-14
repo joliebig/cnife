@@ -1,25 +1,32 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsRw.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsRw.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/stat.h&gt;</cpp:file></cpp:include>
 
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsRw.h"</cpp:file></cpp:include>
 
-
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FILESYSTEM_NOTZERO</name></cpp:ifdef>
+<decl_stmt><decl><type><name>static</name> <name>int</name> <name>__os_zerofill</name></type> <name>__P</name>((<name>DB_ENV</name> *, <name>DB_FH</name> *)</decl></decl_stmt>)<empty_stmt>;</empty_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 <decl_stmt><decl><type><name>static</name> <name>int</name> <name>__os_physwrite</name></type> <name>__P</name>((<name>DB_ENV</name> *, <name>DB_FH</name> *, <name>void</name> *, <name>size_t</name>, <name>size_t</name> *)</decl></decl_stmt>)<empty_stmt>;</empty_stmt>
 
 
 <class>class <name>COsRw</name>
 <block>{<private type="default">
 </private><public>public:
-	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRwHookFunction17</name><parameterlist>(<param><decl><type><name>ssize_t</name>&amp;</type> <name>nio</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>op</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>u_int8_t</name> *&amp;</type> <name>buf</name></decl></param>, <param><decl><type><name>u_int32_t</name>&amp;</type> <name>pagesize</name></decl></param>, <param><decl><type><name>db_pgno_t</name>&amp;</type> <name>pgno</name></decl></param>, <param><decl><type><name>size_t</name> *&amp;</type> <name>niop</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_io</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>pagesize</name></decl></param>, <param><decl><type><name>u_int8_t</name> *</type><name>buf</name></decl></param>, <param><decl><type><name>size_t</name> *</type><name>niop</name></decl></param>)</parameter_list>
+	<function><type><name>static</name> <name>int</name></type> <name>os_io</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>int</name></type> <name>op</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>, <param><decl><type><name>db_pgno_t</name></type> <name>pgno</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>pagesize</name></decl></param>, <param><decl><type><name>u_int8_t</name> *</type><name>buf</name></decl></param>, <param><decl><type><name>size_t</name> *</type><name>niop</name></decl></param>)</parameter_list>
 	<block>{
 <cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PREAD</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PWRITE</name></expr></argument>)</argument_list></call></expr></cpp:if>
 		<decl_stmt><decl><type><name>ssize_t</name></type> <name>nio</name></decl>;</decl_stmt>
@@ -29,7 +36,35 @@
 		<comment type="block">/* Check for illegal usage. */</comment>
 		<expr_stmt><expr><call><name>DB_ASSERT</name><argument_list>(<argument><expr><call><name>F_ISSET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call> &amp;&amp; <name>fhp</name>-&gt;<name>fd</name> != -1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRwHookFunction17</name><argument_list>(<argument><expr><name>nio</name></expr></argument>, <argument><expr><name>op</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>buf</name></expr></argument>, <argument><expr><name>pagesize</name></expr></argument>, <argument><expr><name>pgno</name></expr></argument>, <argument><expr><name>niop</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PREAD</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>HAVE_PWRITE</name></expr></argument>)</argument_list></call></expr></cpp:if>
+		<switch>switch <condition>(<expr><name>op</name></expr>)</condition> <block>{
+		<case>case <expr><name>DB_IO_READ</name></expr>:
+			<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_read</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+				<goto>goto <name>slow</name>;</goto></then></if>
+			<expr_stmt><expr><name>nio</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pread</name></expr></argument>)</argument_list></call> != <name>NULL</name> ? <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pread</name></expr></argument>)</argument_list></call>
+				(<name>fhp</name>-&gt;<name>fd</name>, <name>buf</name>, <name>pagesize</name>, (<name>off_t</name>)<name>pgno</name> * <name>pagesize</name>) :
+				<call><name>pread</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>buf</name></expr></argument>, <argument><expr><name>pagesize</name></expr></argument>, <argument><expr>(<name>off_t</name>)<name>pgno</name> * <name>pagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<break>break;</break>
+		</case><case>case <expr><name>DB_IO_WRITE</name></expr>:
+			<if>if <condition>(<expr><call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_write</name></expr></argument>)</argument_list></call> != <name>NULL</name></expr>)</condition><then>
+				<goto>goto <name>slow</name>;</goto></then></if>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FILESYSTEM_NOTZERO</name></cpp:ifdef>
+			<if>if <condition>(<expr><call><name>__os_fs_notzero</name><argument_list>()</argument_list></call></expr>)</condition><then>
+				<goto>goto <name>slow</name>;</goto></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+			<expr_stmt><expr><name>nio</name> = <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pwrite</name></expr></argument>)</argument_list></call> != <name>NULL</name> ? <call><name>DB_GLOBAL</name><argument_list>(<argument><expr><name>j_pwrite</name></expr></argument>)</argument_list></call>
+				(<name>fhp</name>-&gt;<name>fd</name>, <name>buf</name>, <name>pagesize</name>, (<name>off_t</name>)<name>pgno</name> * <name>pagesize</name>) :
+				<call><name>pwrite</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>buf</name></expr></argument>, <argument><expr><name>pagesize</name></expr></argument>, <argument><expr>(<name>off_t</name>)<name>pgno</name> * <name>pagesize</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<break>break;</break>
+		</case><default>default:
+			<return>return <expr>(<name>EINVAL</name>)</expr>;</return>
+		</default>}</block></switch>
+		<if>if <condition>(<expr><name>nio</name> == (<name>ssize_t</name>)<name>pagesize</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr>*<name>niop</name> = <name>pagesize</name></expr>;</expr_stmt>
+			<return>return <expr>(0)</expr>;</return>
+		}</block></then></if>
+	<label><name>slow</name>:</label>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 		<expr_stmt><expr><call><name>MUTEX_LOCK</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name>-&gt;<name>mtx_fh</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
 		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsSeek</name>::<name>os_seek</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>,
@@ -166,7 +201,76 @@
 	}</block></function>
 	
 
-
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FILESYSTEM_NOTZERO</name></cpp:ifdef>
+	<function><type><name>static</name> <name>int</name></type> <name>os_zerofill</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>off_t</name></type> <name>stat_offset</name>, <name>write_offset</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>size_t</name></type> <name>blen</name>, <name>nw</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>bytes</name>, <name>mbytes</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>group_sync</name>, <name>need_free</name>, <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>u_int8_t</name></type> <name><name>buf</name><index>[<expr>8 * 1024</expr>]</index></name>, *<name>bp</name></decl>;</decl_stmt>
+	
+		<comment type="block">/* Calculate the byte offset of the next write. */</comment>
+		<expr_stmt><expr><name>write_offset</name> = (<name>off_t</name>)<name>fhp</name>-&gt;<name>pgno</name> * <name>fhp</name>-&gt;<name>pgsize</name> + <name>fhp</name>-&gt;<name>offset</name></expr>;</expr_stmt>
+	
+		<comment type="block">/* Stat the file. */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsStat</name>::<name>os_ioinfo</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr>&amp;<name>mbytes</name></expr></argument>, <argument><expr>&amp;<name>bytes</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr><name>stat_offset</name> = (<name>off_t</name>)<name>mbytes</name> * <name>MEGABYTE</name> + <name>bytes</name></expr>;</expr_stmt>
+	
+		<comment type="block">/* Check if the file is large enough. */</comment>
+		<if>if <condition>(<expr><name>stat_offset</name> &gt;= <name>write_offset</name></expr>)</condition><then>
+			<return>return <expr>(0)</expr>;</return></then></if>
+	
+		<comment type="block">/* Get a large buffer if we're writing lots of data. */</comment>
+<cpp:undef>#<cpp:directive>undef</cpp:directive>	<name>ZF_LARGE_WRITE</name></cpp:undef>
+<cpp:define>#<cpp:directive>define</cpp:directive>	<name>ZF_LARGE_WRITE</name>	(64 * 1024)</cpp:define>
+		<if>if <condition>(<expr><name>write_offset</name> - <name>stat_offset</name> &gt; <name>ZF_LARGE_WRITE</name></expr>)</condition><then> <block>{
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_calloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><name>ZF_LARGE_WRITE</name></expr></argument>, <argument><expr>&amp;<name>bp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				    <return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+			<expr_stmt><expr><name>blen</name> = <name>ZF_LARGE_WRITE</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>need_free</name> = 1</expr>;</expr_stmt>
+		}</block></then> <else>else <block>{
+			<expr_stmt><expr><name>bp</name> = <name>buf</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>blen</name> = <call><name>sizeof</name><argument_list>(<argument><expr><name>buf</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><name>need_free</name> = 0</expr>;</expr_stmt>
+			<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>buf</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>buf</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		}</block></else></if>
+	
+		<comment type="block">/* Seek to the current end of the file. */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsSeek</name>::<name>os_seek</name></name><argument_list>(
+		    <argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>MEGABYTE</name></expr></argument>, <argument><expr><name>mbytes</name></expr></argument>, <argument><expr><name>bytes</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>DB_OS_SEEK_SET</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+	
+		<comment type="block">/*
+		 * Hash is the only access method that allocates groups of pages.  Hash
+		 * uses the existence of the last page in a group to signify the entire
+		 * group is OK; so, write all the pages but the last one in the group,
+		 * flush them to disk, then write the last one to disk and flush it.
+		 */</comment>
+		<for>for (<init><expr><name>group_sync</name> = 0</expr>;</init> <condition><expr><name>stat_offset</name> &lt; <name>write_offset</name></expr>;</condition> <incr><expr><name>group_sync</name> = 1</expr></incr>) <block>{
+			<if>if <condition>(<expr><name>write_offset</name> - <name>stat_offset</name> &lt;= <name>blen</name></expr>)</condition><then> <block>{
+				<expr_stmt><expr><name>blen</name> = <call>(<name>size_t</name>)<argument_list>(<argument><expr><name>write_offset</name> - <name>stat_offset</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<if>if <condition>(<expr><name>group_sync</name> &amp;&amp; (<name>ret</name> = <call><name><name>COsFsync</name>::<name>os_fsync</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+					<goto>goto <name>err</name>;</goto></then></if>
+			}</block></then></if>
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name>os_physwrite</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>bp</name></expr></argument>, <argument><expr><name>blen</name></expr></argument>, <argument><expr>&amp;<name>nw</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+				<goto>goto <name>err</name>;</goto></then></if>
+			<expr_stmt><expr><name>stat_offset</name> += <name>blen</name></expr>;</expr_stmt>
+		}</block></for>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsFsync</name>::<name>os_fsync</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+	
+		<comment type="block">/* Seek back to where we started. */</comment>
+		<expr_stmt><expr><name>mbytes</name> = <call>(<name>u_int32_t</name>)<argument_list>(<argument><expr><name>write_offset</name> / <name>MEGABYTE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>bytes</name> = <call>(<name>u_int32_t</name>)<argument_list>(<argument><expr><name>write_offset</name> % <name>MEGABYTE</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><name>ret</name> = <call><name><name>COsSeek</name>::<name>os_seek</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>MEGABYTE</name></expr></argument>, <argument><expr><name>mbytes</name></expr></argument>, <argument><expr><name>bytes</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>DB_OS_SEEK_SET</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+	<label><name>err</name>:</label>	<if>if <condition>(<expr><name>need_free</name></expr>)</condition><then>
+			<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>bp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 </public>}</block>;</class>
 
 </unit>

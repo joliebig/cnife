@@ -1,4 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="HashFunc.h" language="C++"><comment type="block">/*-
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="HashFunc.h"><comment type="block">/*-
 * See the file LICENSE for redistribution information.
 *
 * Copyright (c) 1996-2005
@@ -44,7 +45,9 @@
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_page.h"</cpp:file></cpp:include>
@@ -72,7 +75,7 @@
 		<decl_stmt><decl><type><name>u_int8_t</name></type> <name>c</name></decl>;</decl_stmt>
 
 		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
-			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+			<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 
 		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
 		<expr_stmt><expr><name>e</name> = <name>k</name> + <name>len</name></expr>;</expr_stmt>
@@ -80,7 +83,7 @@
 			<expr_stmt><expr><name>c</name> = *<name>k</name>++</expr>;</expr_stmt>
 			<if>if <condition>(<expr>!<name>c</name> &amp;&amp; <name>k</name> &gt; <name>e</name></expr>)</condition><then>
 				<break>break;</break></then></if>
-			<constructor_decl><name>DCHARHASH</name><parameter_list>(<param><decl><type><name>h</name></type></decl></param>, <param><decl><type><name>c</name></type></decl></param>)</parameter_list>;</constructor_decl>
+			<expr_stmt><expr><call><name>DCHARHASH</name><argument_list>(<argument><expr><name>h</name></expr></argument>, <argument><expr><name>c</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		}</block></for>
 		<return>return <expr>(<name>h</name>)</expr>;</return>
 	}</block></function>
@@ -103,7 +106,7 @@
 		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>n</name>, <name>loop</name></decl>;</decl_stmt>
 
 		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
-			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+			<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 
 		<if>if <condition>(<expr><name>len</name> == 0</expr>)</condition><then>
 			<return>return <expr>(0)</expr>;</return></then></if>
@@ -151,7 +154,7 @@
 		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>h</name>, <name>loop</name></decl>;</decl_stmt>
 
 		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
-			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+			<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 
 		<if>if <condition>(<expr><name>len</name> == 0</expr>)</condition><then>
 			<return>return <expr>(0)</expr>;</return></then></if>
@@ -209,7 +212,7 @@
 		<decl_stmt><decl><type><name>u_int32_t</name></type> <name>h</name></decl>;</decl_stmt>
 
 		<if>if <condition>(<expr><name>dbp</name> != <name>NULL</name></expr>)</condition><then>
-			<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl></then></if>
+			<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 
 		<expr_stmt><expr><name>k</name> = (<name>u_int8_t</name>*)(<name>key</name>)</expr>;</expr_stmt>
 		<expr_stmt><expr><name>e</name> = <name>k</name> + <name>len</name></expr>;</expr_stmt>
@@ -228,7 +231,7 @@
 
 	<function><type><name>static</name> <name>u_int32_t</name></type> <name>ham_test</name><parameter_list>(<param><decl><type><name>DB</name> *</type><name>dbp</name></decl></param>, <param><decl><type><name>const</name> <name>void</name> *</type><name>key</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>len</name></decl></param>)</parameter_list>
 	<block>{
-		<constructor_decl><name>COMPQUIET</name><parameter_list>(<param><decl><type><name>dbp</name></type></decl></param>, <param><decl><type><name>NULL</name></type></decl></param>)</parameter_list>;</constructor_decl>
+		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>dbp</name></expr></argument>, <argument><expr><name>NULL</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<expr_stmt><expr><call><name>COMPQUIET</name><argument_list>(<argument><expr><name>len</name></expr></argument>, <argument><expr>0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<return>return <expr>((<name>u_int32_t</name>)*(<name>char</name> *)<name>key</name>)</expr>;</return>
 	}</block></function>

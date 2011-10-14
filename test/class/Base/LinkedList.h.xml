@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Node.h"</cpp:file></cpp:include>
+
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>DLINKED</name></expr></cpp:if>
+<class>class <name>LinkedList</name> <block>{<private type="default">
+	</private><public>public:
+		<constructor_decl><name>LinkedList</name><parameter_list>()</parameter_list>;</constructor_decl>
+		<destructor_decl><name>~<name>LinkedList</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+
+		<function_decl><type><name>void</name></type> <name>insert</name><parameter_list>( <param><decl><type><name>int</name></type></decl></param> )</parameter_list>;</function_decl>
+		<function_decl><type><name>void</name></type> <name>deleteAllNodes</name><parameter_list>()</parameter_list>;</function_decl>
+
+		<function_decl><type><name>bool</name></type> <name>isEmpty</name><parameter_list>()</parameter_list>;</function_decl>
+		<function_decl><type><name>void</name></type> <name>displayAllNodes</name><parameter_list>()</parameter_list>;</function_decl>
+
+</public><private>private:
+		<function_decl><type><name>void</name></type> <name>displayNode</name><parameter_list>( <param><decl><type><name>Node</name>*</type></decl></param> )</parameter_list>;</function_decl>
+
+		<decl_stmt><decl><type><name>Node</name>*</type> <name>first</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>Node</name>*</type> <name>last</name></decl>;</decl_stmt>
+
+</private>}</block>;</class>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

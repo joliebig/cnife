@@ -1,7 +1,18 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsOpen.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsOpen.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/stat.h&gt;</cpp:file></cpp:include>
 
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_SYS_FCNTL_H</name></cpp:ifdef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/fcntl.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;fcntl.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsOpen.h"</cpp:file></cpp:include>
@@ -11,7 +22,9 @@
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsUnlink.h"</cpp:file></cpp:include>
 
 <decl_stmt><decl><type><name>static</name> <name>int</name> <name>__os_intermediate_dir</name></type> <name>__P</name>((<name>DB_ENV</name> *, <name>const</name> <name>char</name> *)</decl></decl_stmt>)<empty_stmt>;</empty_stmt>
-
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_QNX</name></cpp:ifdef>
+<decl_stmt><decl><type><name>static</name> <name>int</name> <name>__os_region_open</name></type> <name>__P</name>((<name>DB_ENV</name> *, <name>const</name> <name>char</name> *, <name>int</name>, <name>int</name>, <name>DB_FH</name> **)</decl></decl_stmt>)<empty_stmt>;</empty_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 
 <class>class <name>COsOpen</name>
@@ -36,34 +49,7 @@
 	<block>{
 		<return>return <expr>(<call><name>os_open_extend</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>, <argument><expr><name>fhpp</name></expr></argument>)</argument_list></call>)</expr>;</return>
 	}</block></function>
-	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction33</name><parameterlist>(<param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>mode</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction34</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>oflags</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction2</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>oflags</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction4</name><parameterlist>(<param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction6</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>oflags</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction7</name><parameterlist>(<param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction8</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>oflags</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>name</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **&amp;</type> <name>fhpp</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction9</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>name</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction9</name><parameterlist>(<param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>DB_FH</name> *&amp;</type> <name>fhp</name></decl></param>, <param><decl><type><name>DB_ENV</name> *&amp;</type> <name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>name</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_open_extend</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>page_size</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
+	<function><type><name>static</name> <name>int</name></type> <name>os_open_extend</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>page_size</name></decl></param>, <param><decl><type><name>u_int32_t</name></type> <name>flags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>int</name></type> <name>oflags</name>, <name>ret</name></decl>;</decl_stmt>
@@ -80,7 +66,15 @@
 		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>CDbErr</name>::<name>db_fchk</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"__os_open"</expr></argument>, <argument><expr><name>flags</name></expr></argument>, <argument><expr><name>OKFLAGS</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
 			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction2</name><argument_list>(<argument><expr><name>oflags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>O_BINARY</name></expr></argument>)</argument_list></call></expr></cpp:if>
+		<comment type="block">/*
+		 * If there's a binary-mode open flag, set it, we never want any
+		 * kind of translation.  Some systems do translations by default,
+		 * e.g., with Cygwin, the default mode for an open() is set by the
+		 * mode of the mount that underlies the file.
+		 */</comment>
+		<expr_stmt><expr><name>oflags</name> |= <name>O_BINARY</name></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
 		<comment type="block">/*
 		 * DB requires the POSIX 1003.1 semantic that two files opened at the
@@ -93,8 +87,14 @@
 		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_EXCL</name></expr></argument>)</argument_list></call></expr>)</condition><then>
 			<expr_stmt><expr><name>oflags</name> |= <name>O_EXCL</name></expr>;</expr_stmt></then></if>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction34</name><argument_list>(<argument><expr><name>oflags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction6</name><argument_list>(<argument><expr><name>oflags</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_O_DIRECT</name></cpp:ifdef>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_DIRECT</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr><name>oflags</name> |= <name>O_DIRECT</name></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>O_DSYNC</name></cpp:ifdef>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_DSYNC</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr><name>oflags</name> |= <name>O_DSYNC</name></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
 		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_RDONLY</name></expr></argument>)</argument_list></call></expr>)</condition><then>
 			<expr_stmt><expr><name>oflags</name> |= <name>O_RDONLY</name></expr>;</expr_stmt></then>
@@ -113,16 +113,45 @@
 		    (<name>ret</name> = <call><name>os_intermediate_dir</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
 			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction8</name><argument_list>(<argument><expr><name>oflags</name></expr></argument>, <argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>, <argument><expr><name>fhpp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_QNX</name></cpp:ifdef>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_REGION</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<return>return <expr>(<call><name>os_qnx_region_open</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr><name>oflags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>, <argument><expr><name>fhpp</name></expr></argument>)</argument_list></call>)</expr>;</return></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 		<comment type="block">/* Open the file. */</comment>
 		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsHandle</name>::<name>os_openhandle</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr><name>oflags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>, <argument><expr>&amp;<name>fhp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
 			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction33</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FCHMOD</name></cpp:ifdef>
+		<comment type="block">/*
+		 * If the code using Berkeley DB is a library, that code may not be able
+		 * to control the application's umask value.  Allow applications to set
+		 * absolute file modes.  We can't fix the race between file creation and
+		 * the fchmod call -- we can't modify the process' umask here since the
+		 * process may be multi-threaded and the umask value is per-process, not
+		 * per-thread.
+		 */</comment>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_CREATE</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_ABSMODE</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name>fchmod</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction7</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>O_DSYNC</name></cpp:ifdef>
+		<comment type="block">/*
+		 * If we can configure the file descriptor to flush on write, the
+		 * file descriptor does not need to be explicitly sync'd.
+		 */</comment>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_DSYNC</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_NOSYNC</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction4</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_DIRECTIO</name></expr></argument>)</argument_list></call> &amp;&amp; <call><name>defined</name><argument_list>(<argument><expr><name>DIRECTIO_ON</name></expr></argument>)</argument_list></call></expr></cpp:if>
+		<comment type="block">/*
+		 * The Solaris C library includes directio, but you have to set special
+		 * compile flags to #define DIRECTIO_ON.  Require both in order to call
+		 * directio.
+		 */</comment>
+		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_DIRECT</name></expr></argument>)</argument_list></call></expr>)</condition><then>
+			<expr_stmt><expr>(<name>void</name>)<call><name>directio</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>DIRECTIO_ON</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	
 		<comment type="block">/*
 		 * Delete any temporary file.
@@ -135,14 +164,133 @@
 		 * the portability nightmare), so we just live with it.
 		 */</comment>
 		<if>if <condition>(<expr><call><name>LF_ISSET</name><argument_list>(<argument><expr><name>DB_OSO_TEMP</name></expr></argument>)</argument_list></call></expr>)</condition><then> <block>{
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction9</name><argument_list>(<argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsOpenHookFunction9</name><argument_list>(<argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAVE_UNLINK_WITH_OPEN_FAILURE</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>CONFIG_TEST</name></expr></argument>)</argument_list></call></expr></cpp:if>
+			<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr>&amp;<name>fhp</name>-&gt;<name>name</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then> <block>{
+				<expr_stmt><expr>(<name>void</name>)<call><name><name>COsHandle</name>::<name>os_closehandle</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<expr_stmt><expr>(<name>void</name>)<call><name><name>COsUnlink</name>::<name>os_unlink</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+				<return>return <expr>(<name>ret</name>)</expr>;</return>
+			}</block></then></if>
+			<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_UNLINK</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>COsUnlink</name>::<name>os_unlink</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 		}</block></then></if>
 	
 		<expr_stmt><expr>*<name>fhpp</name> = <name>fhp</name></expr>;</expr_stmt>
 		<return>return <expr>(0)</expr>;</return>
 	}</block></function>
 
-<function><type><name>static</name> <name>int</name></type> <name>os_intermediate_dir</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_QNX</name></cpp:ifdef>
+	<function><type><name>static</name> <name>int</name></type> <name>os_qnx_region_open</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>int</name></type> <name>oflags</name></decl></param>, <param><decl><type><name>int</name></type> <name>mode</name></decl></param>, <param><decl><type><name>DB_FH</name> **</type><name>fhpp</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>DB_FH</name> *</type><name>fhp</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name> *</type><name>newname</name></decl>;</decl_stmt>
+	
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_calloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>1</expr></argument>, <argument><expr><call><name>sizeof</name><argument_list>(<argument><expr><name>DB_FH</name></expr></argument>)</argument_list></call></expr></argument>, <argument><expr><name>fhpp</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr><name>fhp</name> = *<name>fhpp</name></expr>;</expr_stmt>
+	
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name>os_shmname</name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr>&amp;<name>newname</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<goto>goto <name>err</name>;</goto></then></if>
+	
+		<comment type="block">/*
+		 * Once we have created the object, we don't need the name
+		 * anymore.  Other callers of this will convert themselves.
+		 */</comment>
+		<expr_stmt><expr><name>fhp</name>-&gt;<name>fd</name> = <call><name>shm_open</name><argument_list>(<argument><expr><name>newname</name></expr></argument>, <argument><expr><name>oflags</name></expr></argument>, <argument><expr><name>mode</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>newname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+		<if>if <condition>(<expr><name>fhp</name>-&gt;<name>fd</name> == -1</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+			<goto>goto <name>err</name>;</goto>
+		}</block></then></if>
+	
+		<expr_stmt><expr><call><name>F_SET</name><argument_list>(<argument><expr><name>fhp</name></expr></argument>, <argument><expr><name>DB_FH_OPENED</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+	
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_FCNTL_F_SETFD</name></cpp:ifdef>
+		<comment type="block">/* Deny file descriptor access to any child process. */</comment>
+		<if>if <condition>(<expr><call><name>fcntl</name><argument_list>(<argument><expr><name>fhp</name>-&gt;<name>fd</name></expr></argument>, <argument><expr><name>F_SETFD</name></expr></argument>, <argument><expr>1</expr></argument>)</argument_list></call> == -1</expr>)</condition><then> <block>{
+			<expr_stmt><expr><name>ret</name> = <call><name><name>COsErrno</name>::<name>os_get_errno</name></name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"fcntl(F_SETFD): %s"</expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<goto>goto <name>err</name>;</goto>
+		}</block></then></if>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	
+	<label><name>err</name>:</label>	<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then> <block>{
+			<expr_stmt><expr>(<name>void</name>)<call><name><name>COsHandle</name>::<name>os_closehandle</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>fhp</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr>*<name>fhpp</name> = <name>NULL</name></expr>;</expr_stmt>
+		}</block></then></if>
+	
+		<return>return <expr>(<name>ret</name>)</expr>;</return>
+	}</block></function>
+	
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_shmname</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>, <param><decl><type><name>char</name> **</type><name>newnamep</name></decl></param>)</parameter_list>
+	<block>{
+		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>size_t</name></type> <name>size</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>char</name> *</type><name>p</name>, *<name>q</name>, *<name>tmpname</name></decl>;</decl_stmt>
+	
+		<expr_stmt><expr>*<name>newnamep</name> = <name>NULL</name></expr>;</expr_stmt>
+	
+		<comment type="block">/*
+		 * POSIX states that the name for a shared memory object
+		 * may begin with a slash '/' and support for subsequent
+		 * slashes is implementation-dependent.  The one implementation
+		 * we know of right now, QNX, forbids subsequent slashes.
+		 * We don't want to be parsing pathnames for '.' and '..' in
+		 * the middle.  In order to allow easy conversion, just take
+		 * the last component as the shared memory name.  This limits
+		 * the namespace a bit, but makes our job a lot easier.
+		 *
+		 * We should not be modifying user memory, so we use our own.
+		 * Caller is responsible for freeing the memory we give them.
+		 */</comment>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>name</name></expr></argument>, <argument><expr>&amp;<name>tmpname</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<comment type="block">/*
+		 * Skip over filename component.
+		 * We set that separator to '\0' so that we can do another
+		 * __db_rpath.  However, we immediately set it then to ':'
+		 * so that we end up with the tailing directory:filename.
+		 * We require a home directory component.  Return an error
+		 * if there isn't one.
+		 */</comment>
+		<expr_stmt><expr><name>p</name> = <call><name><name>COsRpath</name>::<name>db_rpath</name></name><argument_list>(<argument><expr><name>tmpname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>p</name> == <name>NULL</name></expr>)</condition><then>
+			<return>return <expr>(<name>EINVAL</name>)</expr>;</return></then></if>
+		<if>if <condition>(<expr><name>p</name> != <name>tmpname</name></expr>)</condition><then> <block>{
+			<expr_stmt><expr>*<name>p</name> = '\0'</expr>;</expr_stmt>
+			<expr_stmt><expr><name>q</name> = <name>p</name></expr>;</expr_stmt>
+			<expr_stmt><expr><name>p</name> = <call><name><name>COsRpath</name>::<name>db_rpath</name></name><argument_list>(<argument><expr><name>tmpname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr>*<name>q</name> = ':'</expr>;</expr_stmt>
+		}</block></then></if>
+		<if>if <condition>(<expr><name>p</name> != <name>NULL</name></expr>)</condition><then> <block>{
+			<comment type="block">/*
+			 * If we have a path component, copy and return it.
+			 */</comment>
+			<expr_stmt><expr><name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_strdup</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>p</name></expr></argument>, <argument><expr><name>newnamep</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>tmpname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<return>return <expr>(<name>ret</name>)</expr>;</return>
+		}</block></then></if>
+	
+		<comment type="block">/*
+		 * We were given just a directory name with no path components.
+		 * Add a leading slash, and copy the remainder.
+		 */</comment>
+		<expr_stmt><expr><name>size</name> = <call><name>strlen</name><argument_list>(<argument><expr><name>tmpname</name></expr></argument>)</argument_list></call> + 2</expr>;</expr_stmt>
+		<if>if <condition>(<expr>(<name>ret</name> = <call><name><name>COsAlloc</name>::<name>os_malloc</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>size</name></expr></argument>, <argument><expr>&amp;<name>p</name></expr></argument>)</argument_list></call>) != 0</expr>)</condition><then>
+			<return>return <expr>(<name>ret</name>)</expr>;</return></then></if>
+		<expr_stmt><expr><name><name>p</name><index>[<expr>0</expr>]</index></name> = '/'</expr>;</expr_stmt>
+		<expr_stmt><expr><call><name>memcpy</name><argument_list>(<argument><expr>&amp;<name><name>p</name><index>[<expr>1</expr>]</index></name></expr></argument>, <argument><expr><name>tmpname</name></expr></argument>, <argument><expr><name>size</name>-1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>tmpname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<expr_stmt><expr>*<name>newnamep</name> = <name>p</name></expr>;</expr_stmt>
+		<return>return <expr>(0)</expr>;</return>
+	}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+
+	<function><type><name>static</name> <name>int</name></type> <name>os_intermediate_dir</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>size_t</name></type> <name>len</name></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>int</name></type> <name>ret</name></decl>;</decl_stmt>
@@ -194,8 +342,6 @@
 			<expr_stmt><expr><call><name><name>COsAlloc</name>::<name>os_free</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 		<return>return <expr>(<name>ret</name>)</expr>;</return>
 	}</block></function>
-
-
-	</public>}</block>;</class>
+</public>}</block>;</class>
 
 </unit>

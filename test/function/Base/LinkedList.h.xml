@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="LinkedList.h"><cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;iostream&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Config.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"Node.h"</cpp:file></cpp:include>
+
+<using>using namespace <name>std</name>;</using>
+
+<class>class <name>LinkedList</name> <block>{<private type="default">
+	</private><public>public:
+		<constructor_decl><name>LinkedList</name><parameter_list>()</parameter_list>;</constructor_decl>
+		<destructor_decl><name>~<name>LinkedList</name></name><parameter_list>()</parameter_list>;</destructor_decl>
+
+		<function_decl><type><name>void</name></type> <name>insert</name><parameter_list>( <param><decl><type><name>int</name></type></decl></param> )</parameter_list>;</function_decl>
+		<function_decl><type><name>void</name></type> <name>deleteAllNodes</name><parameter_list>()</parameter_list>;</function_decl>
+
+		<function_decl><type><name>bool</name></type> <name>isEmpty</name><parameter_list>()</parameter_list>;</function_decl>
+		<function_decl><type><name>void</name></type> <name>displayAllNodes</name><parameter_list>()</parameter_list>;</function_decl>
+
+</public><private>private:
+		<function_decl><type><name>void</name></type> <name>displayNode</name><parameter_list>( <param><decl><type><name>Node</name>*</type></decl></param> )</parameter_list>;</function_decl>
+
+		<decl_stmt><decl><type><name>Node</name>*</type> <name>first</name></decl>;</decl_stmt>
+		<decl_stmt><decl><type><name>Node</name>*</type> <name>last</name></decl>;</decl_stmt>
+
+</private>}</block>;</class>
+
+
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>DLINKED</name></cpp:ifdef>
+<function><type><name>void</name></type> <name><name>LinkedList</name>::<name>deleteAllNodes</name></name><parameter_list>()</parameter_list> <block>{
+	<decl_stmt><decl><type><name>Node</name> *</type><name>one</name></decl>;</decl_stmt>
+	<decl_stmt><decl><type><name>Node</name> *</type><name>two</name></decl>;</decl_stmt>
+
+	<if>if <condition>(<expr><name>NULL</name> == <name>first</name></expr>)</condition><then>
+		<return>return;</return></then></if>
+
+	<while>while <condition>(<expr><name>NULL</name> != <name>two</name></expr>)</condition> <block>{
+		<expr_stmt><expr><name>one</name> = <name>first</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>first</name> = <name>two</name> = <name>first</name>-&gt;<name>next</name></expr>;</expr_stmt>
+		<expr_stmt><expr><name>one</name>-&gt;<name>next</name> = <name>NULL</name></expr>;</expr_stmt>
+		<if>if <condition>(<expr><name>two</name> != <name>NULL</name></expr>)</condition><then>
+			<expr_stmt><expr><name>two</name>-&gt;<name>prev</name> = <name>NULL</name></expr>;</expr_stmt></then></if>
+		<expr_stmt><expr>delete <name>one</name></expr>;</expr_stmt>
+	}</block></while>
+}</block></function>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>

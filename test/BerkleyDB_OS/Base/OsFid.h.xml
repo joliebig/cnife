@@ -1,32 +1,30 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsFid.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsFid.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:define>#<cpp:directive>define</cpp:directive> <name>_LARGEFILE_SOURCE</name> 1</cpp:define>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/stat.h&gt;</cpp:file></cpp:include>
 
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdlib.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;string.h&gt;</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsFid.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsErrno.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsId.h"</cpp:file></cpp:include>
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;common/DbErr.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 
 <class>class <name>COsFid</name>
 <block>{<private type="default">
 </private><public>public:
-	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction10</name><parameterlist>(<param><decl><type>struct <name>stat</name>&amp;</type> <name>sb</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>fname</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction10</name><parameterlist>(<param><decl><type>struct <name>stat</name>&amp;</type> <name>sb</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>fname</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction15</name><parameterlist>(<param><decl><type>struct <name>stat</name>&amp;</type> <name>sb</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>fname</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction15</name><parameterlist>(<param><decl><type>struct <name>stat</name>&amp;</type> <name>sb</name></decl></param>, <param><decl><type><name>int</name>&amp;</type> <name>ret</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *&amp;</type> <name>fname</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_fileid</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>fname</name></decl></param>, <param><decl><type><name>int</name></type> <name>unique_okay</name></decl></param>, <param><decl><type><name>u_int8_t</name> *</type><name>fidp</name></decl></param>)</parameter_list>
+	<function><type><name>static</name> <name>int</name></type> <name>os_fileid</name><parameter_list>(<param><decl><type><name>DB_ENV</name> *</type><name>dbenv</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type><name>fname</name></decl></param>, <param><decl><type><name>int</name></type> <name>unique_okay</name></decl></param>, <param><decl><type><name>u_int8_t</name> *</type><name>fidp</name></decl></param>)</parameter_list>
 	<block>{
 		<decl_stmt><decl><type><name>pid_t</name></type> <name>pid</name></decl>;</decl_stmt>
 		<decl_stmt><decl><type><name>db_threadid_t</name></type> <name>tid</name></decl>;</decl_stmt>
@@ -40,7 +38,19 @@
 		<expr_stmt><expr><call><name>memset</name><argument_list>(<argument><expr><name>fidp</name></expr></argument>, <argument><expr>0</expr></argument>, <argument><expr><name>DB_FILE_ID_LEN</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 	
 		<comment type="block">/* On POSIX/UNIX, use a dev/inode pair. */</comment>
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction15</name><argument_list>(<argument><expr><name>sb</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsFidHookFunction15</name><argument_list>(<argument><expr><name>sb</name></expr></argument>, <argument><expr><name>ret</name></expr></argument>, <argument><expr><name>fname</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_VXWORKS</name></cpp:ifdef>
+		<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>stat</name><argument_list>(<argument><expr>(<name>char</name> *)<name>fname</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>WIN32</name></cpp:ifndef>
+			<cpp:if>#<cpp:directive>if</cpp:directive> <expr>(<name>__GNUC__</name> &gt; 4 || (<name>__GNUC__</name> == 4 &amp;&amp; <name>__GNUC_MINOR__</name> &gt;= 1))</expr></cpp:if>
+				<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>lstat</name><argument_list>(<argument><expr><name>fname</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+				<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>stat</name><argument_list>(<argument><expr><name>fname</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+			<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+		<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+			<expr_stmt><expr><call><name>RETRY_CHK</name><argument_list>(<argument><expr>(<call><name>stat</name><argument_list>(<argument><expr><name>fname</name></expr></argument>, <argument><expr>&amp;<name>sb</name></expr></argument>)</argument_list></call>)</expr></argument>, <argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+		<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 		<if>if <condition>(<expr><name>ret</name> != 0</expr>)</condition><then> <block>{
 			<expr_stmt><expr><call><name><name>CDbErr</name>::<name>db_err</name></name><argument_list>(<argument><expr><name>dbenv</name></expr></argument>, <argument><expr>"%s: %s"</expr></argument>, <argument><expr><name>fname</name></expr></argument>, <argument><expr><call><name>strerror</name><argument_list>(<argument><expr><name>ret</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 			<return>return <expr>(<name>ret</name>)</expr>;</return>

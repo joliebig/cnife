@@ -1,4 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="OutputList.h" language="C++"><comment type="block">/******************************************************************************
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OutputList.h"><comment type="block">/******************************************************************************
  *
  * $Id: outputlist.h,v 1.47 2001/03/19 19:27:41 root Exp $
  *
@@ -654,7 +655,13 @@
 	<macro><name>FORALL1</name><argument_list>(<argument>const DotGfxHierarchyTable &amp;a1</argument>,<argument>a1</argument>)</argument_list></macro>
 	<macro><name>FORALL1</name><argument_list>(<argument>const DotGroupCollaboration &amp;a1</argument>,<argument>a1</argument>)</argument_list></macro>
 	<macro><name>FORALL1</name><argument_list>(<argument>SectionTypes a1</argument>,<argument>a1</argument>)</argument_list></macro>
-<macro><name>FORALL2</name><argument_list>(<argument>int a1</argument>,<argument>bool a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><call><name>defined</name><argument_list>(<argument><expr><name>HAS_BOOL_TYPE</name></expr></argument>)</argument_list></call> || <call><name>defined</name><argument_list>(<argument><expr><name>Q_HAS_BOOL_TYPE</name></expr></argument>)</argument_list></call></expr></cpp:if>
+	<macro><name>FORALL1</name><argument_list>(<argument>bool a1</argument>,<argument>a1</argument>)</argument_list></macro>
+	<macro><name>FORALL2</name><argument_list>(<argument>bool a1</argument>,<argument>int a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
+	<macro><name>FORALL2</name><argument_list>(<argument>bool a1</argument>,<argument>bool a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
+	<macro><name>FORALL4</name><argument_list>(<argument>const char *a1</argument>,<argument>const char *a2</argument>,<argument>const char *a3</argument>,<argument>bool a4</argument>,<argument>a1</argument>,<argument>a2</argument>,<argument>a3</argument>,<argument>a4</argument>)</argument_list></macro>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+	<macro><name>FORALL2</name><argument_list>(<argument>int a1</argument>,<argument>bool a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
 	<macro><name>FORALL2</name><argument_list>(<argument>bool a1</argument>,<argument>HighlightedItem a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
 	<macro><name>FORALL2</name><argument_list>(<argument>bool a1</argument>,<argument>const char *a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
 	<macro><name>FORALL2</name><argument_list>(<argument>ParamListTypes a1</argument>,<argument>const char *a2</argument>,<argument>a1</argument>,<argument>a2</argument>)</argument_list></macro>
@@ -675,7 +682,6 @@
   
     <constructor_decl><name>OutputList</name><parameter_list>(<param><decl><type><name>const</name> <name>OutputList</name> &amp;</type><name>ol</name></decl></param>)</parameter_list>;</constructor_decl>
     <decl_stmt><decl><type><name><name>QList</name><argument_list>&lt;<argument><name>OutputGenerator</name></argument>&gt;</argument_list></name> *</type><name>outputs</name></decl>;</decl_stmt>
-
-	</private>}</block>;</class>
+</private>}</block>;</class>
 
 </unit>

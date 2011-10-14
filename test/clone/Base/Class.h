@@ -16,13 +16,13 @@ public:
 void Class::print1() {
 	int k = 10;
 #if A
-	cout << "hello world" << endl;
+	k = 5;
 #endif
 }
 
 void Class::print2() {
-	int k = 10;
+	int k = 3;
 #if A
-	cout << "hello world" << endl;
+	k = 5;
 #endif
 }

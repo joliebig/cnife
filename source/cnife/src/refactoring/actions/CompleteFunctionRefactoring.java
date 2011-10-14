@@ -43,6 +43,9 @@ public class CompleteFunctionRefactoring extends RefactoringAction {
 
 	private void moveNodes(PreprocessorNode start, PreprocessorNode end,
 			Document from, Document target, String featureName) {
+		
+		// moving preprocessor nodes from one document (from)
+		// to another document (target)
 		if (NodeTools.haveSameParents(start.getNode(), end.getNode())) {
 			DocumentFragment frag = from.createDocumentFragment();
 			extractNodes(start, end, frag);
@@ -55,7 +58,6 @@ public class CompleteFunctionRefactoring extends RefactoringAction {
 						XPathConstants.NODE);
 				NodeList childs = frag.getChildNodes();
 				for (int i = 0; i < childs.getLength(); i++) {
-					System.out.println("clone Node 1");
 					Node child = childs.item(i).cloneNode(true);
 					target.adoptNode(child);
 					entryPoint.getParentNode().insertBefore(child,
@@ -79,7 +81,6 @@ public class CompleteFunctionRefactoring extends RefactoringAction {
 
 				NodeList childs = frag.getChildNodes();
 				for (int i = 0; i < childs.getLength(); i++) {
-					System.out.println("clone node 2");
 					Node child = childs.item(i).cloneNode(true);
 					target.adoptNode(child);
 					entryPoint.getParentNode().insertBefore(child,

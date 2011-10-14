@@ -1,4 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="FTVHelp.h" language="C++"><comment type="block">/******************************************************************************
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="FTVHelp.h"><comment type="block">/******************************************************************************
  *
  * Copyright (C) 1997-2008 by Dimitri van Heesch.
  *
@@ -93,10 +94,7 @@
     <function><type><name>void</name></type> <name>addIndexFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
     <function><type><name>void</name></type> <name>addImageFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
     <function><type><name>void</name></type> <name>addStyleSheetFile</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type></decl></param>)</parameter_list> <block>{}</block></function>
-    <function>	<type><name>void</name></type> <name>/opt/joliebig/workspace/cnife/test/doxygen/Base/FTVHelpHookFunction4</name><parameterlist>(<param><decl><type><name>QTextStream</name>&amp;</type> <name>t</name></decl></param>)</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>void</name></type> <name>generateTreeView</name><parameter_list>(<param><decl><type><name>QString</name>*</type> <name>OutString</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>
+    <function><type><name>void</name></type> <name>generateTreeView</name><parameter_list>(<param><decl><type><name>QString</name>*</type> <name>OutString</name> =<init> <expr><name>NULL</name></expr></init></decl></param>)</parameter_list>
 <block>{
   <decl_stmt><decl><type><name>QCString</name></type> <name>fileName</name></decl>;</decl_stmt>
   <decl_stmt><decl><type><name>QFile</name></type> <name>f</name></decl>;</decl_stmt>
@@ -118,7 +116,9 @@
     <else>else
     <block>{
       <decl_stmt><decl><type><name>QTextStream</name></type> <name>t</name><argument_list>(<argument><expr>&amp;<name>f</name></expr></argument>)</argument_list></decl>;</decl_stmt>
-<expr_stmt><expr><call><name>/opt/joliebig/workspace/cnife/test/doxygen/Base/FTVHelpHookFunction4</name><argument_list>(<argument><expr><name>t</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:if>#<cpp:directive>if</cpp:directive> <expr><name>QT_VERSION</name> &gt;= 200</expr></cpp:if>
+      <expr_stmt><expr><name>t</name>.<call><name>setEncoding</name><argument_list>(<argument><expr><name><name>QTextStream</name>::<name>UnicodeUTF8</name></name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
       <comment type="line">//t &lt;&lt; "&lt;!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\"&gt;\n";</comment>
       <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"&gt;\n"</expr>;</expr_stmt>
       <expr_stmt><expr><name>t</name> &lt;&lt; "&lt;html xmlns=\"http://www.w3.org/1999/xhtml\"&gt;\n&lt;head&gt;\n"</expr>;</expr_stmt>

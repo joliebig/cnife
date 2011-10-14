@@ -1,25 +1,28 @@
-<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" dir="" filename="OsRoot.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="OsRoot.h"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_config.h"</cpp:file></cpp:include>
 
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;sys/types.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"db_int.h"</cpp:file></cpp:include>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"OsRoot.h"</cpp:file></cpp:include>
-
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>NO_SYSTEM_INCLUDES</name></cpp:ifndef>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;unistd.h&gt;</cpp:file></cpp:include>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 
 
 <class>class <name>COsRoot</name>
 <block>{<private type="default">
 </private><public>public:
-	<function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRootHookFunction32</name><parameterlist>()</parameterlist>
+	<function><type><name>static</name> <name>int</name></type> <name>os_isroot</name><parameter_list>()</parameter_list>
 	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function>	<type><name>void</name></type> <name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRootHookFunction32</name><parameterlist>()</parameterlist>
-	<block>{
-	<comment>//--functionbody</comment>
-	}</block></function><function><type><name>static</name> <name>int</name></type> <name>os_isroot</name><parameter_list>()</parameter_list>
-	<block>{
-<expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRootHookFunction32</name><argument_list>()</argument_list></call></expr>;</expr_stmt><expr_stmt><expr><call><name>/work/joliebig/workspace_sple/cnife/test/BerkleyDB_OS/Base/OsRootHookFunction32</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+<cpp:ifdef>#<cpp:directive>ifdef</cpp:directive> <name>HAVE_GETUID</name></cpp:ifdef>
+		<return>return <expr>(<call><name>getuid</name><argument_list>()</argument_list></call> == 0)</expr>;</return>
+<cpp:else>#<cpp:directive>else</cpp:directive></cpp:else>
+		<return>return <expr>(0)</expr>;</return>
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
 	}</block></function>
 </public>}</block>;</class>
 
