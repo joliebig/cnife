@@ -41,6 +41,7 @@ import scanner.RemainingOccurrencesPattern;
 import scanner.ReplaceFileException;
 import scanner.patterns.ClassIntroductionPattern;
 import scanner.patterns.CompleteFunctionPattern;
+import scanner.patterns.CompleteFunctionPatternInline;
 import scanner.patterns.CompletePrivatePublicBlock;
 import scanner.patterns.DirectivesPattern;
 import scanner.patterns.InFunctionOccurrencesPattern;
@@ -107,6 +108,7 @@ public class FeatureSearcher {
 			FeaturePattern pattern3 = new InFunctionOccurrencesPattern();
 			FeaturePattern pattern4 = new ClassIntroductionPattern();
 			FeaturePattern pattern5 = new DirectivesPattern();
+			FeaturePattern pattern6 = new CompleteFunctionPatternInline();
 
 			LinkedList<PreprocessorOccurrence> occs = new LinkedList<PreprocessorOccurrence>();
 			if (annotationfilter == null || annotationfilter.contains("CompletePrivatePublicBlockPattern"))
@@ -115,8 +117,10 @@ public class FeatureSearcher {
 				occs.addAll(pattern4.checkDoc(doc, tree));
 			if (annotationfilter == null || annotationfilter.contains("DirectivesPattern"))
 				occs.addAll(pattern5.checkDoc(doc, tree));
-			if (annotationfilter == null || annotationfilter.contains("CompleteFunctionPattern"))
+			if (annotationfilter == null || annotationfilter.contains("CompleteFunctionPattern")) {
 				occs.addAll(pattern2.checkDoc(doc, tree));
+				occs.addAll(pattern6.checkDoc(doc, tree));
+			}
 			if (annotationfilter == null || annotationfilter.contains("InFunctionOccurrencesPattern"))
 				occs.addAll(pattern3.checkDoc(doc, tree));
 
