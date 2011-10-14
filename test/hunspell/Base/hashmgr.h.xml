@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="hashmgr.hxx"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
+<?xml version="1.0" encoding="UTF-8"?><unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" filename="hashmgr.h" language="C++"><cpp:pragma>#<cpp:directive>pragma</cpp:directive> once</cpp:pragma>
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>&lt;stdio.h&gt;</cpp:file></cpp:include>
 
 <cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"htypes.hxx"</cpp:file></cpp:include>
@@ -111,7 +110,7 @@
 }</block></constructor>
 
 
-<destructor><name><name>HashMgr</name>::~<name>HashMgr</name></name><parameter_list>()</parameter_list>
+<macro><name>HashMgr</name></macro><expr_stmt><expr><name>::<name><name/></name></name>~<macro><name>HashMgr</name><argument_list>()</argument_list></macro>
 <block>{
 	<if>if <condition>(<expr><name>tableptr</name></expr>)</condition><then> <block>{
 		<comment type="line">// now pass through hash table freeing up everything</comment>
@@ -124,10 +123,10 @@
 				<if>if <condition>(<expr><name>pt</name>-&gt;<name>astr</name> &amp;&amp; (!<name>aliasf</name> || <call><name>TESTAFF</name><argument_list>(<argument><expr><name>pt</name>-&gt;<name>astr</name></expr></argument>, <argument><expr><name>ONLYUPCASEFLAG</name></expr></argument>, <argument><expr><name>pt</name>-&gt;<name>alen</name></expr></argument>)</argument_list></call>)</expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>pt</name>-&gt;<name>astr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 				<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>pt</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 				<expr_stmt><expr><name>pt</name> = <name>nt</name></expr>;</expr_stmt>
-			}</block></while>
-		}</block></for>
+			<expr_stmt/></block></while></block></for></block></then></if>}</block></expr></expr_stmt>
+		}
 		<expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>tableptr</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></then></if>
+	}
 	<expr_stmt><expr><name>tablesize</name> = 0</expr>;</expr_stmt>
 
 	<if>if <condition>(<expr><name>aliasf</name></expr>)</condition><then> <block>{
@@ -156,7 +155,7 @@
 
 	<if>if <condition>(<expr><name>ignorechars</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>ignorechars</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 	<if>if <condition>(<expr><name>ignorechars_utf16</name></expr>)</condition><then> <expr_stmt><expr><call><name>free</name><argument_list>(<argument><expr><name>ignorechars_utf16</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
-}</block></destructor>
+}
 
 <comment type="line">// lookup a root word in the hashtable</comment>
 
@@ -565,7 +564,7 @@
 		  <expr_stmt><expr>*<name>result</name> = (<name>unsigned</name> <name>short</name> *) <call><name>malloc</name><argument_list>(<argument><expr><name>len</name> * <call><name>sizeof</name><argument_list>(<argument><expr><name>short</name></expr></argument>)</argument_list></call></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		  <if>if <condition>(<expr>!*<name>result</name></expr>)</condition><then> <return>return <expr>-1</expr>;</return></then></if>
 		  <for>for (<init><decl><type><name>int</name></type> <name>i</name> =<init> <expr>0</expr></init></decl>;</init> <condition><expr><name>i</name> &lt; <name>len</name></expr>;</condition> <incr><expr><name>i</name>++</expr></incr>) <block>{
-			  <expr_stmt><expr>(*<name>result</name>)[<name>i</name>] = (((<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2</expr>]</index></name>) &lt;&lt; 8) + (<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2 + 1</expr>]</index></name></expr>;</expr_stmt> 
+			  <expr_stmt><expr>(*<name>result</name>)<index>[<expr><name>i</name></expr>]</index> = (((<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2</expr>]</index></name>) &lt;&lt; 8) + (<name>unsigned</name> <name>short</name>) <name><name>flags</name><index>[<expr><name>i</name> * 2 + 1</expr>]</index></name></expr>;</expr_stmt> 
 		  }</block></for>
 		  <break>break;</break>
 					  }</block>
@@ -663,7 +662,13 @@
 }</block></function>
 
 <comment type="line">// read in aff file and set flag mode</comment>
-<function><type><name>int</name></type>  <name><name>HashMgr</name>::<name>load_config</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>affpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>
+<function>	<type><name>void</name></type> <name>/opt/joliebig/workspace/cnife/test/hunspell/Base/hashmgrHookFunction1</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function>	<type><name>void</name></type> <name>/opt/joliebig/workspace/cnife/test/hunspell/Base/hashmgrHookFunction2</name><parameterlist>()</parameterlist>
+	<block>{
+	<comment>//--functionbody</comment>
+	}</block></function><function><type><name>int</name></type>  <name><name>HashMgr</name>::<name>load_config</name></name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type> <name>affpath</name></decl></param>, <param><decl><type><name>const</name> <name>char</name> *</type> <name>key</name></decl></param>)</parameter_list>
 <block>{
 	<decl_stmt><decl><type><name>char</name> *</type> <name>line</name></decl>;</decl_stmt> <comment type="line">// io buffers</comment>
 	<decl_stmt><decl><type><name>int</name></type> <name>firstline</name> =<init> <expr>1</expr></init></decl>;</decl_stmt>
@@ -715,11 +720,7 @@
 			}</block></then></if>    	    
 			<if>if <condition>(<expr><call><name>strcmp</name><argument_list>(<argument><expr><name>enc</name></expr></argument>, <argument><expr>"UTF-8"</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{
 				<expr_stmt><expr><name>utf8</name> = 1</expr>;</expr_stmt>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>OPENOFFICEORG</name></cpp:ifndef>
-<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>MOZILLA_CLIENT</name></cpp:ifndef>
-				<expr_stmt><expr><call><name>initialize_utf_tbl</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
-<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+<expr_stmt><expr><call><name>/opt/joliebig/workspace/cnife/test/hunspell/Base/hashmgrHookFunction2</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
 			}</block></then> <else>else <expr_stmt><expr><name>csconv</name> = <call><name>get_current_cs</name><argument_list>(<argument><expr><name>enc</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></else></if>
 		}</block></then></if>
 		<if>if <condition>(<expr><call><name>strncmp</name><argument_list>(<argument><expr><name>line</name></expr></argument>, <argument><expr>"LANG"</expr></argument>, <argument><expr>4</expr></argument>)</argument_list></call> == 0</expr>)</condition><then> <block>{

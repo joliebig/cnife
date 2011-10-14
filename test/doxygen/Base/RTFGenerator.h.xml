@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="RTFGenerator.h"><comment type="block">/******************************************************************************
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="RTFGenerator.h"><comment type="block">/******************************************************************************
  *
  * $Id: rtfgen.h,v 1.13 2001/03/19 19:27:41 root Exp $
  *

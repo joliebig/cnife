@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="" filename="Store.h"><comment type="block">/******************************************************************************
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" filename="Store.h"><comment type="block">/******************************************************************************
  *
  * $Id: $
  *
@@ -71,9 +71,9 @@
 	  }</block></constructor>
 
     <comment type="block">/*! Releases the store object. Will close the underlying file if opened. */</comment>
-	<destructor><name>~<name>Store</name></name><parameter_list>()</parameter_list>
+	<expr_stmt><expr>~<macro><name>Store</name><argument_list>()</argument_list></macro>
 	<block>{
-		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then>   <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
+		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then>   <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if></block></expr></expr_stmt>
 
 		<comment type="line">// clean up free list</comment>
 		<while>while <condition>(<expr><name>m_head</name></expr>)</condition>
@@ -82,12 +82,12 @@
 			<expr_stmt><expr><name>m_head</name> = <name>node</name>-&gt;<name>next</name></expr>;</expr_stmt>
 			<expr_stmt><expr>delete <name>node</name></expr>;</expr_stmt>
 		}</block></while>
-	}</block></destructor>
+	</public>}</block>
 
     <comment type="block">/*! Opens the file underlying the store using \a name as the file name. 
      *  Returns 0 upon success, or -1 otherwise.
      */</comment>
-	<function><type><name>int</name></type> <name>open</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>name</name></decl></param>)</parameter_list>
+	<decl><name>int</name> <name>open</name><argument_list>(<argument><expr><name>const</name> <name>char</name> *<name>name</name></expr></argument>)</argument_list>
 	<block>{
 		<decl_stmt><decl><type><name>int</name></type> <name>i</name></decl>;</decl_stmt>
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Init</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
@@ -111,10 +111,10 @@
 		<expr_stmt><expr><name>m_head</name>   = 0</expr>;</expr_stmt>
 		<expr_stmt><expr><name>m_state</name>  = <name>Reading</name></expr>;</expr_stmt>
 		<return>return <expr>0</expr>;</return>
-	}</block></function>
+	}</block></decl>
 
     <comment type="block">/*! Allocates a handle to write to and read from. */</comment>
-	<function><type><name>portable_off_t</name></type> <name>alloc</name><parameter_list>()</parameter_list>
+	<decl><name>portable_off_t</name> <name>alloc</name><argument_list>()</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<expr_stmt><expr><name>m_state</name>=<name>Writing</name></expr>;</expr_stmt>
@@ -150,13 +150,13 @@
 		}</block></else></if>
 		<comment type="line">//printf("%x: Store::alloc\n",(int)pos);</comment>
 		<return>return <expr><name>pos</name></expr>;</return>
-	}</block></function>
+	}</block></decl>
 
     <comment type="block">/*! Writes \a size bytes in array \a buf to the store. 
      *  First alloc() has to be called.
      *  \note The information can only be read after end() has been called.
      */</comment>
-	<function><type><name>int</name></type> <name>write</name><parameter_list>(<param><decl><type><name>const</name> <name>char</name> *</type><name>buf</name></decl></param>,<param><decl><type><name>uint</name></type> <name>size</name></decl></param>)</parameter_list>
+	<decl><name>int</name> <name>write</name><argument_list>(<argument><expr><name>const</name> <name>char</name> *<name>buf</name></expr></argument>,<argument><expr><name>uint</name> <name>size</name></expr></argument>)</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Writing</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<comment type="line">//printf("%x: Store::write\n",(int)portable_ftell(m_file));</comment>
@@ -230,14 +230,14 @@
 		}</block>
 		while <condition>(<expr><name>size</name>&gt;0</expr>)</condition>;</do>
 		<return>return <expr><name>size</name></expr>;</return>
-	}</block></function>
+	}</block></decl>
 
 
     <comment type="block">/*! Ends the sequence of writes. 
      *  \note After this call, first alloc() has to be called
      *  before new writes can be done.
      */</comment>
-	<function><type><name>void</name></type> <name>end</name><parameter_list>()</parameter_list>
+	<decl><name>void</name> <name>end</name><argument_list>()</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Writing</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<decl_stmt><decl><type><name>portable_off_t</name></type> <name>curPos</name>     =<init> <expr><call><name>portable_ftell</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr></init></decl>;</decl_stmt>
@@ -251,10 +251,10 @@
 			<expr_stmt><expr><call><name>fputc</name><argument_list>(<argument><expr>0</expr></argument>,<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		}</block></for>
 		<expr_stmt><expr><name>m_state</name>=<name>Reading</name></expr>;</expr_stmt>
-	}</block></function>
+	}</block></decl>
 
     <comment type="block">/*! Releases the memory corresponding to the handle returned with alloc() */</comment>
-	<function><type><name>void</name></type> <name>release</name><parameter_list>(<param><decl><type><name>portable_off_t</name></type> <name>pos</name></decl></param>)</parameter_list>
+	<decl><name>void</name> <name>release</name><argument_list>(<argument><expr><name>portable_off_t</name> <name>pos</name></expr></argument>)</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<comment type="line">//printf("%x: Store::release\n",(int)pos);</comment>
@@ -287,19 +287,19 @@
 			<expr_stmt><expr><name>cur</name> = <name>next</name></expr>;</expr_stmt>
 			<comment type="line">//printf("%x: Store::release\n",(int)cur);</comment>
 		}</block></while>
-	}</block></function>
+	}</block></decl>
 
 
     <comment type="block">/*! Closes the store */</comment>
-	<function><type><name>void</name></type> <name>close</name><parameter_list>()</parameter_list>
+	<decl><name>void</name> <name>close</name><argument_list>()</argument_list>
 	<block>{
 		<if>if <condition>(<expr><name>m_file</name></expr>)</condition><then> <expr_stmt><expr><call><name>fclose</name><argument_list>(<argument><expr><name>m_file</name></expr></argument>)</argument_list></call></expr>;</expr_stmt></then></if>
 		<expr_stmt><expr><name>m_file</name>=0</expr>;</expr_stmt>
 		<expr_stmt><expr><name>m_state</name>  = <name>Init</name></expr>;</expr_stmt>
-	}</block></function>
+	}</block></decl>
 
     <comment type="block">/*! Goes to the start of information corresponding to handle \a pos */</comment>
-	<function><type><name>void</name></type> <name>seek</name><parameter_list>(<param><decl><type><name>portable_off_t</name></type> <name>pos</name></decl></param>)</parameter_list>
+	<decl><name>void</name> <name>seek</name><argument_list>(<argument><expr><name>portable_off_t</name> <name>pos</name></expr></argument>)</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<comment type="line">//printf("%x: Store::seek\n",(int)pos);</comment>
@@ -310,13 +310,13 @@
 			<expr_stmt><expr><call><name>exit</name><argument_list>(<argument><expr>1</expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		}</block></then></if>
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr>(<name>pos</name>&amp;(<name>BLOCK_SIZE</name>-1))==0</expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></function>
+	}</block></decl>
 
 
     <comment type="block">/*! Reads \a size bytes from the store into the array pointed to be \a buf.
      *  \note Before reading seek() has to be called to set the right start of the store.
      */</comment>
-	<function><type><name>int</name></type> <name>read</name><parameter_list>(<param><decl><type><name>char</name> *</type><name>buf</name></decl></param>,<param><decl><type><name>uint</name></type> <name>size</name></decl></param>)</parameter_list>
+	<decl><name>int</name> <name>read</name><argument_list>(<argument><expr><name>char</name> *<name>buf</name></expr></argument>,<argument><expr><name>uint</name> <name>size</name></expr></argument>)</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>STORE_ASSERT</name><argument_list>(<argument><expr><name>m_state</name>==<name>Reading</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
 		<comment type="line">//printf("%x: Store::read total=%d\n",(int)portable_ftell(m_file),size);</comment>
@@ -367,22 +367,22 @@
 		}</block>
 		while <condition>(<expr><name>size</name>&gt;0</expr>)</condition>;</do>
 		<return>return <expr><name>size</name></expr>;</return>
-	}</block></function>
+	}</block></decl>
 
-    <function><type><name>void</name></type> <name>printStats</name><parameter_list>()</parameter_list>
+    <decl><name>void</name> <name>printStats</name><argument_list>()</argument_list>
 	<block>{
 		<expr_stmt><expr><call><name>printf</name><argument_list>(<argument><expr>"ObjStore: block size %d bytes, total size %ld blocks, wrote %d blocks, read %d blocks\n"</expr></argument>,
 			<argument><expr><name>BLOCK_SIZE</name></expr></argument>,<argument><expr><call>(<name>long</name>)<argument_list>(<argument><expr><name>m_front</name>/<name>BLOCK_SIZE</name></expr></argument>)</argument_list></call></expr></argument>,<argument><expr><name>m_reads</name></expr></argument>,<argument><expr><name>m_writes</name></expr></argument>)</argument_list></call></expr>;</expr_stmt>
-	}</block></function>
+	}</block></decl>
 
 
-  </public><private>private:
-    <enum>enum <name>State</name>
+  <decl>private:
+    enum <name>State</name>
     <block>{
-      <expr><name>Init</name></expr>,
+      <expr_stmt><expr><name>Init</name></expr>,
       <expr><name>Reading</name></expr>,
-      <expr><name>Writing</name></expr>
-    }</block>;</enum>
+      <expr><name>Writing</name></expr></expr_stmt>
+    }</block></decl>;</class>
     <struct>struct <name>Node</name>
     <block>{<public type="default">
       <decl_stmt><decl><type><name>portable_off_t</name></type> <name>pos</name></decl>;</decl_stmt>
@@ -406,6 +406,6 @@
     <decl_stmt><decl><type><name>State</name></type> <name>m_state</name></decl>;</decl_stmt>
     <decl_stmt><decl><type><name>int</name></type> <name>m_reads</name></decl>;</decl_stmt>
     <decl_stmt><decl><type><name>int</name></type> <name>m_writes</name></decl>;</decl_stmt>
-</private>}</block>;</class>
+};
 
 </unit>
